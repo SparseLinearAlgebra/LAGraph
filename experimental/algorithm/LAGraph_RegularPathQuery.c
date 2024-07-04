@@ -255,7 +255,11 @@ int LAGraph_RegularPathQuery
     }
 
     // Check source nodes in the graph
+<<<<<<< HEAD
     for (size_t i = 0 ; i < ns ; i++)
+=======
+    for (GrB_Index i = 0; i < ns; i++)
+>>>>>>> 30e086c8 (Add regular path query algorithm)
     {
         GrB_Index s = S [i] ;
         LG_ASSERT_MSG (s < ng, GrB_INVALID_INDEX, "invalid graph source node") ;
