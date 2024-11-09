@@ -880,6 +880,36 @@ int LAGraph_SquareClustering
 ) ;
 
 //------------------------------------------------------------------------------
+// Algorithms for working with CFGs and graphs
+//------------------------------------------------------------------------------
+
+// Production rule of Context-free grammar in Weak Chomsky Normal Form
+// Rule defined by tuple of [NONTERM, PROD_A, PROD_B, INDEX] in Weak Chomsky Normal Form
+// Variable -> eps: [NONTERM, -1, -1, INDEX]
+// Variable -> term: [NONTERM, TERM, -1, INDEX]
+// Variable -> AB: [NONTERM, TERM1, TERM2, INDEX]
+//
+// Example:
+// Terms: [0 a] [1 b]
+// Nonterms: [0 S] [1 A] [2 B] [3 C]
+// S -> AB [0 1 2 0]
+// S -> AC [0 1 3 0]
+// C -> SB [3 0 2 0]
+// A -> a  [1 0 -1 0]
+// B -> b  [2 1 -1 0]
+// S -> eps [0 -1 -1 0]
+ typedef struct {
+    int32_t nonterm; // If Prod_A != -1 && Prod_B != -1 => Type of Rule is [Variable -> AB]
+    int32_t prod_A; // If Prod_A == -1 => Type of Rule is [Variable -> eps]
+    int32_t prod_B; // If Prod_B == -1 => Type of Rule is [Variable -> term]
+    int32_t index; // For rules that can be grouped by index
+ } LAGraph_rule_WCNF;
+
+GrB_Info LAGraph_MTX_reach_basic(GrB_Matrix *output, GrB_Matrix *adj_matrices,
+                                 size_t terms_count, size_t nonterms_count,
+                                 LAGraph_rule_WCNF *rules, size_t rules_count, char *msg);
+
+//------------------------------------------------------------------------------
 // a simple example of an algorithm
 //------------------------------------------------------------------------------
 
