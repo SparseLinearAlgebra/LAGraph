@@ -20,11 +20,11 @@ GrB_Info LAGraph_MTX_reach_basic(GrB_Matrix *output, GrB_Matrix *adj_matrices,
     LG_CLEAR_MSG;
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
-                  "Count of terms must be greater than zero");
+                  "Count of terms must be greater than zero.");
     LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
-                  "Count of nonterms must be greater than zero")
+                  "Count of nonterms must be greater than zero.")
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
-                  "Count of rules must be greater than zero");
+                  "Count of rules must be greater than zero.");
 
     GrB_Index n;
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
