@@ -81,7 +81,7 @@ GrB_Info LAGraph_MTX_reach_basic(GrB_Matrix *output, GrB_Matrix *adj_matrices,
         for (size_t j = 0; j < nnz; j++) {
 #ifdef DEBUG
             printf("[TERM] SET ELEMENT [TRUE], NONTERM: %d, ROW: %ld, COL: %ld\n",
-                   nonterm, row[j], col[j]);
+                   term_rule.nonterm, row[j], col[j]);
 #endif
             GrB_Matrix_setElement(T[term_rule.nonterm], 1, row[j], col[j]);
         }
@@ -93,7 +93,8 @@ GrB_Info LAGraph_MTX_reach_basic(GrB_Matrix *output, GrB_Matrix *adj_matrices,
 
         for (size_t j = 0; j < n; j++) {
 #ifdef DEBUG
-            printf("[EPS] SET ELEMENT [TRUE], NONTERM: %d, INDEX: %ld\n", nonterm, j);
+            printf("[EPS] SET ELEMENT [TRUE], NONTERM: %d, INDEX: %ld\n",
+                   eps_rule.nonterm, j);
 #endif
             GrB_Matrix_setElement(T[eps_rule.nonterm], true, j, j);
         }
@@ -118,7 +119,7 @@ GrB_Info LAGraph_MTX_reach_basic(GrB_Matrix *output, GrB_Matrix *adj_matrices,
 #ifdef DEBUG
             printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
                    "I: %ld\n",
-                   nonterm, nonterm_A, nonterm_B, i);
+                   bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i);
 #endif
             nnz[bin_rule.nonterm] = new_nnz;
         }
