@@ -898,6 +898,9 @@ int LAGraph_SquareClustering
 // A -> a  [1 0 -1 0]
 // B -> b  [2 1 -1 0]
 // S -> eps [0 -1 -1 0]
+//
+// Warning: 
+// Variable -> _ B: [NONTERM, -1, TERM, INDEX] is not valid rule and may causes errors
  typedef struct {
     int32_t nonterm; // If Prod_A != -1 && Prod_B != -1 => Type of Rule is [Variable -> AB]
     int32_t prod_A; // If Prod_A == -1 => Type of Rule is [Variable -> eps]
