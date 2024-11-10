@@ -6,6 +6,9 @@
         free(nnz);                                                                       \
     } while (0)
 
+#define LG_FREE_ALL                                                                      \
+    { LG_FREE_WORK; }
+
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -49,6 +52,7 @@ GrB_Info LAGraph_CFG_reach_basic(
     // Create nonterms matrices
     for (size_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
+        T_size++;
     }
 
     // Arrays for processing rules
@@ -150,5 +154,6 @@ GrB_Info LAGraph_CFG_reach_basic(
 #endif
 
     GrB_Matrix_dup(output, T[0]);
+    LG_FREE_WORK;
     return GrB_SUCCESS;
 }

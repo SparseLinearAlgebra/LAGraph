@@ -48,5 +48,12 @@ int main() {
     }
     printf("\n");
 
+    free(row);
+    free(col);
+    free(val);
+    GrB_free(&adj_matrix_a);
+    GrB_free(&adj_matrix_b);
+    GrB_free(&output);
+
     return 0;
 }
