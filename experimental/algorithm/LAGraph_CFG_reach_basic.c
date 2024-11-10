@@ -19,16 +19,16 @@ GrB_Info LAGraph_CFG_reach_basic(
     GrB_Matrix *output, // Matrix with result. (i, j) = true <=> there is a path from i to
                         // j node according to CFG
     /// input
-    GrB_Matrix
+    const GrB_Matrix
         *adj_matrices, // Array of adjacency matrices which represent graph.
                        // Len of that array equal to count of terminals `terms_count`.
                        // adj_matrices[0]: (i, j) = 1 <=> there is edge between i
                        // and j nodes with label of terminal with index 0
 
-    size_t terms_count,       // count of terminals in CFG
-    size_t nonterms_count,    // count of non-terminals in CFG
-    LAGraph_rule_WCNF *rules, // rules of CFG
-    size_t rules_count,       // count of rules
+    size_t terms_count,             // count of terminals in CFG
+    size_t nonterms_count,          // count of non-terminals in CFG
+    const LAGraph_rule_WCNF *rules, // rules of CFG
+    size_t rules_count,             // count of rules
     char *msg) {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix T[nonterms_count];
