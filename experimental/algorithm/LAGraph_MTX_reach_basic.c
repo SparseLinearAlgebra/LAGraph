@@ -83,7 +83,7 @@ GrB_Info LAGraph_MTX_reach_basic(GrB_Matrix *output, GrB_Matrix *adj_matrices,
             printf("[TERM] SET ELEMENT [TRUE], NONTERM: %d, ROW: %ld, COL: %ld\n",
                    term_rule.nonterm, row[j], col[j]);
 #endif
-            GrB_Matrix_setElement(T[term_rule.nonterm], 1, row[j], col[j]);
+            GrB_Matrix_setElement(T[term_rule.nonterm], true, row[j], col[j]);
         }
     }
 
