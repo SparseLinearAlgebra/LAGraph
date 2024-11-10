@@ -32,7 +32,7 @@ int main() {
     LAGraph_rule_WCNF rules[5] = {
         {0, 1, 2, 0}, {0, 1, 3, 0}, {3, 0, 2, 0}, {1, 0, -1, 0}, {2, 1, -1, 0}};
 
-    LAGraph_MTX_reach_basic(&output, adj_matrices, 2, 6, rules,
+    LAGraph_CFG_reach_basic(&output, adj_matrices, 2, 6, rules,
                             sizeof(rules) / (sizeof(LAGraph_rule_WCNF)), msg);
 
     GrB_Index nnz = 0;
