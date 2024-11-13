@@ -902,10 +902,10 @@ int LAGraph_SquareClustering
 // Warning: 
 // Variable -> _ B: [NONTERM, -1, TERM, INDEX] is not valid rule and may causes errors
  typedef struct {
-    int32_t nonterm; // If Prod_A != -1 && Prod_B != -1 => Type of Rule is [Variable -> AB]
-    int32_t prod_A; // If Prod_A == -1 => Type of Rule is [Variable -> eps]
-    int32_t prod_B; // If Prod_B == -1 => Type of Rule is [Variable -> term]
-    int32_t index; // For rules that can be grouped by index
+    int32_t nonterm; // prod_A != -1 && prod_B != -1 => Type of Rule is [Variable -> AB]
+    int32_t prod_A;  // prod_A == -1 && prod_B == -1 => Type of Rule is [Variable -> eps]
+    int32_t prod_B;  // prod_A != -1 && prod_B == -1 => Type of Rule is [Variable -> term]
+    int32_t index;   // For rules that can be grouped by index
  } LAGraph_rule_WCNF;
 
 
