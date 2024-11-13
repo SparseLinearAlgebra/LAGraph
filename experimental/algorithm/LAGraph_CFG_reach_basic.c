@@ -25,8 +25,10 @@ GrB_Info LAGraph_CFG_reach_basic(
     const GrB_Matrix
         *adj_matrices, // Array of adjacency matrices which represent graph.
                        // Len of that array equal to count of terminals `terms_count`.
-                       // adj_matrices[0]: (i, j) = 1 <=> there is edge between i
-                       // and j nodes with label of terminal with index 0
+                       //
+                       // adj_matrices[t]: (i, j) == 1 <=> there is edge between
+                       // i and j nodes with label of terminal with index 't'
+                       // t - number in range [0, terms_count - 1]
 
     size_t terms_count,             // count of terminals in CFG
     size_t nonterms_count,          // count of non-terminals in CFG
