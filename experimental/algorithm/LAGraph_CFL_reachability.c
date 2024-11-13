@@ -1,3 +1,7 @@
+// Code is based on the "A matrix-based CFPQ algorithm" described in the following paper:
+//  * Rustam Azimov, Semyon Grigorev, "Context-Free Path Querying Using Linear Algebra"
+//  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
+
 #define LG_FREE_WORK                                                                     \
     do {                                                                                 \
         for (size_t i = 0; i < T_size; i++) {                                            \
