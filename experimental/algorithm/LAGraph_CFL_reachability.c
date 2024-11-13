@@ -4,7 +4,7 @@
 
 #define ERROR_RULE(msg)                                                                  \
     {                                                                                    \
-        LG_ASSERT_MSGF(false, GrB_INVALID_VALUE, "Rule with index %d is invalid. " msg,  \
+        LG_ASSERT_MSGF(false, GrB_INVALID_VALUE, "Rule with index %ld is invalid. " msg, \
                        i);                                                               \
     }
 
