@@ -921,7 +921,7 @@ int LAGraph_SquareClustering
 GrB_Info LAGraph_CFL_reachability
 (
     // output
-    GrB_Matrix **outputs, // Array of matrices with result.
+    GrB_Matrix *outputs, // Array of matrices with result.
                           // Size of array must be equal to nonterms_count
                           //
                           // outputs[k]: (i, j) = true <=> there is a path from i to j
