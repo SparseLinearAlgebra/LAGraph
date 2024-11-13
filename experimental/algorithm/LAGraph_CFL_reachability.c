@@ -27,11 +27,12 @@
 // Start nonterminal is nonterminal with index 0
 GrB_Info LAGraph_CFL_reachability(
     // output
-    GrB_Matrix *output, // Matrix with result.
-                        //
-                        // (i, j) = true <=> there is a path from i to j nodes
-                        // whose edge labels form a word derivable
-                        // from the start nonterminal of the specified CFG.
+    GrB_Matrix **outputs, // Array of matrices with result.
+                          // Size of array must be equal to nonterms_count
+                          //
+                          // outputs[k]: (i, j) = true <=> there is a path from i to j
+                          // nodes whose edge labels form a word derivable
+                          // from the start nonterminal 'k' of the specified CFG.
     /// input
     const GrB_Matrix
         *adj_matrices, // Array of adjacency matrices which represent graph.
@@ -167,7 +168,9 @@ GrB_Info LAGraph_CFL_reachability(
     }
 #endif
 
-    GrB_Matrix_dup(output, T[0]);
+    for (size_t i = 0; i < nonterms_count; i++) {
+        outputs[i] = T[i];
+    }
     LG_FREE_WORK;
     return GrB_SUCCESS;
 }
