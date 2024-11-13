@@ -2,6 +2,12 @@
 //  * Rustam Azimov, Semyon Grigorev, "Context-Free Path Querying Using Linear Algebra"
 //  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
 
+#define ERROR_RULE(msg)                                                                  \
+    {                                                                                    \
+        LG_ASSERT_MSGF(false, GrB_INVALID_VALUE, "Rule with index %d is invalid. " msg,  \
+                       i);                                                               \
+    }
+
 #define LG_FREE_WORK                                                                     \
     do {                                                                                 \
         for (size_t i = 0; i < T_size; i++) {                                            \
@@ -79,6 +85,16 @@ GrB_Info LAGraph_CFL_reachability(
     for (size_t i = 0; i < rules_count; i++) {
         LAGraph_rule_WCNF rule = rules[i];
 
+        // Check range on rules
+        if (rule.nonterm < 0 || rule.nonterm >= nonterms_count) {
+            ERROR_RULE("Nonterm must be in range [0, nonterms_count).");
+        }
+
+        if ((rule.prod_A < -1 || rule.prod_A >= terms_count) ||
+            (rule.prod_B < -1 || rule.prod_B >= terms_count)) {
+            ERROR_RULE("Term must be in range [-1, nonterms_count)");
+        }
+
         // [Variable -> eps]
         if (rule.prod_A == -1 && rule.prod_B == -1) {
             eps_rules[eps_rules_count++] = i;
@@ -98,9 +114,7 @@ GrB_Info LAGraph_CFL_reachability(
         }
 
         // [Variable -> _ B]
-        LG_ASSERT_MSG(false, GrB_INVALID_VALUE,
-                      "Rule with index %d is invalid. [Variable -> _ B] type of rule "
-                      "don't accepted.");
+        ERROR_RULE("[Variable -> _ B] type of rule is not acceptable.");
     }
 
     // Rule [Variable -> term]
@@ -169,7 +183,7 @@ GrB_Info LAGraph_CFL_reachability(
 #endif
 
     for (size_t i = 0; i < nonterms_count; i++) {
-        outputs[i] = T[i];
+        outputs[i] = &T[i];
     }
     LG_FREE_WORK;
     return GrB_SUCCESS;
