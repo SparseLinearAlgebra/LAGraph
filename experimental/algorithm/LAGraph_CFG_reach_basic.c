@@ -88,7 +88,7 @@ GrB_Info LAGraph_CFG_reach_basic(
         }
 
         // [Variable -> _ B]
-        LG_ASSERT_MSG(true, GrB_INVALID_VALUE,
+        LG_ASSERT_MSG(false, GrB_INVALID_VALUE,
                       "Rule with index %d is invalid. [Variable -> _ B] type of rule "
                       "don't accepted.");
     }
