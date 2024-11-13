@@ -20,8 +20,10 @@
 // Start nonterminal is nonterminal with index 0
 GrB_Info LAGraph_CFG_reach_basic(
     // output
-    GrB_Matrix *output, // Matrix with result. (i, j) = true <=> there is a path from i to
-                        // j node according to CFG
+    GrB_Matrix *output, // Matrix with result.
+                        // (i, j) = true <=> there is a path
+                        // from i to j nodes that form a word derivable
+                        // from the start nonterminal of the specified CFG.
     /// input
     const GrB_Matrix
         *adj_matrices, // Array of adjacency matrices which represent graph.
