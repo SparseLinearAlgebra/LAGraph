@@ -85,31 +85,42 @@ GrB_Info LAGraph_CFL_reachability(
     for (size_t i = 0; i < rules_count; i++) {
         LAGraph_rule_WCNF rule = rules[i];
 
+        bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
+        bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
+        bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
+
         // Check range on rules
         if (rule.nonterm < 0 || rule.nonterm >= nonterms_count) {
             ERROR_RULE("Nonterm must be in range [0, nonterms_count).");
         }
 
-        if ((rule.prod_A < -1 || rule.prod_A >= terms_count) ||
-            (rule.prod_B < -1 || rule.prod_B >= terms_count)) {
-            ERROR_RULE("Term must be in range [-1, nonterms_count)");
-        }
-
         // [Variable -> eps]
-        if (rule.prod_A == -1 && rule.prod_B == -1) {
+        if (is_rule_eps) {
             eps_rules[eps_rules_count++] = i;
+
             continue;
         }
 
         // [Variable -> term]
-        if (rule.prod_A != -1 && rule.prod_B == -1) {
+        if (is_rule_term) {
             term_rules[term_rules_count++] = i;
+
+            if (rule.prod_A < -1 || rule.prod_A >= terms_count) {
+                ERROR_RULE("Term must be in range [-1, nonterms_count)");
+            }
+
             continue;
         }
 
         // [Variable -> A B]
-        if (rule.prod_A != -1 && rule.prod_B != -1) {
+        if (is_rule_bin) {
             bin_rules[bin_rules_count++] = i;
+
+            if (rule.prod_A < -1 || rule.prod_A >= nonterms_count || rule.prod_B < -1 ||
+                rule.prod_B >= nonterms_count) {
+                ERROR_RULE("Nonterm must be in range [0, nonterms_count).");
+            }
+
             continue;
         }
 
