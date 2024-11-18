@@ -53,6 +53,8 @@ void free_workspace() {
 // Grammars
 //====================
 
+// S -> aSb | ab in WCNF
+//
 // Terms: [0 a] [1 b]
 // Nonterms: [0 S] [1 A] [2 B] [3 C]
 // S -> AB [0 1 2 0]
@@ -60,7 +62,7 @@ void free_workspace() {
 // C -> SB [3 0 2 0]
 // A -> a  [1 0 -1 0]
 // B -> b  [2 1 -1 0]
-grammar_t init_grammar_1() {
+void init_grammar_1() {
     LAGraph_rule_WCNF *rules = calloc(5, sizeof(LAGraph_rule_WCNF));
     rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
@@ -72,11 +74,90 @@ grammar_t init_grammar_1() {
         .nonterms_count = 4, .terms_count = 2, .rules_count = 5, .rules = rules};
 }
 
+// S -> aS | a in WCNF
+//
+// Terms: [0 a]
+// Nonterms: [0 S]
+// S -> SS [0 0 0 0]
+// S -> a  [0 0 -1 0]
+void init_grammar_2() {
+    LAGraph_rule_WCNF *rules = calloc(2, sizeof(LAGraph_rule_WCNF));
+    rules[0] = (LAGraph_rule_WCNF){0, 0, 0, 0};
+    rules[1] = (LAGraph_rule_WCNF){0, 0, -1, 0};
+
+    grammar = (grammar_t){
+        .nonterms_count = 1, .terms_count = 1, .rules_count = 2, .rules = rules};
+}
+
+// Complex grammar
+//
+// Terms: [0 a] [1 b]
+// Nonterms: [0 S] [n Sn]
+// S -> S1 S2       [0 1 2 0]
+// S -> S15 S16     [0 15 16 0]
+// S1 -> S3 S4      [1 3 4 0]
+// S2 -> S5 S6      [2 5 6 0]
+// S3 -> S7 S8      [3 7 8 0]
+// S4 -> S9 S10     [4 9 10 0]
+// S5 -> S11 S12    [5 11 12 0]
+// S6 -> S13 S14    [6 13 14 0]
+// S16 -> S17 S18   [16 17 18 0]
+// S17 -> S19 S20   [17 19 20 0]
+// S18 -> S21 S22   [18 21 22 0]
+// S22 -> S23 S24   [22 23 24 0]
+// S7 -> a          [7 0 -1 0]
+// S8 -> a          [8 0 -1 0]
+// S9 -> a          [9 0 -1 0]
+// S10 -> a         [10 0 -1 0]
+// S11 -> b         [11 1 -1 0]
+// S12 -> b         [12 1 -1 0]
+// S13 -> b         [13 1 -1 0]
+// S14 -> b         [14 1 -1 0]
+// S15 -> a         [15 0 -1 0]
+// S19 -> a         [19 0 -1 0]
+// S20 -> a         [20 0 -1 0]
+// S21 -> b         [21 1 -1 0]
+// S23 -> b         [23 1 -1 0]
+// S24 -> b         [24 1 -1 0]
+void init_grammar_3() {
+    LAGraph_rule_WCNF *rules = calloc(25, sizeof(LAGraph_rule_WCNF));
+    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
+    rules[1] = (LAGraph_rule_WCNF){0, 15, 16, 0};
+    rules[2] = (LAGraph_rule_WCNF){1, 3, 4, 0};
+    rules[3] = (LAGraph_rule_WCNF){2, 5, 6, 0};
+    rules[4] = (LAGraph_rule_WCNF){3, 7, 8, 0};
+    rules[5] = (LAGraph_rule_WCNF){4, 9, 10, 0};
+    rules[6] = (LAGraph_rule_WCNF){5, 11, 12, 0};
+    rules[7] = (LAGraph_rule_WCNF){6, 13, 14, 0};
+    rules[8] = (LAGraph_rule_WCNF){16, 17, 18, 0};
+    rules[9] = (LAGraph_rule_WCNF){17, 19, 20, 0};
+    rules[10] = (LAGraph_rule_WCNF){18, 21, 22, 0};
+    rules[11] = (LAGraph_rule_WCNF){22, 23, 24, 0};
+    rules[12] = (LAGraph_rule_WCNF){7, 0, -1, 0};
+    rules[13] = (LAGraph_rule_WCNF){8, 0, -1, 0};
+    rules[14] = (LAGraph_rule_WCNF){9, 0, -1, 0};
+    rules[15] = (LAGraph_rule_WCNF){10, 0, -1, 0};
+    rules[16] = (LAGraph_rule_WCNF){11, 1, -1, 0};
+    rules[17] = (LAGraph_rule_WCNF){12, 1, -1, 0};
+    rules[18] = (LAGraph_rule_WCNF){13, 1, -1, 0};
+    rules[19] = (LAGraph_rule_WCNF){14, 1, -1, 0};
+    rules[20] = (LAGraph_rule_WCNF){15, 0, -1, 0};
+    rules[21] = (LAGraph_rule_WCNF){19, 0, -1, 0};
+    rules[22] = (LAGraph_rule_WCNF){20, 0, -1, 0};
+    rules[23] = (LAGraph_rule_WCNF){21, 1, -1, 0};
+    rules[24] = (LAGraph_rule_WCNF){23, 1, -1, 0};
+    rules[25] = (LAGraph_rule_WCNF){24, 1, -1, 0};
+
+    grammar = (grammar_t){
+        .nonterms_count = 25, .terms_count = 2, .rules_count = 26, .rules = rules};
+}
+
 //====================
 // Graphs
 //====================
 
 // Graph:
+//
 // 0 -a-> 1
 // 1 -a-> 2
 // 2 -a-> 0
@@ -87,13 +168,144 @@ void init_graph_1() {
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4);
     GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 4, 4);
+
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
+
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 3));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 3, 0));
+
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+}
+
+// Graph:
+//
+// 0 -a-> 1
+// 1 -a-> 2
+// 2 -a-> 3
+// 3 -a-> 4
+// 3 -b-> 5
+// 4 -b-> 3
+// 5 -b-> 6
+// 6 -b-> 7
+void init_graph_2() {
+    adj_matrices = calloc(2, sizeof(GrB_Matrix));
+    GrB_Matrix adj_matrix_a, adj_matrix_b;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 8, 8);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 3));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 3, 4));
+
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 3, 5));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 4, 3));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 5, 6));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 6, 7));
+
+    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[1] = adj_matrix_b;
+}
+
+// Graph:
+//
+// 0 -a-> 2
+// 1 -a-> 2
+// 3 -a-> 5
+// 4 -a-> 5
+// 2 -a-> 6
+// 5 -a-> 6
+// 2 -b-> 0
+// 2 -b-> 1
+// 5 -b-> 3
+// 5 -b-> 4
+// 6 -b-> 2
+// 6 -b-> 5
+void init_graph_3() {
+    adj_matrices = calloc(2, sizeof(GrB_Matrix));
+    GrB_Matrix adj_matrix_a, adj_matrix_b;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 7, 7);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 3, 5));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 4, 5));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 6));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 5, 6));
+
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 2, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 2, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 5, 3));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 5, 4));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 6, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 6, 5));
+
+    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[1] = adj_matrix_b;
+}
+
+// Graph:
+//
+// 0 -a-> 1
+// 1 -a-> 2
+// 2 -a-> 0
+void init_graph_4() {
+    adj_matrices = calloc(1, sizeof(GrB_Matrix));
+    GrB_Matrix adj_matrix_a;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
+
+    adj_matrices[0] = adj_matrix_a;
+}
+
+// Graph:
+
+// 0 -a-> 1
+// 1 -a-> 2
+// 2 -b-> 3
+// 3 -b-> 4
+void init_graph_5() {
+    adj_matrices = calloc(2, sizeof(GrB_Matrix));
+    GrB_Matrix adj_matrix_a, adj_matrix_b;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 5, 5);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
+
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 2, 3));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 3, 4));
+
+    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[1] = adj_matrix_b;
+}
+
+// Graph:
+
+// 0 -a-> 0
+// 0 -b-> 1
+// 1 -c-> 2
+void init_graph_6() {
+    adj_matrices = calloc(3, sizeof(GrB_Matrix));
+    GrB_Matrix adj_matrix_a, adj_matrix_b, adj_matrix_c;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 3, 3);
+    GrB_Matrix_new(&adj_matrix_c, GrB_BOOL, 3, 3);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_c, true, 1, 2));
+
+    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[1] = adj_matrix_b;
+    adj_matrices[2] = adj_matrix_c;
 }
 
 void test_CFL_reachability_invalid_rules(void) {
