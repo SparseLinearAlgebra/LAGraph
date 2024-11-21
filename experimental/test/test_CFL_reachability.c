@@ -66,13 +66,26 @@ char *output_to_str(size_t nonterm) {
 }
 
 void free_workspace() {
+
     for (size_t i = 0; i < grammar.terms_count; i++) {
+        if (adj_matrices == NULL)
+            break;
+
+        if (adj_matrices[i] == NULL)
+            continue;
+
         GrB_free(&adj_matrices[i]);
     }
     free(adj_matrices);
     adj_matrices = NULL;
 
     for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        if (outputs == NULL)
+            break;
+
+        if (outputs[i] == NULL)
+            continue;
+
         GrB_free(&outputs[i]);
     }
     free(outputs);
