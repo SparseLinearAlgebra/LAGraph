@@ -5,13 +5,23 @@
 #include <acutest.h>
 #include <stdio.h>
 
+#define run_algorithm()                                                                  \
+    LAGraph_CFL_reachability(outputs, adj_matrices, grammar.terms_count,                 \
+                             grammar.nonterms_count, grammar.rules, grammar.rules_count, \
+                             msg)
+
 #define check_invalid_value()                                                            \
     {                                                                                    \
-        retval = LAGraph_CFL_reachability(outputs, adj_matrices, grammar.terms_count,    \
-                                          grammar.nonterms_count, grammar.rules,         \
-                                          grammar.rules_count, msg);                     \
+        retval = run_algorithm();                                                        \
         TEST_CHECK(retval == GrB_INVALID_VALUE);                                         \
         TEST_MSG("retval = %d (%s)", retval, msg);                                       \
+    }
+
+#define check_result(result)                                                             \
+    {                                                                                    \
+        char *expected = output_to_str(0);                                               \
+        TEST_CHECK(strcmp(result, expected) == 0);                                       \
+        TEST_MSG("Wrong result. Actual: %s", expected);                                  \
     }
 
 typedef struct {
@@ -31,6 +41,29 @@ void setup() { LAGraph_Init(msg); }
 void teardown(void) { LAGraph_Finalize(msg); }
 
 void init_outputs() { outputs = calloc(grammar.nonterms_count, sizeof(GrB_Matrix)); }
+
+char *output_to_str(size_t nonterm) {
+    GrB_Index nnz = 0;
+    OK(GrB_Matrix_nvals(&nnz, outputs[nonterm]));
+    GrB_Index *row = malloc(nnz * sizeof(GrB_Index));
+    GrB_Index *col = malloc(nnz * sizeof(GrB_Index));
+    bool *val = malloc(nnz * sizeof(GrB_Index));
+    OK(GrB_Matrix_extractTuples(row, col, val, &nnz, outputs[nonterm]));
+
+    // 11 - size of " (%ld, %ld)"
+    char *result_str = malloc(11 * nnz * sizeof(char));
+    result_str[0] = '\0';
+    for (size_t i = 0; i < nnz; i++) {
+        sprintf(result_str + strlen(result_str), i == 0 ? "(%ld, %ld)" : " (%ld, %ld)",
+                row[i], col[i]);
+    }
+
+    free(row);
+    free(col);
+    free(val);
+
+    return result_str;
+}
 
 void free_workspace() {
     for (size_t i = 0; i < grammar.terms_count; i++) {
