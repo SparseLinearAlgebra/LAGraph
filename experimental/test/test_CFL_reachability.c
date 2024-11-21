@@ -342,6 +342,105 @@ void init_graph_6() {
     adj_matrices[2] = adj_matrix_c;
 }
 
+//====================
+// Tests with valid result
+//====================
+
+void test_CFL_reachability_cycle(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_2();
+    init_graph_4();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_two_cycle(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_1();
+    init_graph_1();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_labels_more_than_nonterms(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_1();
+    init_graph_6();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 1)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_complex_grammar(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_3();
+    init_graph_2();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 7) (1, 6)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_tree(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_1();
+    init_graph_3();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
+                 "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_line(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_1();
+    init_graph_5();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 4) (1, 3)");
+
+    free_workspace();
+    teardown();
+}
+
+//====================
+// Tests with invalid result
+//====================
+
 void test_CFL_reachability_invalid_rules(void) {
     setup();
     GrB_Info retval;
@@ -376,5 +475,12 @@ void test_CFL_reachability_invalid_rules(void) {
     return;
 }
 
-TEST_LIST = {{"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
+TEST_LIST = {{"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
+             {"CFL_reachability_cycle", test_CFL_reachability_cycle},
+             {"CFL_reachability_two_cycle", test_CFL_reachability_two_cycle},
+             {"CFL_reachability_labels_more_than_nonterms",
+              test_CFL_reachability_labels_more_than_nonterms},
+             {"CFL_reachability_tree", test_CFL_reachability_tree},
+             {"CFL_reachability_line", test_CFL_reachability_line},
+             {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
              {NULL, NULL}};
