@@ -10,10 +10,10 @@
                              grammar.nonterms_count, grammar.rules, grammar.rules_count, \
                              msg)
 
-#define check_invalid_value()                                                            \
+#define check_error(error)                                                               \
     {                                                                                    \
         retval = run_algorithm();                                                        \
-        TEST_CHECK(retval == GrB_INVALID_VALUE);                                         \
+        TEST_CHECK(retval == error);                                                     \
         TEST_MSG("retval = %d (%s)", retval, msg);                                       \
     }
 
