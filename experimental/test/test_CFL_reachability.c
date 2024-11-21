@@ -123,6 +123,7 @@ void init_grammar_2() {
 }
 
 // Complex grammar
+// aaaabbbb or aaabbb
 //
 // Terms: [0 a] [1 b]
 // Nonterms: [0 S] [n Sn]
@@ -153,7 +154,7 @@ void init_grammar_2() {
 // S23 -> b         [23 1 -1 0]
 // S24 -> b         [24 1 -1 0]
 void init_grammar_3() {
-    LAGraph_rule_WCNF *rules = calloc(25, sizeof(LAGraph_rule_WCNF));
+    LAGraph_rule_WCNF *rules = calloc(26, sizeof(LAGraph_rule_WCNF));
     rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 15, 16, 0};
     rules[2] = (LAGraph_rule_WCNF){1, 3, 4, 0};
@@ -199,8 +200,8 @@ void init_grammar_3() {
 void init_graph_1() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 4, 4);
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 4, 4));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -226,8 +227,8 @@ void init_graph_1() {
 void init_graph_2() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 8, 8);
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 8, 8));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -260,8 +261,8 @@ void init_graph_2() {
 void init_graph_3() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 7, 7);
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 7, 7));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
