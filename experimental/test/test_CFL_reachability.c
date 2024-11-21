@@ -465,22 +465,51 @@ void test_CFL_reachability_invalid_rules(void) {
     // Rule [Variable -> _ B]
     grammar.rules[0] =
         (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
-    check_invalid_value();
+    check_error(GrB_INVALID_VALUE);
 
     // Rule [_ -> A B]
     grammar.rules[0] =
         (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
-    check_invalid_value();
+    check_error(GrB_INVALID_VALUE);
 
     // Rule [C -> A B], where C >= nonterms_count
     grammar.rules[0] =
         (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
-    check_invalid_value();
+    check_error(GrB_INVALID_VALUE);
 
     // Rule [C -> t], where t >= terms_count
     grammar.rules[0] =
         (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
-    check_invalid_value();
+    check_error(GrB_INVALID_VALUE);
+
+    free_workspace();
+    teardown();
+
+    return;
+}
+
+void test_CFL_reachability_null_pointers(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_1();
+    init_graph_1();
+    init_outputs();
+
+    adj_matrices[0] = NULL;
+    check_error(GrB_NULL_POINTER);
+
+    adj_matrices = NULL;
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+
+    init_grammar_1();
+    init_graph_1();
+    init_outputs();
+
+    outputs = NULL;
+    check_error(GrB_NULL_POINTER);
 
     free_workspace();
     teardown();
@@ -496,4 +525,5 @@ TEST_LIST = {{"CFL_reachability_complex_grammar", test_CFL_reachability_complex_
              {"CFL_reachability_tree", test_CFL_reachability_tree},
              {"CFL_reachability_line", test_CFL_reachability_line},
              {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
+             {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
              {NULL, NULL}};
