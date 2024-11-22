@@ -1,3 +1,15 @@
+//------------------------------------------------------------------------------
+// LAGraph/experimental/test/LAGraph_CFL_reachability.c: test cases for Context-Free
+// Language Reachability Matrix-Based Algorithm
+//------------------------------------------------------------------------------
+//
+// LAGraph, (c) 2019-2024 by The LAGraph Contributors, All Rights Reserved.
+// SPDX-License-Identifier: BSD-2-Clause
+
+// Contributed by Ilhom Kombaev, Semyon Grigoriev, St. Petersburg State University.
+
+//------------------------------------------------------------------------------
+
 #include <LAGraphX.h>
 #include <LAGraph_test.h>
 #include <LG_Xtest.h>
