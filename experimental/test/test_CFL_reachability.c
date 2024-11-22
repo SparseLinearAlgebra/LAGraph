@@ -503,12 +503,19 @@ void test_CFL_reachability_null_pointers(void) {
     check_error(GrB_NULL_POINTER);
 
     free_workspace();
-
     init_grammar_aSb();
     init_graph_double_cycle();
     init_outputs();
 
     outputs = NULL;
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    grammar.rules = NULL;
     check_error(GrB_NULL_POINTER);
 
     free_workspace();

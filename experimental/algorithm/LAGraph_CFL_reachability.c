@@ -70,6 +70,7 @@ GrB_Info LAGraph_CFL_reachability(
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
                   "Count of rules must be greater than zero.");
     LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "Outputs array is null.");
+    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "Rules array is null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "Adjacency matrix array is null.");
 
