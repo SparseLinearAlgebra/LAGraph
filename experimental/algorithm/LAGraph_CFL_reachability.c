@@ -69,6 +69,14 @@ GrB_Info LAGraph_CFL_reachability(
                   "Count of nonterms must be greater than zero.")
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
                   "Count of rules must be greater than zero.");
+    LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "Outputs array is null.");
+    LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
+                  "Adjacency matrix array is null.");
+
+    for (size_t i = 0; i < terms_count; i++) {
+        LG_ASSERT_MSGF(adj_matrices[i] != NULL, GrB_NULL_POINTER,
+                       "Adjacency matrix with index %ld is null.", i);
+    }
 
     GrB_Index n;
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
