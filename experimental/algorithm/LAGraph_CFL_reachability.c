@@ -10,14 +10,17 @@
 
 #define LG_FREE_WORK                                                                     \
     do {                                                                                 \
-        for (size_t i = 0; i < T_size; i++) {                                            \
-            GrB_free(&T[i]);                                                             \
-        }                                                                                \
         free(nnz);                                                                       \
     } while (0)
 
 #define LG_FREE_ALL                                                                      \
-    { LG_FREE_WORK; }
+    {                                                                                    \
+        LG_FREE_WORK;                                                                    \
+                                                                                         \
+        for (size_t i = 0; i < T_size; i++) {                                            \
+            GrB_free(&T[i]);                                                             \
+        }                                                                                \
+    }
 
 #include "LG_internal.h"
 #include <LAGraphX.h>
