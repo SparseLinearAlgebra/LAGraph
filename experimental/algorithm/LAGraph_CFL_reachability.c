@@ -68,7 +68,7 @@ GrB_Info LAGraph_CFL_reachability(
                          //
                          // outputs[k]: (i, j) = true <=> there is a path from i to j
                          // nodes whose edge labels form a word derivable
-                         // from the start nonterminal 'k' of the specified CFG.
+                         // from the nonterminal 'k' of the specified CFG.
     /// input
     const GrB_Matrix
         *adj_matrices, // Array of adjacency matrices which represent graph.
@@ -128,7 +128,7 @@ GrB_Info LAGraph_CFL_reachability(
         bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
         bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
 
-        // Check range on rules
+        // Check that all rules are well-formed
         if (rule.nonterm < 0 || rule.nonterm >= nonterms_count) {
             ERROR_RULE("Nonterm must be in range [0, nonterms_count).");
         }
