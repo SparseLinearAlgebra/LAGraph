@@ -108,7 +108,7 @@ void free_workspace() {
 // C -> SB [3 0 2 0]
 // A -> a  [1 0 -1 0]
 // B -> b  [2 1 -1 0]
-void init_grammar_1() {
+void init_grammar_aSb() {
     LAGraph_rule_WCNF *rules = calloc(5, sizeof(LAGraph_rule_WCNF));
     rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
@@ -126,7 +126,7 @@ void init_grammar_1() {
 // Nonterms: [0 S]
 // S -> SS [0 0 0 0]
 // S -> a  [0 0 -1 0]
-void init_grammar_2() {
+void init_grammar_aS() {
     LAGraph_rule_WCNF *rules = calloc(2, sizeof(LAGraph_rule_WCNF));
     rules[0] = (LAGraph_rule_WCNF){0, 0, 0, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 0, -1, 0};
@@ -166,7 +166,7 @@ void init_grammar_2() {
 // S21 -> b         [21 1 -1 0]
 // S23 -> b         [23 1 -1 0]
 // S24 -> b         [24 1 -1 0]
-void init_grammar_3() {
+void init_grammar_complex() {
     LAGraph_rule_WCNF *rules = calloc(26, sizeof(LAGraph_rule_WCNF));
     rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 15, 16, 0};
@@ -210,7 +210,7 @@ void init_grammar_3() {
 // 2 -a-> 0
 // 0 -b-> 3
 // 3 -b-> 0
-void init_graph_1() {
+void init_graph_double_cycle() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4));
@@ -237,7 +237,7 @@ void init_graph_1() {
 // 4 -b-> 3
 // 5 -b-> 6
 // 6 -b-> 7
-void init_graph_2() {
+void init_graph_1() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8));
@@ -271,7 +271,7 @@ void init_graph_2() {
 // 5 -b-> 4
 // 6 -b-> 2
 // 6 -b-> 5
-void init_graph_3() {
+void init_graph_tree() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7));
@@ -300,7 +300,7 @@ void init_graph_3() {
 // 0 -a-> 1
 // 1 -a-> 2
 // 2 -a-> 0
-void init_graph_4() {
+void init_graph_one_cycle() {
     adj_matrices = calloc(1, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
@@ -318,7 +318,7 @@ void init_graph_4() {
 // 1 -a-> 2
 // 2 -b-> 3
 // 3 -b-> 4
-void init_graph_5() {
+void init_graph_line() {
     adj_matrices = calloc(2, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5);
@@ -339,7 +339,7 @@ void init_graph_5() {
 // 0 -a-> 0
 // 0 -b-> 1
 // 1 -c-> 2
-void init_graph_6() {
+void init_graph_2() {
     adj_matrices = calloc(3, sizeof(GrB_Matrix));
     GrB_Matrix adj_matrix_a, adj_matrix_b, adj_matrix_c;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
@@ -363,8 +363,8 @@ void test_CFL_reachability_cycle(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_2();
-    init_graph_4();
+    init_grammar_aS();
+    init_graph_one_cycle();
     init_outputs();
 
     OK(run_algorithm());
@@ -378,8 +378,8 @@ void test_CFL_reachability_two_cycle(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_1();
-    init_graph_1();
+    init_grammar_aSb();
+    init_graph_double_cycle();
     init_outputs();
 
     OK(run_algorithm());
@@ -393,8 +393,8 @@ void test_CFL_reachability_labels_more_than_nonterms(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_1();
-    init_graph_6();
+    init_grammar_aSb();
+    init_graph_2();
     init_outputs();
 
     OK(run_algorithm());
@@ -408,8 +408,8 @@ void test_CFL_reachability_complex_grammar(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_3();
-    init_graph_2();
+    init_grammar_complex();
+    init_graph_1();
     init_outputs();
 
     OK(run_algorithm());
@@ -423,8 +423,8 @@ void test_CFL_reachability_tree(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_1();
-    init_graph_3();
+    init_grammar_aSb();
+    init_graph_tree();
     init_outputs();
 
     OK(run_algorithm());
@@ -439,8 +439,8 @@ void test_CFL_reachability_line(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_1();
-    init_graph_5();
+    init_grammar_aSb();
+    init_graph_line();
     init_outputs();
 
     OK(run_algorithm());
@@ -458,8 +458,8 @@ void test_CFL_reachability_invalid_rules(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_1();
-    init_graph_1();
+    init_grammar_aSb();
+    init_graph_double_cycle();
     init_outputs();
 
     // Rule [Variable -> _ B]
@@ -492,8 +492,8 @@ void test_CFL_reachability_null_pointers(void) {
     setup();
     GrB_Info retval;
 
-    init_grammar_1();
-    init_graph_1();
+    init_grammar_aSb();
+    init_graph_double_cycle();
     init_outputs();
 
     adj_matrices[0] = NULL;
@@ -504,8 +504,8 @@ void test_CFL_reachability_null_pointers(void) {
 
     free_workspace();
 
-    init_grammar_1();
-    init_graph_1();
+    init_grammar_aSb();
+    init_graph_double_cycle();
     init_outputs();
 
     outputs = NULL;
