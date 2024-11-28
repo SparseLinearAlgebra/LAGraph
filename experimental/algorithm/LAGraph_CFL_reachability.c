@@ -13,6 +13,9 @@
 //  * Rustam Azimov, Semyon Grigorev, "Context-Free Path Querying Using Linear Algebra"
 //  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
 
+#include "LG_internal.h"
+#include <LAGraphX.h>
+
 #define ERROR_RULE(msg)                                                                  \
     {                                                                                    \
         LG_ASSERT_MSGF(false, GrB_INVALID_VALUE, "Rule with index %ld is invalid. " msg, \
@@ -31,6 +34,14 @@
         }                                                                                \
     }
 
+#define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                 \
+    {                                                                                    \
+        rule.len_indexes_str += snprintf(rule.indexes_str + rule.len_indexes_str,        \
+                                         LAGRAPH_MSG_LEN - rule.len_indexes_str,         \
+                                         rule.count == 0 ? "%ld" : ", %ld", i);          \
+        rule.count++;                                                                    \
+    }
+
 #define LG_FREE_WORK                                                                     \
     do {                                                                                 \
         free(nnz);                                                                       \
@@ -44,9 +55,6 @@
             GrB_free(&T[i]);                                                             \
         }                                                                                \
     }
-
-#include "LG_internal.h"
-#include <LAGraphX.h>
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
