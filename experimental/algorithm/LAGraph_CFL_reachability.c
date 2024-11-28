@@ -21,6 +21,11 @@
 
 #define ADD_TO_MSG(...)                                                                  \
     {                                                                                    \
+        if (msg_len == 0) {                                                              \
+            msg_len +=                                                                   \
+                snprintf(msg, LAGRAPH_MSG_LEN,                                           \
+                         "LAGraph failure (file %s, line %d): ", __FILE__, __LINE__);    \
+        }                                                                                \
         if (msg_len < LAGRAPH_MSG_LEN) {                                                 \
             msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, __VA_ARGS__);  \
         }                                                                                \
@@ -133,7 +138,6 @@ GrB_Info LAGraph_CFL_reachability(
             continue;
 
         if (!found_null) {
-            ADD_TO_MSG("LAGraph failure (file %s, line %d): ", __FILE__, __LINE__);
             ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
             ADD_TO_MSG("%ld", i);
         } else {
