@@ -19,6 +19,13 @@
                        i);                                                               \
     }
 
+#define ADD_TO_MSG(...)                                                                  \
+    {                                                                                    \
+        if (msg_len < LAGRAPH_MSG_LEN) {                                                 \
+            msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, __VA_ARGS__);  \
+        }                                                                                \
+    }
+
 #define LG_FREE_WORK                                                                     \
     do {                                                                                 \
         free(nnz);                                                                       \
@@ -107,17 +114,18 @@ GrB_Info LAGraph_CFL_reachability(
     size_t T_size = 0; // Variable for correct free
     uint64_t *nnz = NULL;
     LG_CLEAR_MSG;
+    size_t msg_len = 0; // For error formating
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
-                  "Count of terms must be greater than zero.");
+                  "The number of terminals must be greater than zero.");
     LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
-                  "Count of nonterms must be greater than zero.")
+                  "The number of non-terminals must be greater than zero.");
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
-                  "Count of rules must be greater than zero.");
-    LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "Outputs array is null.");
-    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "Rules array is null.");
+                  "The number of rules must be greater than zero.");
+    LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
+    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
-                  "Adjacency matrix array is null.");
+                  "The adjacency matrices array cannot be null.");
 
     for (size_t i = 0; i < terms_count; i++) {
         LG_ASSERT_MSGF(adj_matrices[i] != NULL, GrB_NULL_POINTER,
