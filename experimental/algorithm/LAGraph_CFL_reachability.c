@@ -127,7 +127,7 @@ GrB_Info LAGraph_CFL_reachability(
     size_t T_size = 0; // Variable for correct free
     uint64_t *nnz = NULL;
     LG_CLEAR_MSG;
-    size_t msg_len = 0; // For error formating
+    size_t msg_len = 0; // For error formatting
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
@@ -140,6 +140,7 @@ GrB_Info LAGraph_CFL_reachability(
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
 
+    // Find null adjacency matrices
     bool found_null = false;
     for (size_t i = 0; i < terms_count; i++) {
         if (adj_matrices[i] != NULL)
