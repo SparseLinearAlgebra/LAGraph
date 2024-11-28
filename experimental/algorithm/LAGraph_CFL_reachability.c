@@ -127,9 +127,25 @@ GrB_Info LAGraph_CFL_reachability(
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
 
+    bool found_null = false;
     for (size_t i = 0; i < terms_count; i++) {
-        LG_ASSERT_MSGF(adj_matrices[i] != NULL, GrB_NULL_POINTER,
-                       "Adjacency matrix with index %ld is null.", i);
+        if (adj_matrices[i] != NULL)
+            continue;
+
+        if (!found_null) {
+            ADD_TO_MSG("LAGraph failure (file %s, line %d): ", __FILE__, __LINE__);
+            ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
+            ADD_TO_MSG("%ld", i);
+        } else {
+            ADD_TO_MSG(", %ld", i);
+        }
+
+        found_null = true;
+    }
+
+    if (found_null) {
+        LG_FREE_ALL;
+        return GrB_NULL_POINTER;
     }
 
     GrB_Index n;
