@@ -367,6 +367,25 @@ void init_graph_2() {
     adj_matrices[2] = adj_matrix_c;
 }
 
+// Graph:
+
+// 0 -a-> 1
+// 1 -a-> 0
+// 0 -b-> 0
+void init_graph_3() {
+    adj_matrices = calloc(2, sizeof(GrB_Matrix));
+    GrB_Matrix adj_matrix_a, adj_matrix_b;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 2, 2);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 2, 2);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 0));
+
+    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[1] = adj_matrix_b;
+}
+
 //====================
 // Tests with valid result
 //====================
@@ -462,6 +481,21 @@ void test_CFL_reachability_line(void) {
     teardown();
 }
 
+void test_CFL_reachability_two_nodes_cycle(void) {
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_3();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (1, 0)");
+
+    free_workspace();
+    teardown();
+}
+
 //====================
 // Tests with invalid result
 //====================
@@ -543,6 +577,7 @@ TEST_LIST = {{"CFL_reachability_complex_grammar", test_CFL_reachability_complex_
               test_CFL_reachability_labels_more_than_nonterms},
              {"CFL_reachability_tree", test_CFL_reachability_tree},
              {"CFL_reachability_line", test_CFL_reachability_line},
+             {"CFL_reachability_two_nodes_cycle", test_CFL_reachability_two_nodes_cycle},
              {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
              {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
              {NULL, NULL}};
