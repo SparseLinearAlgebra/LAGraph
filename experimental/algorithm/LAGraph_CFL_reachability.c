@@ -175,6 +175,14 @@ GrB_Info LAGraph_CFL_reachability(
     size_t bin_rules[rules_count], bin_rules_count = 0;   // [Variable -> AB]
 
     // Process rules
+    typedef struct {
+        size_t count;
+        size_t len_indexes_str;
+        char indexes_str[LAGRAPH_MSG_LEN];
+    } rule_error_s;
+    rule_error_s term_err = {0};
+    rule_error_s nonterm_err = {0};
+    rule_error_s invalid_err = {0};
     for (size_t i = 0; i < rules_count; i++) {
         LAGraph_rule_WCNF rule = rules[i];
 
@@ -184,7 +192,7 @@ GrB_Info LAGraph_CFL_reachability(
 
         // Check that all rules are well-formed
         if (rule.nonterm < 0 || rule.nonterm >= nonterms_count) {
-            ERROR_RULE("Nonterm must be in range [0, nonterms_count).");
+            ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
         }
 
         // [Variable -> eps]
@@ -199,7 +207,7 @@ GrB_Info LAGraph_CFL_reachability(
             term_rules[term_rules_count++] = i;
 
             if (rule.prod_A < -1 || rule.prod_A >= terms_count) {
-                ERROR_RULE("Term must be in range [-1, nonterms_count)");
+                ADD_INDEX_TO_ERROR_RULE(term_err, i);
             }
 
             continue;
@@ -211,14 +219,35 @@ GrB_Info LAGraph_CFL_reachability(
 
             if (rule.prod_A < -1 || rule.prod_A >= nonterms_count || rule.prod_B < -1 ||
                 rule.prod_B >= nonterms_count) {
-                ERROR_RULE("Nonterm must be in range [0, nonterms_count).");
+                ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
             }
 
             continue;
         }
 
         // [Variable -> _ B]
-        ERROR_RULE("[Variable -> _ B] type of rule is not acceptable.");
+        ADD_INDEX_TO_ERROR_RULE(invalid_err, i);
+    }
+
+    if (term_err.count + nonterm_err.count + invalid_err.count > 0) {
+        ADD_TO_MSG("Count of invalid rules: %ld.\n",
+                   term_err.count + nonterm_err.count + invalid_err.count);
+
+        if (nonterm_err.count > 0) {
+            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str)
+        }
+        if (term_err.count > 0) {
+            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str)
+        }
+        if (invalid_err.count > 0) {
+            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", invalid_err.indexes_str)
+        }
+
+        LG_FREE_ALL;
+        return GrB_INVALID_VALUE;
     }
 
     // Rule [Variable -> term]
