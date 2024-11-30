@@ -43,9 +43,7 @@
     }
 
 #define LG_FREE_WORK                                                                     \
-    do {                                                                                 \
-        free(nnz);                                                                       \
-    } while (0)
+    { free(nnz); }
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
