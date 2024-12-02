@@ -264,17 +264,30 @@ GrB_Info LAGraph_CFL_reachability
         #endif
     }
 
+    GrB_Matrix identityMatrix;
+    GRB_TRY(GrB_Matrix_new(&identityMatrix, GrB_BOOL, n, n));
+    GrB_Index *indexes = malloc(sizeof(GrB_Index)*n);
+
+    for (size_t i = 0; i < n; i++) {
+        indexes[i] = i;
+    }
+
+    GrB_Scalar true_scalar;
+    GrB_Scalar_new(&true_scalar, GrB_BOOL);
+    GrB_Scalar_setElement_BOOL(true_scalar, true);
+
+    GRB_TRY(GxB_Matrix_build_Scalar(identityMatrix, indexes, indexes, true_scalar, n));
+
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
-        for (size_t j = 0; j < n; j++) {
-#ifdef DEBUG
-            printf("[EPS] SET ELEMENT [TRUE], NONTERM: %d, INDEX: %ld\n",
-                   eps_rule.nonterm, j);
-#endif
-            GrB_Matrix_setElement(T[eps_rule.nonterm], true, j, j);
-        }
+        GrB_eWiseAdd(T[eps_rule.nonterm], GrB_NULL, GxB_LOR_BOOL, GxB_LOR_BOOL, T[eps_rule.nonterm], identityMatrix, GrB_NULL);
+
+        #ifdef DEBUG
+        printf("[EPS] SET ELEMENT [TRUE], NONTERM: %d, INDEX: %ld\n",
+                eps_rule.nonterm, j);
+        #endif
     }
 
     // Rule [Variable -> Variable1 Variable2]
