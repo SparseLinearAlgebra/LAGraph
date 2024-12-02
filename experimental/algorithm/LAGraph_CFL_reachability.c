@@ -256,17 +256,12 @@ GrB_Info LAGraph_CFL_reachability
         GrB_Index nnz;
         GrB_Matrix_nvals(&nnz, adj_matrices[term_rule.prod_A]);
 
-        GrB_Index row[nnz], col[nnz];
-        bool values[nnz];
+        GrB_eWiseAdd(T[term_rule.nonterm], GrB_NULL, GxB_LOR_BOOL, GxB_LOR_BOOL,
+                     T[term_rule.nonterm], adj_matrices[term_rule.prod_A], GrB_NULL);
 
-        GrB_Matrix_extractTuples(row, col, values, &nnz, adj_matrices[term_rule.prod_A]);
-        for (size_t j = 0; j < nnz; j++) {
-#ifdef DEBUG
-            printf("[TERM] SET ELEMENT [TRUE], NONTERM: %d, ROW: %ld, COL: %ld\n",
-                   term_rule.nonterm, row[j], col[j]);
-#endif
-            GrB_Matrix_setElement(T[term_rule.nonterm], true, row[j], col[j]);
-        }
+        #ifdef DEBUG
+        printf("[TERM] eWiseAdd: NONTERM: %d\n", term_rule.nonterm);
+        #endif
     }
 
     // Rule [Variable -> eps]
