@@ -1,5 +1,5 @@
 //------------------------------------------------------------------------------
-// LAGraph_RegularPathQuery.c: regular path query
+// LAGraph_2RegularPathQuery.c: 2-way regular path query
 //------------------------------------------------------------------------------
 //
 // LAGraph, (c) 2019-2024 by The LAGraph Contributors, All Rights Reserved.
@@ -10,6 +10,9 @@
 
 //------------------------------------------------------------------------------
 
+// TODO: This is a copy-pasted description of the original RPQ algorithm with
+// support for 2-RPQs.
+//
 // For an edge-labelled directed graph the algorithm computes the set of nodes
 // for which these conditions are held:
 // * The node is reachable by a path from one of the source nodes.
@@ -94,7 +97,7 @@
 #include "LG_internal.h"
 #include "LAGraphX.h"
 
-int LAGraph_RegularPathQuery
+int LAGraph_2RegularPathQuery
 (
     // output:
     GrB_Vector *reachable,      // reachable(i) = true if node i is reachable
@@ -103,6 +106,7 @@ int LAGraph_RegularPathQuery
     // input:
     LAGraph_Graph *R,           // input non-deterministic finite automaton
                                 // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
     size_t nl,                  // total label count, # of matrices graph and
                                 // NFA adjacency matrix decomposition
     const GrB_Index *QS,        // starting states in NFA
@@ -112,6 +116,7 @@ int LAGraph_RegularPathQuery
     LAGraph_Graph *G,           // input graph adjacency matrix decomposition
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
     char *msg                   // LAGraph output message
 )
 {
@@ -134,7 +139,8 @@ int LAGraph_RegularPathQuery
                                          // visited matrix to an answer
 
     GrB_Index ng = 0 ;                   // # nodes in the graph
-    GrB_Index nr = 0 ;                   // # states odes in the NFA
+    GrB_Index nr = 0 ;                   // # states in the NFA
+    GrB_Index nv = 0 ;                   // # pair count in the frontier
     GrB_Index states = ns ;              // # pairs in the current
                                          // correspondence between the graph and
                                          // the NFA
@@ -144,6 +150,7 @@ int LAGraph_RegularPathQuery
     GrB_Index vals = 0 ;                 // utility matrix value count
 
     GrB_Matrix *A = NULL ;
+    GrB_Matrix *AT = NULL ;
     GrB_Matrix *B = NULL ;
     GrB_Matrix *BT = NULL ;
 
@@ -167,16 +174,29 @@ int LAGraph_RegularPathQuery
     }
 
     LG_TRY (LAGraph_Malloc ((void **) &A, nl, sizeof (GrB_Matrix), msg)) ;
+    LG_TRY (LAGraph_Malloc ((void **) &AT, nl, sizeof (GrB_Matrix), msg)) ;
 
     for (int32_t i = 0; i < nl; i++)
     {
         if (G[i] == NULL) 
         {
             A[i] = NULL ;
+            AT[i] = NULL ;
             continue ;
         }
 
         A[i] = G[i]->A;
+        if (G[i]->kind == LAGraph_ADJACENCY_UNDIRECTED ||
+            G[i]->is_symmetric_structure == LAGraph_TRUE)
+        {
+            AT[i] = A[i] ;
+        }
+        else
+        {
+            // AT[i] could be NULL and the matrix will be transposed by a
+            // descriptor
+            AT[i] = G[i]->AT ;
+        }
     }
 
     LG_TRY (LAGraph_Malloc ((void **) &B, nl, sizeof (GrB_Matrix), msg)) ;
@@ -187,6 +207,7 @@ int LAGraph_RegularPathQuery
         if (R[i] == NULL)
         {
             B[i] = NULL ;
+            BT[i] = NULL ;
             continue ;
         }
 
@@ -325,20 +346,43 @@ int LAGraph_RegularPathQuery
 
             // Traverse the NFA
             // Try to use a provided transposed matrix or use the descriptor
-            if (BT[i] != NULL)
-            {
-                GRB_TRY (GrB_mxm (symbol_frontier, GrB_NULL, GrB_NULL,
-                    GrB_LOR_LAND_SEMIRING_BOOL, BT[i], frontier, GrB_DESC_R)) ;
-            }
-            else
-            {
-                GRB_TRY (GrB_mxm (symbol_frontier, GrB_NULL, GrB_NULL,
-                    GrB_LOR_LAND_SEMIRING_BOOL, B[i], frontier, GrB_DESC_RT0)) ;
+            if (!inverse) {
+                if (BT[i] != NULL)
+                {
+                    GRB_TRY (GrB_mxm (symbol_frontier, GrB_NULL, GrB_NULL,
+                        GrB_LOR_LAND_SEMIRING_BOOL, BT[i], frontier, GrB_DESC_R)) ;
+                }
+                else
+                {
+                    GRB_TRY (GrB_mxm (symbol_frontier, GrB_NULL, GrB_NULL,
+                        GrB_LOR_LAND_SEMIRING_BOOL, B[i], frontier, GrB_DESC_RT0)) ;
+                }
+            } else {
+                GRB_TRY (GrB_mxm (symbol_frontier, NULL, NULL, GrB_LOR_LAND_SEMIRING_BOOL, B[i], frontier, GrB_DESC_R )) ;
             }
 
+            GrB_Matrix_nvals( &nv, symbol_frontier);
+            if (nv == 0)
+                continue;
+
             // Traverse the graph
-            GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR,
-                GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, A[i], GrB_DESC_SC)) ;
+            if (!inverse_labels[i]) {
+                if (!inverse) {
+                    GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, A[i], GrB_DESC_SC)) ;
+                } else if (AT[i]) {
+                    GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, AT[i], GrB_DESC_SC)) ;
+                } else {
+                    GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, A[i], GrB_DESC_SCT1)) ;
+                }
+            } else {
+                if (!inverse && AT[i]) {
+                    GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, AT[i], GrB_DESC_SC)) ;
+                } else if (!inverse) {
+                    GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, A[i], GrB_DESC_SCT1)) ;
+                } else {
+                    GRB_TRY (GrB_mxm (next_frontier, visited, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, symbol_frontier, A[i], GrB_DESC_SC)) ;
+                }
+            }
         }
 
         // Accumulate the new state <-> node correspondence

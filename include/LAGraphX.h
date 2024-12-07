@@ -779,7 +779,7 @@ int LAGraph_scc (
 
 //****************************************************************************
 LAGRAPHX_PUBLIC
-int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
+int LAGraph_2RegularPathQuery   // nodes reachable from the starting by the
                                 // path satisfying regular expression
 (
     // output:
@@ -789,6 +789,7 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
     // input:
     LAGraph_Graph *R,           // input non-deterministic finite automaton
                                 // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
     size_t nl,                  // total label count, # of matrices graph and
                                 // NFA adjacency matrix decomposition
     const GrB_Index *QS,        // starting states in NFA
@@ -798,6 +799,7 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
     LAGraph_Graph *G,           // input graph adjacency matrix decomposition
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
     char *msg                   // LAGraph output message
 );
 //****************************************************************************
