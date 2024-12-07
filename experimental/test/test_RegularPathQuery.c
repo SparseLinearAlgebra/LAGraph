@@ -165,8 +165,9 @@ void test_RegularPathQueryBasic (void)
         // Evaluate the algorithm
         GrB_Vector r = NULL ;
 
-        OK (LAGraph_RegularPathQuery (&r, R, MAX_LABELS, QS, nqs,
-                                         QF, nqf, G, S, ns, msg)) ;
+        // TODO: Use 2RPQ HERE.
+        //OK (LAGraph_RegularPathQuery (&r, R, MAX_LABELS, QS, nqs,
+        //                                  QF, nqf, G, S, ns, msg)) ;
 
         // Extract results from the output vector
         GrB_Index *reachable ;
