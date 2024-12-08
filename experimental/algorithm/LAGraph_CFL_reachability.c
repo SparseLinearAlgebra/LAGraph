@@ -115,8 +115,8 @@ GrB_Info LAGraph_CFL_reachability
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
-    size_t terms_count,             // The total number of terminal symbols in the CFG.
-    size_t nonterms_count, // The total number of non-terminal symbols in the CFG.
+    int32_t terms_count,             // The total number of terminal symbols in the CFG.
+    int32_t nonterms_count, // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
     char *msg                       // Message string for error reporting.
@@ -142,15 +142,15 @@ GrB_Info LAGraph_CFL_reachability
 
     // Find null adjacency matrices
     bool found_null = false;
-    for (size_t i = 0; i < terms_count; i++) {
+    for (int32_t i = 0; i < terms_count; i++) {
         if (adj_matrices[i] != NULL)
             continue;
 
         if (!found_null) {
             ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
-            ADD_TO_MSG("%ld", i);
+            ADD_TO_MSG("%d", i);
         } else {
-            ADD_TO_MSG(", %ld", i);
+            ADD_TO_MSG(", %d", i);
         }
 
         found_null = true;
@@ -165,7 +165,7 @@ GrB_Info LAGraph_CFL_reachability
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
     // Create nonterms matrices
-    for (size_t i = 0; i < nonterms_count; i++) {
+    for (int32_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
         T_size++;
     }
@@ -318,15 +318,16 @@ GrB_Info LAGraph_CFL_reachability
     }
 
 #ifdef DEBUG
-    for (size_t i = 0; i < nonterms_count; i++) {
-        printf("MATRIX WITH INDEX %ld:\n", i);
-        GxB_print(T[i], 5);
+        for (int32_t i = 0; i < nonterms_count; i++) {
+            printf("MATRIX WITH INDEX %d:\n", i);
+            GxB_print(T[i], 1);
     }
 #endif
 
-    for (size_t i = 0; i < nonterms_count; i++) {
+    for (int32_t i = 0; i < nonterms_count; i++) {
         outputs[i] = T[i];
     }
+
     LG_FREE_WORK;
     return GrB_SUCCESS;
 }
