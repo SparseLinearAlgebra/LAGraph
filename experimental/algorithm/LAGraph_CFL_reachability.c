@@ -14,15 +14,15 @@
 //  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
 
 #define LG_FREE_WORK                                                                     \
-    { free(nnz); GrB_free(&true_scalar); GrB_free(&identity_matrix); }
+    { free(nnz); GrB_free(&true_scalar); GrB_free(&identity_matrix); free(T); }
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
-        LG_FREE_WORK;                                                                    \
-                                                                                         \
         for (size_t i = 0; i < T_size; i++) {                                            \
             GrB_free(&T[i]);                                                             \
         }                                                                                \
+                                                                                         \
+        LG_FREE_WORK;                                                                    \
     }
 
 #include "LG_internal.h"
@@ -123,7 +123,7 @@ GrB_Info LAGraph_CFL_reachability
 )
 {
     // Declare workspace and clear the msg string, if not NULL
-    GrB_Matrix T[nonterms_count];
+    GrB_Matrix *T = calloc(nonterms_count, sizeof(GrB_Matrix));
     GrB_Matrix identity_matrix;
     size_t T_size = 0; // Variable for correct free
     uint64_t *nnz = NULL;
