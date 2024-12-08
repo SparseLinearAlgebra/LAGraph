@@ -950,7 +950,8 @@ int LAGraph_SquareClustering
 // (1, 3) - because there exists a path (1-2-3) that forms "ab"
 // (1, 2) - because there exists a path (1-5-2) that forms the word "ab"
 // (0, 3) - because there exists a path (0-1-5-2-3) that forms the word "aabb"
-GrB_Info LAGraph_CFL_reachability(
+GrB_Info LAGraph_CFL_reachability
+(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.
@@ -969,11 +970,12 @@ GrB_Info LAGraph_CFL_reachability(
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
 
-    size_t terms_count,    // The total number of terminal symbols in the CFG.
-    size_t nonterms_count, // The total number of non-terminal symbols in the CFG.
+    int32_t terms_count,    // The total number of terminal symbols in the CFG.
+    int32_t nonterms_count, // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
-    char *msg) {                    // Message string for error reporting.
+    char *msg                       // Message string for error reporting.
+);
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
