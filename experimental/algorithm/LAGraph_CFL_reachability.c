@@ -14,7 +14,7 @@
 //  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
 
 #define LG_FREE_WORK                                                                     \
-    { free(nnz); }
+    { free(nnz); GrB_free(&true_scalar); GrB_free(&identity_matrix); }
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
@@ -124,11 +124,17 @@ GrB_Info LAGraph_CFL_reachability
 {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix T[nonterms_count];
+    GrB_Matrix identity_matrix;
     size_t T_size = 0; // Variable for correct free
     uint64_t *nnz = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
+
+
+    GrB_Scalar true_scalar;
+    GrB_Scalar_new(&true_scalar, GrB_BOOL);
+    GrB_Scalar_setElement_BOOL(true_scalar, true);
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
@@ -252,10 +258,6 @@ GrB_Info LAGraph_CFL_reachability
         return GrB_INVALID_VALUE;
     }
 
-    GrB_Scalar true_scalar;
-    GrB_Scalar_new(&true_scalar, GrB_BOOL);
-    GrB_Scalar_setElement_BOOL(true_scalar, true);
-
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
@@ -272,8 +274,7 @@ GrB_Info LAGraph_CFL_reachability
         #endif
     }
 
-    GrB_Matrix identityMatrix;
-    GRB_TRY(GrB_Matrix_new(&identityMatrix, GrB_BOOL, n, n));
+    GRB_TRY(GrB_Matrix_new(&identity_matrix, GrB_BOOL, n, n));
     GrB_Index *indexes = malloc(sizeof(GrB_Index)*n);
 
     for (size_t i = 0; i < n; i++) {
@@ -281,13 +282,14 @@ GrB_Info LAGraph_CFL_reachability
     }
 
 
-    GRB_TRY(GxB_Matrix_build_Scalar(identityMatrix, indexes, indexes, true_scalar, n));
+    GRB_TRY(GxB_Matrix_build_Scalar(identity_matrix, indexes, indexes, true_scalar, n));
+    free(indexes);
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
-        GxB_eWiseUnion(T[eps_rule.nonterm], GrB_NULL, GxB_PAIR_BOOL, GxB_PAIR_BOOL, T[eps_rule.nonterm], true_scalar, identityMatrix, true_scalar, GrB_NULL);
+        GxB_eWiseUnion(T[eps_rule.nonterm], GrB_NULL, GxB_PAIR_BOOL, GxB_PAIR_BOOL, T[eps_rule.nonterm], true_scalar, identity_matrix, true_scalar, GrB_NULL);
 
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
