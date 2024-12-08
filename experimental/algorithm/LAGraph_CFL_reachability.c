@@ -335,7 +335,7 @@ GrB_Info LAGraph_CFL_reachability
     #ifdef DEBUG
         for (int32_t i = 0; i < nonterms_count; i++) {
             printf("MATRIX WITH INDEX %d:\n", i);
-            GxB_print(T[i], 1);
+            GxB_print(T[i], GxB_SUMMARY);
         }
     #endif
 
