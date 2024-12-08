@@ -13,6 +13,18 @@
 //  * Rustam Azimov, Semyon Grigorev, "Context-Free Path Querying Using Linear Algebra"
 //  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
 
+#define LG_FREE_WORK                                                                     \
+    { free(nnz); }
+
+#define LG_FREE_ALL                                                                      \
+    {                                                                                    \
+        LG_FREE_WORK;                                                                    \
+                                                                                         \
+        for (size_t i = 0; i < T_size; i++) {                                            \
+            GrB_free(&T[i]);                                                             \
+        }                                                                                \
+    }
+
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -42,17 +54,7 @@
         rule.count++;                                                                    \
     }
 
-#define LG_FREE_WORK                                                                     \
-    { free(nnz); }
 
-#define LG_FREE_ALL                                                                      \
-    {                                                                                    \
-        LG_FREE_WORK;                                                                    \
-                                                                                         \
-        for (size_t i = 0; i < T_size; i++) {                                            \
-            GrB_free(&T[i]);                                                             \
-        }                                                                                \
-    }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
