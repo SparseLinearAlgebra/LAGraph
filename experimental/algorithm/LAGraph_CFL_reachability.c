@@ -277,7 +277,7 @@ GrB_Info LAGraph_CFL_reachability
                      
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
-        printf("[TERM] eWiseAdd: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
+        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
         #endif
     }
 
@@ -299,7 +299,7 @@ GrB_Info LAGraph_CFL_reachability
 
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
-        printf("[EPS] eWiseAdd: NONTERM: %d (ISO: %d)\n",
+        printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n",
                 eps_rule.nonterm, iso_flag);
         #endif
     }
