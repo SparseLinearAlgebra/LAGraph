@@ -989,7 +989,7 @@ int LAGraph_MMRead
 
     if (type == GrB_BOOL)
     {
-        GRB_TRY (GrB_Matrix_build_BOOL (*A, I, J, (bool *) X, nvals2, NULL)) ;
+        GRB_TRY (GrB_Matrix_build_BOOL (*A, I, J, (bool *) X, nvals2, GxB_IGNORE_DUP)) ;
     }
     else if (type == GrB_INT8)
     {
