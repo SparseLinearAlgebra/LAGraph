@@ -15,7 +15,7 @@
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        free(nnz);                                                                       \
+        free(nnzs);                                                                       \
         GrB_free(&true_scalar);                                                          \
         GrB_free(&identity_matrix);                                                      \
         free(T);                                                                         \
@@ -132,7 +132,7 @@ GrB_Info LAGraph_CFL_reachability
     GrB_Matrix *T = calloc(nonterms_count, sizeof(GrB_Matrix));
     GrB_Matrix identity_matrix = NULL;
     size_t T_size = 0; // Variable for correct free
-    uint64_t *nnz = NULL;
+    uint64_t *nnzs = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
@@ -305,7 +305,7 @@ GrB_Info LAGraph_CFL_reachability
     }
 
     // Rule [Variable -> Variable1 Variable2]
-    nnz = calloc(nonterms_count, sizeof(uint64_t));
+    nnzs = calloc(nonterms_count, sizeof(uint64_t));
     bool changed = true;
     while (changed) {
         changed = false;
@@ -319,8 +319,8 @@ GrB_Info LAGraph_CFL_reachability
             GrB_Index new_nnz;
             GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
 
-            changed = changed | (nnz[bin_rule.nonterm] != new_nnz);
-            nnz[bin_rule.nonterm] = new_nnz;
+            changed = changed | (nnzs[bin_rule.nonterm] != new_nnz);
+            nnzs[bin_rule.nonterm] = new_nnz;
 
             #ifdef DEBUG
             GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
