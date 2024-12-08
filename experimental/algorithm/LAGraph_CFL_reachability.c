@@ -14,7 +14,13 @@
 //  * URL: https://disser.spbu.ru/files/2022/disser_azimov.pdf
 
 #define LG_FREE_WORK                                                                     \
-    { free(nnz); GrB_free(&true_scalar); GrB_free(&identity_matrix); free(T); }
+    {                                                                                    \
+        free(nnz);                                                                       \
+        GrB_free(&true_scalar);                                                          \
+        GrB_free(&identity_matrix);                                                      \
+        free(T);                                                                         \
+        free(indexes);                                                                   \
+    }
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
@@ -124,12 +130,13 @@ GrB_Info LAGraph_CFL_reachability
 {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T = calloc(nonterms_count, sizeof(GrB_Matrix));
-    GrB_Matrix identity_matrix;
+    GrB_Matrix identity_matrix = NULL;
     size_t T_size = 0; // Variable for correct free
     uint64_t *nnz = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
+    GrB_Index *indexes = NULL;
 
 
     GrB_Scalar true_scalar;
@@ -275,7 +282,7 @@ GrB_Info LAGraph_CFL_reachability
     }
 
     GRB_TRY(GrB_Matrix_new(&identity_matrix, GrB_BOOL, n, n));
-    GrB_Index *indexes = malloc(sizeof(GrB_Index)*n);
+    indexes = malloc(sizeof(GrB_Index)*n);
 
     for (size_t i = 0; i < n; i++) {
         indexes[i] = i;
@@ -283,7 +290,6 @@ GrB_Info LAGraph_CFL_reachability
 
 
     GRB_TRY(GxB_Matrix_build_Scalar(identity_matrix, indexes, indexes, true_scalar, n));
-    free(indexes);
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
