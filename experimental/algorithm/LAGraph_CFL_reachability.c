@@ -128,6 +128,7 @@ GrB_Info LAGraph_CFL_reachability
     uint64_t *nnz = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
+    bool iso_flag = false;
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
@@ -262,7 +263,8 @@ GrB_Info LAGraph_CFL_reachability
                      T[term_rule.nonterm], adj_matrices[term_rule.prod_A], GrB_NULL);
 
         #ifdef DEBUG
-        printf("[TERM] eWiseAdd: NONTERM: %d\n", term_rule.nonterm);
+        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
+        printf("[TERM] eWiseAdd: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
         #endif
     }
 
@@ -287,8 +289,9 @@ GrB_Info LAGraph_CFL_reachability
         GrB_eWiseAdd(T[eps_rule.nonterm], GrB_NULL, GxB_LOR_BOOL, GxB_LOR_BOOL, T[eps_rule.nonterm], identityMatrix, GrB_NULL);
 
         #ifdef DEBUG
-        printf("[EPS] SET ELEMENT [TRUE], NONTERM: %d, INDEX: %ld\n",
-                eps_rule.nonterm, j);
+        GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
+        printf("[EPS] eWiseAdd: NONTERM: %d (ISO: %d)\n",
+                eps_rule.nonterm, iso_flag);
         #endif
     }
 
@@ -308,21 +311,24 @@ GrB_Info LAGraph_CFL_reachability
             GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
 
             changed = changed | (nnz[bin_rule.nonterm] != new_nnz);
-#ifdef DEBUG
-            printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
-                   "I: %ld\n",
-                   bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i);
-#endif
             nnz[bin_rule.nonterm] = new_nnz;
+
+            #ifdef DEBUG
+            GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
+            printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
+                   "I: %ld (ISO: %d)\n",
+                   bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i, iso_flag);
+            #endif
+            
         }
     }
 
-#ifdef DEBUG
+    #ifdef DEBUG
         for (int32_t i = 0; i < nonterms_count; i++) {
             printf("MATRIX WITH INDEX %d:\n", i);
             GxB_print(T[i], 1);
-    }
-#endif
+        }
+    #endif
 
     for (int32_t i = 0; i < nonterms_count; i++) {
         outputs[i] = T[i];
