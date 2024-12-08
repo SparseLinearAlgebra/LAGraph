@@ -252,6 +252,10 @@ GrB_Info LAGraph_CFL_reachability
         return GrB_INVALID_VALUE;
     }
 
+    GrB_Scalar true_scalar;
+    GrB_Scalar_new(&true_scalar, GrB_BOOL);
+    GrB_Scalar_setElement_BOOL(true_scalar, true);
+
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
@@ -259,9 +263,9 @@ GrB_Info LAGraph_CFL_reachability
         GrB_Index nnz;
         GrB_Matrix_nvals(&nnz, adj_matrices[term_rule.prod_A]);
 
-        GrB_eWiseAdd(T[term_rule.nonterm], GrB_NULL, GxB_LOR_BOOL, GxB_LOR_BOOL,
-                     T[term_rule.nonterm], adj_matrices[term_rule.prod_A], GrB_NULL);
-
+        GxB_eWiseUnion(T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
+                     T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
+                     
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
         printf("[TERM] eWiseAdd: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
@@ -276,9 +280,6 @@ GrB_Info LAGraph_CFL_reachability
         indexes[i] = i;
     }
 
-    GrB_Scalar true_scalar;
-    GrB_Scalar_new(&true_scalar, GrB_BOOL);
-    GrB_Scalar_setElement_BOOL(true_scalar, true);
 
     GRB_TRY(GxB_Matrix_build_Scalar(identityMatrix, indexes, indexes, true_scalar, n));
 
@@ -286,7 +287,7 @@ GrB_Info LAGraph_CFL_reachability
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
-        GrB_eWiseAdd(T[eps_rule.nonterm], GrB_NULL, GxB_LOR_BOOL, GxB_LOR_BOOL, T[eps_rule.nonterm], identityMatrix, GrB_NULL);
+        GxB_eWiseUnion(T[eps_rule.nonterm], GrB_NULL, GxB_PAIR_BOOL, GxB_PAIR_BOOL, T[eps_rule.nonterm], true_scalar, identityMatrix, true_scalar, GrB_NULL);
 
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
@@ -304,7 +305,7 @@ GrB_Info LAGraph_CFL_reachability
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
             GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, GxB_LOR_BOOL,
-                            GxB_ANY_PAIR_BOOL, T[bin_rule.prod_A], T[bin_rule.prod_B],
+                            GxB_LOR_PAIR_BOOL, T[bin_rule.prod_A], T[bin_rule.prod_B],
                             GrB_NULL));
 
             GrB_Index new_nnz;
