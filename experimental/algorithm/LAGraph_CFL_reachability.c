@@ -129,7 +129,7 @@ GrB_Info LAGraph_CFL_reachability
 )
 {
     // Declare workspace and clear the msg string, if not NULL
-    GrB_Matrix *T = calloc(nonterms_count, sizeof(GrB_Matrix));
+    GrB_Matrix *T;
     GrB_Matrix identity_matrix = NULL;
     size_t T_size = 0; // Variable for correct free
     uint64_t *nnzs = NULL;
@@ -142,6 +142,8 @@ GrB_Info LAGraph_CFL_reachability
     GrB_Scalar true_scalar;
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
+    
+    LG_TRY(LAGraph_Malloc((void **) &T, nonterms_count, sizeof(GrB_Matrix), msg));
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
