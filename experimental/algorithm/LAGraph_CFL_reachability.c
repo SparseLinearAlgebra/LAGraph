@@ -300,7 +300,7 @@ GrB_Info LAGraph_CFL_reachability
     }
 
     // Rule [Variable -> Variable1 Variable2]
-    nnzs = calloc(nonterms_count, sizeof(uint64_t));
+    LG_TRY(LAGraph_Calloc((void **) &nnzs, nonterms_count, sizeof(uint64_t), msg));
     bool changed = true;
     while (changed) {
         changed = false;
