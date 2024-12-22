@@ -271,9 +271,6 @@ GrB_Info LAGraph_CFL_reachability
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
 
-        GrB_Index nnz;
-        GrB_Matrix_nvals(&nnz, adj_matrices[term_rule.prod_A]);
-
         GxB_eWiseUnion(T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
                      T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
                      
