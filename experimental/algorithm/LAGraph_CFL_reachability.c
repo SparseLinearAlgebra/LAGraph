@@ -280,15 +280,11 @@ GrB_Info LAGraph_CFL_reachability
         #endif
     }
 
-    GRB_TRY(GrB_Matrix_new(&identity_matrix, GrB_BOOL, n, n));
-    indexes = malloc(sizeof(GrB_Index)*n);
-
-    for (size_t i = 0; i < n; i++) {
-        indexes[i] = i;
-    }
-
-
-    GRB_TRY(GxB_Matrix_build_Scalar(identity_matrix, indexes, indexes, true_scalar, n));
+    GrB_Vector v_diag;
+    GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
+    GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
+    GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
+    GRB_TRY(GrB_free(&v_diag));
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
