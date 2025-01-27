@@ -281,10 +281,10 @@ GrB_Info LAGraph_CFL_reachability
             T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
             T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
         );
-        
+
         t_empty_flags[term_rule.nonterm] = false;
 
-        #ifdef DEBUG
+        #ifdef DEBUG_CFL_REACHBILITY
         GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
         printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
         #endif
@@ -307,7 +307,7 @@ GrB_Info LAGraph_CFL_reachability
         
         t_empty_flags[eps_rule.nonterm] = false;
 
-        #ifdef DEBUG
+        #ifdef DEBUG_CFL_REACHBILITY
         GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
         printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n",
                 eps_rule.nonterm, iso_flag);
@@ -339,7 +339,7 @@ GrB_Info LAGraph_CFL_reachability
             changed = changed || (nnzs[bin_rule.nonterm] != new_nnz);
             nnzs[bin_rule.nonterm] = new_nnz;
 
-            #ifdef DEBUG
+            #ifdef DEBUG_CFL_REACHBILITY
             GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
             printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
                    "I: %ld (ISO: %d)\n",
@@ -349,7 +349,7 @@ GrB_Info LAGraph_CFL_reachability
         }
     }
 
-    #ifdef DEBUG
+    #ifdef DEBUG_CFL_REACHBILITY
         for (int32_t i = 0; i < nonterms_count; i++) {
             printf("MATRIX WITH INDEX %d:\n", i);
             GxB_print(T[i], GxB_SUMMARY);
