@@ -24,7 +24,7 @@
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
-        for (size_t i = 0; i < T_size; i++) {                                            \
+        for (size_t i = 0; i < nonterms_count; i++) {                                            \
             GrB_free(&T[i]);                                                             \
         }                                                                                \
                                                                                          \
@@ -130,8 +130,8 @@ GrB_Info LAGraph_CFL_reachability
 {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
+    bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
     GrB_Matrix identity_matrix = NULL;
-    size_t T_size = 0; // Variable for correct free
     uint64_t *nnzs = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
@@ -143,7 +143,7 @@ GrB_Info LAGraph_CFL_reachability
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
     
-    LG_TRY(LAGraph_Malloc((void **) &T, nonterms_count, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **) &T, nonterms_count, sizeof(GrB_Matrix), msg));
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
@@ -183,7 +183,7 @@ GrB_Info LAGraph_CFL_reachability
     // Create nonterms matrices
     for (int32_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
-        T_size++;
+        t_empty_flags[i] = true;
     }
 
     // Arrays for processing rules
@@ -270,10 +270,20 @@ GrB_Info LAGraph_CFL_reachability
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+        GrB_Index adj_matrix_nnz = 0;
+        GRB_TRY(GrB_Matrix_nvals(&adj_matrix_nnz, adj_matrices[term_rule.prod_A]));
 
-        GxB_eWiseUnion(T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
-                     T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
-                     
+        if (adj_matrix_nnz == 0) {
+            continue;
+        }
+
+        GxB_eWiseUnion(
+            T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
+            T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
+        );
+        
+        t_empty_flags[term_rule.nonterm] = false;
+
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
         printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
@@ -290,7 +300,12 @@ GrB_Info LAGraph_CFL_reachability
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
-        GxB_eWiseUnion(T[eps_rule.nonterm], GrB_NULL, GxB_PAIR_BOOL, GxB_PAIR_BOOL, T[eps_rule.nonterm], true_scalar, identity_matrix, true_scalar, GrB_NULL);
+        GxB_eWiseUnion (
+            T[eps_rule.nonterm],GrB_NULL,GxB_PAIR_BOOL,GxB_PAIR_BOOL,
+            T[eps_rule.nonterm],true_scalar,identity_matrix,true_scalar,GrB_NULL
+        );
+        
+        t_empty_flags[eps_rule.nonterm] = false;
 
         #ifdef DEBUG
         GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
@@ -307,14 +322,21 @@ GrB_Info LAGraph_CFL_reachability
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, GxB_LOR_BOOL,
-                            GxB_LOR_PAIR_BOOL, T[bin_rule.prod_A], T[bin_rule.prod_B],
-                            GrB_NULL));
+            // If one of matrices is empty then their product will be empty
+            if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B]) {
+                continue;
+            }
+
+            GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : GxB_ANY_BOOL;
+            GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op,
+                        GxB_ANY_PAIR_BOOL, T[bin_rule.prod_A], T[bin_rule.prod_B],
+                        GrB_NULL))
 
             GrB_Index new_nnz;
             GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
+            if (new_nnz != 0) t_empty_flags[bin_rule.nonterm] = false;
 
-            changed = changed | (nnzs[bin_rule.nonterm] != new_nnz);
+            changed = changed || (nnzs[bin_rule.nonterm] != new_nnz);
             nnzs[bin_rule.nonterm] = new_nnz;
 
             #ifdef DEBUG
