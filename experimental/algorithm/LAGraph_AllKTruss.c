@@ -142,41 +142,13 @@ int LAGraph_AllKTruss   // compute all k-trusses of a graph
     // find all k-trusses
     //--------------------------------------------------------------------------
 
-#define NHACK 1
-// GB_Global_hack_set (2,2) ; // never use the GPU
-// GB_Global_hack_set (2,1) ; // always use the GPU
-
     while (true)
     {
-
         // C{S} = S*S'
-int c = 1 ;
-   GB_Global_hack_set (2,c) ;
-for (int hack = 0 ; hack < NHACK ; hack++)
-{
-printf ("\n====================== k %ld nsteps %ld hack mxm trial %d on %s\n",
-k, nsteps, hack,
-    (c == 1) ? "GPU" : "cpu") ;
         GRB_TRY (GrB_mxm (C, S, NULL, LAGraph_plus_one_uint32, S, S,
             GrB_DESC_RST1)) ;
-}
-
         // keep entries in C that are >= k-2
-c = 2 ;
-   GB_Global_hack_set (2,c) ;
-GrB_Matrix T ; GrB_Matrix_new (&T, GrB_UINT32, n, n) ;
-for (int hack = 0 ; hack < NHACK ; hack++)
-{
-printf ("\n====================== k %ld nsteps %ld hack seelect trial %d on %s\n",
-k, nsteps, hack,
-    (c == 1) ? "GPU" : "cpu") ;
-        GRB_TRY (GrB_select (T, NULL, NULL, GrB_VALUEGE_UINT32, C, k-2, NULL)) ;
-}
-GrB_free (&C) ;
-Cset [k] = T ;
-C = T ;
-T = NULL ;
-
+        GRB_TRY (GrB_select (C, NULL, NULL, GrB_VALUEGE_UINT32, C, k-2, NULL)) ;
         nsteps++ ;
         // check if k-truss has been found
         GRB_TRY (GrB_Matrix_nvals (&nvals, C)) ;
