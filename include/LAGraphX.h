@@ -282,6 +282,14 @@ void LAGraph_SFreeSet           // free a set of matrices
     GrB_Index nmatrices         // # of matrices in the set
 ) ;
 
+LAGRAPHX_PUBLIC
+int LAGraph_Incidence_Matrix
+(
+    GrB_Matrix *result,
+    LAGraph_Graph graph,
+    char *msg
+) ;
+
 //****************************************************************************
 // Algorithms
 //****************************************************************************
@@ -584,7 +592,7 @@ GrB_Info LAGraph_BF_full_mxv
  * @param[in]   nz       number of edges
  * @param[in]   Ilist    row index vector (size n)
  * @param[in]   J        column index vector (size nz)
- * @param[in]   W        weight vector (size nz), W(i) = weight of edge 
+ * @param[in]   W        weight vector (size nz), W(i) = weight of edge
  *                       (Ilist(i),J(i))
  *
  * @retval GrB_SUCCESS        if completed successfully
@@ -652,12 +660,8 @@ GrB_Info LAGraph_BF_pure_c_double
  * Community detection using label propagation algorithm
  *
  * @param[out]  CDLP_handle  community vector
- * @param[in]   A            adjacency matrix for the graph
- * @param[in]   symmetric    denote whether the matrix is symmetric
- * @param[in]   sanitize     if true, verify that A is binary
+ * @param[in]   G            the graph
  * @param[in]   itermax      max number of iterations (0 computes nothing)
- * @param[out]  t            array of two doubles allocated by caller:
- *                           [0]=sanitize time, [1]=cdlp time in seconds
  * @param[in,out] msg        any error messages.
  *
  * @retval GrB_SUCCESS        if completed successfully
@@ -670,11 +674,53 @@ LAGRAPHX_PUBLIC
 int LAGraph_cdlp
 (
     GrB_Vector *CDLP_handle,
-    const GrB_Matrix A,
-    bool symmetric,
-    bool sanitize,
+    LAGraph_Graph G,
     int itermax,
-    double *t,
+    char *msg
+) ;
+
+LAGRAPHX_PUBLIC
+int LAGraph_cdlp_withsort
+(
+    GrB_Vector *CDLP_handle,
+    LAGraph_Graph G,
+    int itermax,
+    char *msg
+) ;
+
+
+//------------------------------------------------------------------------------
+// LAGr_PageRankGX: PageRank as defined in LDBC Graphalytics (GX)
+//------------------------------------------------------------------------------
+
+/** LAGr_PageRankGX: computes the PageRank of a directed graph G as defined in
+ * the LDBC Graphalytics benchmark.
+ *
+ * @param[out] centrality   centrality(i) is the PageRank of node i.
+ * @param[out] iters        number of iterations taken.
+ * @param[in] G             input graph.
+ * @param[in] damping       damping factor (typically 0.85).
+ * @param[in] itermax       maximum number of iterations (typically 100).
+ * @param[in,out] msg       any error messages.
+ *
+ * @retval GrB_SUCCESS if successful.
+ * @retval GrB_NULL_POINTER if G, centrality, and/our iters are NULL.
+ * @retval LAGRAPH_NOT_CACHED if G->AT is required but not present,
+ *      or if G->out_degree is not present.
+ * @retval LAGRAPH_INVALID_GRAPH Graph is invalid
+ *              (@sphinxref{LAGraph_CheckGraph} failed).
+ * @returns any GraphBLAS errors that may have been encountered.
+ */
+LAGRAPHX_PUBLIC
+int LAGr_PageRankGX
+(
+    // output:
+    GrB_Vector *centrality,
+    int *iters,
+    // input:
+    const LAGraph_Graph G,
+    float damping,
+    int itermax,
     char *msg
 ) ;
 
@@ -733,11 +779,7 @@ GrB_Info LAGraph_FW
  * Compute the local clustering coefficient for all nodes in a graph.
  *
  * @param[out]  LCC_handle   output vector holding coefficients
- * @param[in]   A            adjacency matrix for the graph
- * @param[in]   symmetric    denote whether the matrix is symmetric
- * @param[in]   sanitize     if true, verify that A is binary
- * @param[out]  t            array of two doubles
- *                           [0]=sanitize time, [1]=lcc time in seconds
+ * @param[in]   G            the graph
  * @param[in,out] msg        any error messages.
  *
  * @retval GrB_SUCCESS        if completed successfully
@@ -749,11 +791,7 @@ LAGRAPHX_PUBLIC
 int LAGraph_lcc            // compute lcc for all nodes in A
 (
     GrB_Vector *LCC_handle,     // output vector
-    const GrB_Matrix A,         // input matrix
-    bool symmetric,             // if true, the matrix is symmetric
-    bool sanitize,              // if true, ensure A is binary
-    double t [2],               // t [0] = sanitize time, t [1] = lcc time,
-                                // in seconds
+    LAGraph_Graph G,            // input graph
     char *msg
 ) ;
 
@@ -866,6 +904,48 @@ int LAGraph_FastGraphletTransform
     // inputs:
     LAGraph_Graph G,
     bool compute_d_15,  // probably this makes most sense
+    char *msg
+) ;
+
+//------------------------------------------------------------------------------
+// matching and coarsening
+//------------------------------------------------------------------------------
+
+typedef enum
+{
+    LAGraph_Matching_unweighted = 0,
+    LAGraph_Matching_heavy = 1,
+    LAGraph_Matching_light = 2,
+}
+LAGraph_Matching_kind ;
+
+LAGRAPHX_PUBLIC
+int LAGraph_MaximalMatching
+(
+    // outputs:
+    GrB_Vector *matching,
+    // inputs:
+    GrB_Matrix E,                         // incidence matrix, not part of LAGraph_Graph (for now)
+    GrB_Matrix E_t,                       // incidence transposed
+    LAGraph_Matching_kind matching_type,  // refer to above enum
+    uint64_t seed,                        // random number seed
+    char *msg
+) ;
+
+LAGRAPHX_PUBLIC
+int LAGraph_Coarsen_Matching
+(
+    // outputs:
+    GrB_Matrix *coarsened,                  // coarsened adjacency
+    GrB_Vector *parent_result,              // description in LAGraph_CoarsenMatching
+    GrB_Vector *newlabel_result,            // description in LAGraph_CoarsenMatching
+    GrB_Vector *inv_newlabel_result,        // description in LAGraph_CoarsenMatching
+    // inputs:
+    LAGraph_Graph G,
+    LAGraph_Matching_kind matching_type,     // refer to above enum
+    bool preserve_mapping,                   // preserve initial namespace of nodes
+    bool combine_weights,                    // whether to sum edge weights or just keep the pattern
+    uint64_t seed,                           // used for matching
     char *msg
 ) ;
 
@@ -990,6 +1070,265 @@ int LAGraph_HelloWorld // a simple algorithm, just for illustration
     LAGraph_Graph G,
     char *msg
 ) ;
+
+//------------------------------------------------------------------------------
+// run a breadth first search for multiple source nodes
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_MultiSourceBFS 
+(
+    // outputs:
+    GrB_Matrix    *level,
+    GrB_Matrix    *parent,
+    // inputs:
+    const LAGraph_Graph G,
+    GrB_Vector      src,
+    char          *msg
+) ;
+
+//------------------------------------------------------------------------------
+// estimate the diameter of a graph
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_EstimateDiameter
+(
+    // outputs:
+    GrB_Index    *diameter,
+    GrB_Vector    *peripheral,
+    // inputs:
+    const LAGraph_Graph G,
+    GrB_Index    maxSrcs,
+    GrB_Index    maxLoops,
+    uint64_t     seed,          // seed for randomization
+    char          *msg
+) ;
+
+//------------------------------------------------------------------------------
+// find the exact diameter of a graph
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_ExactDiameter
+(
+    // outputs:
+    GrB_Index    *diameter,
+    GrB_Vector    *peripheral,
+    GrB_Vector    *eccentricity,
+    // inputs:
+    const LAGraph_Graph G,
+    GrB_Index      k,
+    char          *msg
+) ;
+
+//------------------------------------------------------------------------------
+// HDIP_Fiedler
+//------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------
+// applies a Householder Reflection
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_Happly // happly Checked for pointer issues
+(
+    // outputs:
+    GrB_Vector y, // y output of Householder reflection on x.
+    // inputs:
+    GrB_Vector u, // u, the vector used for application of householder
+    GrB_Vector x, // x, the vector on which householder reflection is applied
+    float alpha,  // the scalar alpha used for application of householder
+    // error msg
+    char *msg
+);
+
+//------------------------------------------------------------------------------
+// Compute H*M*H*x = (M-u*x'-x*u)*x
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_hmhx // hmhx checked for pointer issues
+(
+    // outputs:
+    GrB_Vector z, // z output of hmhx
+    // inputs:
+    GrB_Matrix M, // Matrix used in hmhx
+    GrB_Vector u, // Vector u used for happly
+    GrB_Vector x, // Vector x used for happly
+    float alpha,  // the scalar alpha used for happly
+    char *msg
+);
+
+//------------------------------------------------------------------------------
+// Euclidean normalization on a vector
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_norm2 // norm2 checked for pointer mistakes
+(
+    // outputs:
+    float norm2,
+    // inputs:
+    GrB_Vector v,
+    // error msg
+    char *msg
+);
+
+//------------------------------------------------------------------------------
+// Computes Laplacian of a Matrix
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_Laplacian // compute the Laplacian matrix
+(
+    //  outputs:
+    GrB_Matrix *Lap, // the output Laplacian matrix
+    float *inform,    // infinity norm of Lap
+    // inputs:
+    GrB_Matrix G, // input matrix, symmetric
+    char *msg
+);
+
+//------------------------------------------------------------------------------
+// Preconditioned Conjugate Gradient
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_mypcg2(
+    // outputs
+    GrB_Vector *steper,
+    GrB_Index *k_result,
+    // inputs:
+    GrB_Matrix L, // input matrix, symmetric, result from Laplacian
+    GrB_Vector u, // vector u will be passed into another function to create Householder reflection
+    float malpha, // This float
+    GrB_Matrix invdiag,
+    GrB_Vector b,
+    float tol,
+    float maxit,
+    // error msging
+    char *msg
+);
+
+//------------------------------------------------------------------------------
+// Computes the Fiedler Vector
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGraph_Hdip_Fiedler // compute the Hdip_Fiedler
+(
+    // outputs:
+    GrB_Vector *iters, // Stores number of inner and outer iterations
+    float *lamb,       // Lambda of hdip_fiedler
+    GrB_Vector *x,     // the hdip fielder result vector
+    // inputs:
+    GrB_Matrix L, // input matrix, symmetric, result from Laplacian
+    float InfNorm,
+    GrB_Vector kmax,
+    float emax,
+    float tol,
+    char *msg
+);
+
+//------------------------------------------------------------------------------
+// for GPU development
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGr_TriangleCount_GPU
+(
+    // output:
+    uint64_t                   *ntriangles,
+    // input:
+    const LAGraph_Graph         G,
+    LAGr_TriangleCount_Method  *method,
+    LAGr_TriangleCount_Presort *presort,
+    char                       *msg
+) ;
+
+//------------------------------------------------------------------------------
+// Hubs and Authorities
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGr_HITS
+(
+    GrB_Vector *hubs,
+    GrB_Vector *authorities,
+    int *iters,
+    const LAGraph_Graph G,
+    float tol,
+    int itermax,
+    char *msg 
+) ;
+
+//------------------------------------------------------------------------------
+// graph clustering with quality metrics
+//------------------------------------------------------------------------------
+
+LAGRAPHX_PUBLIC
+int LAGr_PeerPressureClustering(
+    // output:
+    GrB_Vector *c_f,      // final clustering vector
+    // input:
+    bool normalize,       // if true, normalize the input graph via out-degree
+    bool make_undirected, // if true, make G undirected which generally leads to a coarser partitioning
+    double thresh,        // Threshold for convergence (percent of vertices that changed clusters)
+    int max_iter,         // Maximum number of iterations
+    LAGraph_Graph G,      // input graph
+    char *msg
+);
+
+LAGRAPHX_PUBLIC
+int LAGr_MarkovClustering(
+    // output:
+    GrB_Vector *c_f,              // final clustering vector
+    // input
+    int e,                        // expansion coefficient
+    int i,                        // inflation coefficient
+    double pruning_threshold,     // threshold for pruning values
+    double convergence_threshold, // MSE threshold for convergence
+    int max_iter,                 // maximum iterations
+    LAGraph_Graph G,              // input graph
+    char *msg
+);
+
+LAGRAPHX_PUBLIC
+int LAGr_PartitionQuality(
+    // Outputs
+    double *cov,     // Coverage
+    double *perf,    // Performance
+    // Inputs
+    GrB_Vector c,    // Cluster vector where c[i] = j means vertex i is in cluster j
+    LAGraph_Graph G, // original graph
+    char *msg
+);
+
+LAGRAPHX_PUBLIC
+int LAGr_Modularity(
+    // Outputs
+    double *mod_handle, // Modularity
+    // Inputs
+    double gamma,       // Resolution parameter
+    GrB_Vector c,       // Cluster vector where c[i] = j means vertex i is in cluster j
+    LAGraph_Graph G,    // original graph
+    char *msg
+) ;
+
+LAGRAPHX_PUBLIC
+int LAGraph_argminmax
+(
+    // output
+    GrB_Matrix *x,              // min/max value in each row/col of A
+    GrB_Matrix *p,              // index of min/max value in each row/col of A
+    // input
+    GrB_Matrix A,
+    int dim,                    // dim=1: cols of A, dim=2: rows of A
+    bool is_min,
+    char *msg
+); 
+
 
 #if defined ( __cplusplus )
 }

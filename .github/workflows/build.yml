@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
   push:
     branches-ignore:
+      - '**/v1.2*'
       - '**/*dev2'
   pull_request:
 
@@ -13,9 +14,8 @@ jobs:
     strategy:
       matrix:
         config:
-        # if there are multiple items in this list, only use should
-        # deployit=true for just one of them.
-         - {grb_version: 9.3.1, deployit: true}
+         - {grb_version: 7.4.4, conda_grb_package_hash: hcb278e6, conda_extension: conda, vanilla: 0, deploy_test_results: true}
+         - {grb_version: 7.4.4, conda_grb_package_hash: hcb278e6, conda_extension: conda, vanilla: 1, deploy_test_results: false}
     steps:
     - name: Checkout
       uses: actions/checkout@v2.0.0
@@ -35,12 +35,12 @@ jobs:
         export GRAPHBLAS_INCLUDE_DIR=`pwd`/GraphBLAS/include/suitesparse
         export GRAPHBLAS_LIBRARY=`pwd`/GraphBLAS/lib/libgraphblas.so
         cd build
-        cmake .. -DCOVERAGE=1 -DGRAPHBLAS_INCLUDE_DIR=${GRAPHBLAS_INCLUDE_DIR} -DGRAPHBLAS_LIBRARY=${GRAPHBLAS_LIBRARY}
+        cmake .. -DCOVERAGE=1 -DGRAPHBLAS_INCLUDE_DIR=${GRAPHBLAS_INCLUDE_DIR} -DGRAPHBLAS_LIBRARY=${GRAPHBLAS_LIBRARY} -DLAGRAPH_VANILLA=${{ matrix.config.vanilla }}
         JOBS=2 make
         make test_coverage
     - name: Deploy
       uses: JamesIves/github-pages-deploy-action@4.1.1
-      if: matrix.config.deployit && github.event_name == 'push' && github.ref == 'refs/heads/stable'
+      if: matrix.deploy_test_results && github.event_name == 'push' && github.ref == 'refs/heads/stable'
       with:
         branch: gh-pages
         folder: build/test_coverage/
@@ -50,12 +50,14 @@ jobs:
       with:
         name: test_coverage
         path: build/test_coverage/
+      if: github.event_name == 'push' && github.ref == 'refs/heads/stable'
   macos:
     runs-on: macos-12
     strategy:
       matrix:
         config:
-         - {grb_version: 9.3.1}
+         - {grb_version: 7.4.4, conda_grb_package_hash: ha894c9a, conda_extension: conda, vanilla: 0}
+         - {grb_version: 7.4.4, conda_grb_package_hash: ha894c9a, conda_extension: conda, vanilla: 1}
     steps:
     - name: Checkout
       uses: actions/checkout@v2.0.0
@@ -79,6 +81,6 @@ jobs:
         # adding an extra line to the CMakeLists.txt file to locate the libomp instance installed by brew
         echo 'include_directories("/usr/local/opt/libomp/include")' | cat - CMakeLists.txt
         cd build
-        CC=gcc cmake .. -DGRAPHBLAS_INCLUDE_DIR=${GRAPHBLAS_INCLUDE_DIR} -DGRAPHBLAS_LIBRARY=${GRAPHBLAS_LIBRARY}
+        CC=gcc cmake .. -DGRAPHBLAS_INCLUDE_DIR=${GRAPHBLAS_INCLUDE_DIR} -DGRAPHBLAS_LIBRARY=${GRAPHBLAS_LIBRARY} -DLAGRAPH_VANILLA=${{ matrix.config.vanilla }}
         JOBS=2 make
         make test
