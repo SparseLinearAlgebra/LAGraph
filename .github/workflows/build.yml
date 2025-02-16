@@ -51,7 +51,7 @@ jobs:
         name: test_coverage
         path: build/test_coverage/
   macos:
-    runs-on: macos-12
+    runs-on: macos-14
     strategy:
       matrix:
         config:
