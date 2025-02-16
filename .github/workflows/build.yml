@@ -1,4 +1,4 @@
-name: LAGraph CI with Builtin GraphBLAS
+name: LAGraph CI
 
 on:
   workflow_dispatch:
@@ -22,18 +22,22 @@ jobs:
     - name: Install tools for build
       run: |
         sudo apt install -y lcov
-    - name: Build GraphBLAS
+    - name: Get GraphBLAS binaries
       run: |
-        git clone https://github.com/DrTimothyAldenDavis/GraphBLAS.git
-        cd GraphBLAS
-        git checkout tags/v${{ matrix.config.grb_version }}
-        make compact
-        sudo make install
+        mkdir graphblas-binaries
+        cd graphblas-binaries
+        wget --quiet https://anaconda.org/conda-forge/graphblas/${{ matrix.config.grb_version }}/download/linux-64/graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.${{ matrix.config.conda_extension }}
+        if [ ${{ matrix.config.conda_extension }} == "tar.bz2" ]; then
+          tar xf graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.${{ matrix.config.conda_extension }}
+        else
+          unzip graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.${{ matrix.config.conda_extension }}
+          tar xf pkg-graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.tar.zst
+        fi
         cd ..
     - name: Build project
       run: |
-        export GRAPHBLAS_INCLUDE_DIR=`pwd`/GraphBLAS/include/suitesparse
-        export GRAPHBLAS_LIBRARY=`pwd`/GraphBLAS/lib/libgraphblas.so
+        export GRAPHBLAS_INCLUDE_DIR=`pwd`/graphblas-binaries/include
+        export GRAPHBLAS_LIBRARY=`pwd`/graphblas-binaries/lib/libgraphblas.so
         cd build
         cmake .. -DCOVERAGE=1 -DGRAPHBLAS_INCLUDE_DIR=${GRAPHBLAS_INCLUDE_DIR} -DGRAPHBLAS_LIBRARY=${GRAPHBLAS_LIBRARY} -DLAGRAPH_VANILLA=${{ matrix.config.vanilla }}
         JOBS=2 make
@@ -66,18 +70,22 @@ jobs:
         brew tap-new libomp/cask
         brew extract --version=14.0.6 libomp libomp/cask
         brew install libomp@14.0.6
-    - name: Build GraphBLAS
+    - name: Get GraphBLAS binaries
       run: |
-        git clone https://github.com/DrTimothyAldenDavis/GraphBLAS.git
-        cd GraphBLAS
-        git checkout tags/v${{ matrix.config.grb_version }}
-        make compact
-        sudo make install
+        mkdir graphblas-binaries
+        cd graphblas-binaries
+        wget --quiet https://anaconda.org/conda-forge/graphblas/${{ matrix.config.grb_version }}/download/osx-64/graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.${{ matrix.config.conda_extension }}
+        if [ ${{ matrix.config.conda_extension }} == "tar.bz2" ]; then
+          tar xf graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.${{ matrix.config.conda_extension }}
+        else
+          unzip graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.${{ matrix.config.conda_extension }}
+          tar xf pkg-graphblas-${{ matrix.config.grb_version }}-${{ matrix.config.conda_grb_package_hash }}_0.tar.zst
+        fi
         cd ..
     - name: Build project
       run: |
-        export GRAPHBLAS_INCLUDE_DIR=`pwd`/GraphBLAS/include/suitesparse
-        export GRAPHBLAS_LIBRARY=`pwd`/GraphBLAS/lib/libgraphblas.dylib
+        export GRAPHBLAS_INCLUDE_DIR=`pwd`/graphblas-binaries/include
+        export GRAPHBLAS_LIBRARY=`pwd`/graphblas-binaries/lib/libgraphblas.dylib
         # adding an extra line to the CMakeLists.txt file to locate the libomp instance installed by brew
         echo 'include_directories("/usr/local/opt/libomp/include")' | cat - CMakeLists.txt
         cd build

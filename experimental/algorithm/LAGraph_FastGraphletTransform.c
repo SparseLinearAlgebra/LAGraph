@@ -613,10 +613,6 @@ int LAGraph_FastGraphletTransform
     //--------------------------------------------------------------------------
 
     LG_FREE_WORK ;
-    free ((void *) A_Tiles) ;       A_Tiles = NULL ;
-    free ((void *) D_Tiles) ;       D_Tiles = NULL ;
-    free ((void *) C_Tiles) ;       C_Tiles = NULL ;
-    free ((void *) Tile_nrows) ;    Tile_nrows = NULL ;
 
     return (0) ;
 #endif

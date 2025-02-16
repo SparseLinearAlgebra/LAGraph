@@ -491,7 +491,6 @@ int LG_CC_FastSV5           // SuiteSparse:GraphBLAS method
         // determine the number entries to be constructed in T for each thread
         //----------------------------------------------------------------------
 
-        int tid;
         #pragma omp parallel for num_threads(nthreads) schedule(static)
         for (tid = 0 ; tid < nthreads ; tid++)
         {
@@ -679,7 +678,6 @@ int LG_CC_FastSV5           // SuiteSparse:GraphBLAS method
             // this is safe (memmove_s not necessary):
             memmove (Tj + offset, Tj + Tp [range [tid]],
                 sizeof (GrB_Index) * count [tid]) ;
-
             offset += count [tid] ;
             count [tid] = offset - count [tid] ;
         }

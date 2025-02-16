@@ -346,4 +346,3 @@ int LAGr_Init
     LG_set_LAGr_Init_has_been_called (true) ;
     return (GrB_SUCCESS) ;
 }
-
