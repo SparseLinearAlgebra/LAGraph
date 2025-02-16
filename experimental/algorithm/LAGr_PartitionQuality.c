@@ -44,8 +44,6 @@
         LG_FREE_WORK;                                                          \
     }
 
-#define DEBUG 0
-
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -89,7 +87,7 @@ int LAGr_PartitionQuality(
     // Delete self-edges, not relevant to these clustering metrics
     GRB_TRY(GrB_select(A, NULL, NULL, GrB_OFFDIAG, A, 0, NULL));
 
-#if DEBUG
+#if 0
     FILE *f = fopen("./data/pp_sanitized_data.mtx", "w");
     LAGRAPH_TRY(LAGraph_MMWrite(A, f, NULL, msg));
     fclose(f);
@@ -111,7 +109,7 @@ int LAGr_PartitionQuality(
     GrB_Index *cI, *cX;
     LAGRAPH_TRY(LAGraph_Malloc((void **)&cI, n, sizeof(GrB_Index), msg));
     LAGRAPH_TRY(LAGraph_Malloc((void **)&cX, n, sizeof(GrB_Index), msg));
-    GRB_TRY(GrB_Vector_extractTuples_INT64(cI, cX, &n, c));
+    GRB_TRY(GrB_Vector_extractTuples_INT64(cI, (int64_t *) cX, &n, c));
     GRB_TRY(GxB_Matrix_build_Scalar(C, cX, cI, ONE_INT64, n));
     GrB_Matrix_wait(C, GrB_MATERIALIZE);
     LAGraph_Free((void **)&cI, NULL);

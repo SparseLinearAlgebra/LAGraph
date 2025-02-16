@@ -48,8 +48,6 @@
         GrB_free(c_f);                                                         \
     }
 
-#define DEBUG
-
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -203,7 +201,7 @@ int LAGr_PeerPressureClustering(
             GrB_vxm(m_index, NULL, NULL, GxB_MIN_SECONDI_INT64, ones, E, NULL));
         // m_index_values(i) = argmax(T(:, i))
         GRB_TRY(
-            GrB_Vector_extractTuples_INT64(NULL, m_index_values, &n, m_index));
+            GrB_Vector_extractTuples_INT64(NULL, (int64_t *) m_index_values, &n, m_index));
         GRB_TRY(GrB_Matrix_new(&C_temp, GrB_BOOL, n, n));
         GRB_TRY(GrB_extract(C_temp, NULL, NULL, I, GrB_ALL, n, m_index_values,
                             n, NULL));
