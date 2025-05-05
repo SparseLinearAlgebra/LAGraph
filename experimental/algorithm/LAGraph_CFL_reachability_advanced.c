@@ -78,6 +78,20 @@
         continue;                                                                        \
     }
 
+#define TIMER_START()                                                                    \
+    {                                                                                    \
+        start_time = LAGraph_WallClockTime();                                            \
+    }
+
+#define TIMER_STOP(label, accumulator)                                                   \
+    {                                                                                    \
+        end_time = LAGraph_WallClockTime();                                              \
+        printf("%s %.3fs\n", label, end_time - start_time);                              \
+        if (accumulator != NULL) {                                                       \
+            *(accumulator) += (end_time - start_time);                                   \
+        }                                                                                \
+    }
+
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
@@ -338,7 +352,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // Rule [Variable -> Variable1 Variable2]
     LG_TRY(LAGraph_Calloc((void **)&nnzs, nonterms_count, sizeof(uint64_t), msg));
 
-    double start, end;
+    double start_time, end_time;
     bool changed = true;
     size_t iteration = 0;
     double mxm1 = 0.0;
@@ -357,42 +371,30 @@ GrB_Info LAGraph_CFL_reachability_adv(
             GRB_TRY(GrB_Matrix_new(&temp_matrices[i], GrB_BOOL, n, n));
         }
 
-        start = LAGraph_WallClockTime();
+        TIMER_START();
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
             SKIP_IF_NULL(matrices[bin_rule.prod_A]);
             SKIP_IF_NULL(delta_matrices[bin_rule.prod_B]);
 
+            GrB_Index left_nnz;
+            GrB_Index right_nnz;
+
             GRB_TRY(GrB_mxm(temp_matrices[bin_rule.nonterm], GrB_NULL, GrB_LOR,
                             GrB_LOR_LAND_SEMIRING_BOOL, matrices[bin_rule.prod_A],
                             delta_matrices[bin_rule.prod_B], GrB_NULL));
-            GxB_Matrix_iso(&iso_flag, temp_matrices[bin_rule.nonterm]);
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, temp_matrices[bin_rule.nonterm]));
-            if (!iso_flag && new_nnz) {
-                GxB_print(temp_matrices[bin_rule.nonterm], 1);
-                printf("ALERT");
-            }
-            GxB_Matrix_iso(&iso_flag, matrices[bin_rule.prod_A]);
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrices[bin_rule.prod_A]));
-            if (!iso_flag && new_nnz) {
-                GxB_print(matrices[bin_rule.prod_A], 1);
-                printf("ALERT");
-            }
-            GxB_Matrix_iso(&iso_flag, delta_matrices[bin_rule.prod_B]);
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, delta_matrices[bin_rule.prod_B]));
-            if (!iso_flag && new_nnz) {
-                GxB_print(delta_matrices[bin_rule.prod_B], 1);
-                printf("ALERT");
-            }
-        }
-        end = LAGraph_WallClockTime();
-        printf("MXM 1 %.3fs\n", end - start);
-        mxm1 += end - start;
 
-        start = LAGraph_WallClockTime();
+            IS_ISO(temp_matrices[bin_rule.nonterm], "ALERT");
+            IS_ISO(matrices[bin_rule.prod_A], "ALERT");
+            IS_ISO(delta_matrices[bin_rule.prod_B], "ALERT");
+        }
+        TIMER_STOP("MXM 1", &mxm1);
+
+        TIMER_START()
         for (size_t i = 0; i < nonterms_count; i++) {
             SKIP_IF_NULL(delta_matrices[i]);
+
             GrB_Matrix_nvals(&new_nnz, matrices[i]);
             if (new_nnz == 0) {
                 GrB_Matrix_apply(matrices[i], GrB_NULL, GrB_NULL, GrB_IDENTITY_BOOL,
@@ -400,15 +402,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
                 IS_ISO(matrices[i], "ALERT WISE 1");
                 continue;
             }
+
             GrB_eWiseAdd(matrices[i], GrB_NULL, GrB_NULL, GxB_ANY_BOOL, matrices[i],
                          delta_matrices[i], GrB_NULL);
+
             IS_ISO(matrices[i], "ALERT WISE 1");
         }
-        end = LAGraph_WallClockTime();
-        printf("WISE 1 %.3f\n", end - start);
-        wise1 += end - start;
+        TIMER_STOP("WISE 1", &wise1);
 
-        start = LAGraph_WallClockTime();
+        TIMER_START()
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
@@ -419,44 +421,29 @@ GrB_Info LAGraph_CFL_reachability_adv(
                             GxB_ANY_PAIR_BOOL, delta_matrices[bin_rule.prod_A],
                             matrices[bin_rule.prod_B], GrB_NULL))
         }
-        end = LAGraph_WallClockTime();
-        printf("MXM 2 %.3f\n", end - start);
-        mxm2 += end - start;
+        TIMER_STOP("MXM 2", &mxm2);
 
-        start = LAGraph_WallClockTime();
-
+        TIMER_START();
         for (size_t i = 0; i < nonterms_count; i++) {
-            // GrB_eWiseAdd(delta_matrices[i], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
-            // temp_matrices[i], temp_matrices[i], GrB_DESC_R);
             GrB_Matrix_new(&delta_matrices[i], GrB_BOOL, n, n);
+            SKIP_IF_NULL(temp_matrices[i]);
+
             GrB_Matrix_apply(delta_matrices[i], GrB_NULL, GrB_NULL, GrB_IDENTITY_BOOL,
                              temp_matrices[i], GrB_NULL);
-            // GxB_eWiseUnion (
-            //     delta_matrices[i],GrB_NULL,GrB_NULL,GxB_ANY_BOOL,
-            //     temp_matrices[i],true_scalar,temp_matrices[i],true_scalar,GrB_DESC_R
-            // );
-            // GrB_Matrix_dup(&delta_matrices[i], temp_matrices[i]);
-        }
-        end = LAGraph_WallClockTime();
-        printf("WISE 2 (COPY) %.3f\n", end - start);
-        wise2 += end - start;
 
-        start = LAGraph_WallClockTime();
+            IS_ISO(delta_matrices[i], "WISE 2");
+        }
+        TIMER_STOP("WISE 2 (copy)", &wise2);
+
+        TIMER_START();
         for (size_t i = 0; i < nonterms_count; i++) {
             SKIP_IF_NULL(delta_matrices[i]);
+
             GrB_Matrix_apply(delta_matrices[i], matrices[i], GrB_NULL, GrB_IDENTITY_BOOL,
                              delta_matrices[i], GrB_DESC_C);
-
-            // GrB_eWiseAdd(matrices[i], GrB_NULL, GrB_NULL, GrB_MINUS_BOOL, matrices[i],
-            //              delta_matrices[i], GrB_NULL);
-            // GxB_eWiseUnion (
-            //     delta_matrices[i],matrices[i],GrB_NULL,GxB_ANY_BOOL,
-            //     delta_matrices[i],true_scalar,delta_matrices[i],true_scalar,GrB_DESC_C
-            // );
+            IS_ISO(delta_matrices[i], "WISE 3");
         }
-        end = LAGraph_WallClockTime();
-        printf("WISE 3 (MASK) %.3f\n", end - start);
-        rsub += end - start;
+        TIMER_STOP("WISE 3 (MASK)", &rsub);
 
         for (size_t i = 0; i < nonterms_count; i++) {
             GrB_Index new_nnz;
