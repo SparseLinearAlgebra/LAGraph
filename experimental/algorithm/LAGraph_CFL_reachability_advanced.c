@@ -381,9 +381,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
             GrB_Index left_nnz;
             GrB_Index right_nnz;
 
-            GRB_TRY(GrB_mxm(temp_matrices[bin_rule.nonterm], GrB_NULL, GrB_LOR,
-                            GrB_LOR_LAND_SEMIRING_BOOL, matrices[bin_rule.prod_A],
-                            delta_matrices[bin_rule.prod_B], GrB_NULL));
+            GrB_Matrix res;
+            GrB_Matrix_new(&res, GrB_BOOL, n, n);
+
+            GRB_TRY(GrB_mxm(res, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
+                            matrices[bin_rule.prod_A], delta_matrices[bin_rule.prod_B],
+                            GrB_NULL));
+            SKIP_IF_NULL(res);
+            GrB_eWiseAdd(temp_matrices[bin_rule.nonterm], GrB_NULL, GrB_NULL,
+                         GxB_ANY_BOOL, temp_matrices[bin_rule.nonterm], res, GrB_NULL);
 
             IS_ISO(temp_matrices[bin_rule.nonterm], "ALERT");
             IS_ISO(matrices[bin_rule.prod_A], "ALERT");
@@ -438,6 +444,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START();
         for (size_t i = 0; i < nonterms_count; i++) {
             SKIP_IF_NULL(delta_matrices[i]);
+            SKIP_IF_NULL(matrices[i]);
+
+            GrB_Matrix zero;
+            GrB_Matrix_new(&zero, GrB_NULL, n, n);
 
             GrB_Matrix_apply(delta_matrices[i], matrices[i], GrB_NULL, GrB_IDENTITY_BOOL,
                              delta_matrices[i], GrB_DESC_C);
