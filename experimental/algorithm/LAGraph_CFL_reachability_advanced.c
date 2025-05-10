@@ -403,8 +403,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
             GrB_Matrix_nvals(&new_nnz, matrices[i]);
             if (new_nnz == 0) {
-                GrB_Matrix_apply(matrices[i], GrB_NULL, GrB_NULL, GrB_IDENTITY_BOOL,
-                                 delta_matrices[i], GrB_NULL);
+                GrB_Matrix_dup(&matrices[i], delta_matrices[i]);
                 IS_ISO(matrices[i], "ALERT WISE 1");
                 continue;
             }
