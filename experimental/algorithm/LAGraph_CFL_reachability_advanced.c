@@ -449,8 +449,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
             GrB_Matrix zero;
             GrB_Matrix_new(&zero, GrB_NULL, n, n);
 
-            GrB_Matrix_apply(delta_matrices[i], matrices[i], GrB_NULL, GrB_IDENTITY_BOOL,
-                             delta_matrices[i], GrB_DESC_C);
+            GrB_eWiseAdd(delta_matrices[i], matrices[i], GrB_NULL, GxB_ANY_BOOL, zero,
+                         delta_matrices[i], GrB_DESC_C);
+
             IS_ISO(delta_matrices[i], "WISE 3");
         }
         TIMER_STOP("WISE 3 (MASK)", &rsub);
