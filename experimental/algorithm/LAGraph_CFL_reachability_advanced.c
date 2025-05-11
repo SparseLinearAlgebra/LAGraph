@@ -92,6 +92,18 @@
         }                                                                                \
     }
 
+#define TRY(GrB_method)                                                                  \
+    {                                                                                    \
+        GrB_Info LG_GrB_Info = GrB_method;                                               \
+        if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
+            return LG_GrB_Info;                                                          \
+        }                                                                                \
+    }
+
+GrB_Info matrix_apply_mask_i(GrB_Matrix matrix, GrB_Matrix mask, GrB_Index size) {
+    TRY(GrB_Matrix_apply(matrix, mask, GrB_NULL, GrB_IDENTITY_BOOL, matrix, GrB_DESC_SC));
+}
+
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
@@ -445,11 +457,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             SKIP_IF_NULL(delta_matrices[i]);
             SKIP_IF_NULL(matrices[i]);
 
-            GrB_Matrix zero;
-            GrB_Matrix_new(&zero, GrB_NULL, n, n);
-
-            GrB_eWiseAdd(delta_matrices[i], matrices[i], GrB_NULL, GxB_ANY_BOOL, zero,
-                         delta_matrices[i], GrB_DESC_C);
+            GRB_TRY(matrix_apply_mask_i(delta_matrices[i], matrices[i], n));
 
             IS_ISO(delta_matrices[i], "WISE 3");
         }
