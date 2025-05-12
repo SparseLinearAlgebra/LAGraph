@@ -62,34 +62,45 @@
         rule.count++;                                                                    \
     }
 
-#define IS_ISO(matrix, msg)                                                              \
+// clang-format off
+#if BENCH_CFL_REACHBILITY
+    #define IS_ISO(matrix, str)                                                              \
     {                                                                                    \
+        bool iso_flag;                                                                   \
+        GrB_Index nnz;                                                                   \
         GxB_Matrix_iso(&iso_flag, matrix);                                               \
-        GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrix));                                     \
-        if (!iso_flag && new_nnz) {                                                      \
+        GrB_Matrix_nvals(&nnz, matrix);                                                  \
+        if (!iso_flag && nnz) {                                                          \
+            printf("-----ISO ALERT----- (%s)\n", str);                                   \
             GxB_print(matrix, 1);                                                        \
-            printf(msg);                                                                 \
+            printf("-------------------\n");                                             \
         }                                                                                \
     }
 
-#define SKIP_IF_NULL(matrix)                                                             \
-    GrB_Matrix_nvals(&new_nnz, matrix);                                                  \
-    if (new_nnz == 0) {                                                                  \
-        continue;                                                                        \
-    }
-
-#define TIMER_START()                                                                    \
+    #define TIMER_START()                                                                    \
     {                                                                                    \
         start_time = LAGraph_WallClockTime();                                            \
     }
 
-#define TIMER_STOP(label, accumulator)                                                   \
+    #define TIMER_STOP(label, accumulator)                                                   \
     {                                                                                    \
         end_time = LAGraph_WallClockTime();                                              \
         printf("%s %.3fs\n", label, end_time - start_time);                              \
         if (accumulator != NULL) {                                                       \
             *(accumulator) += (end_time - start_time);                                   \
         }                                                                                \
+    }
+#else
+    #define IS_ISO(matrix, str)
+    #define TIMER_START()
+    #define TIMER_STOP(label, accumulator)
+#endif
+// clang-format on
+
+#define SKIP_IF_NULL(matrix)                                                             \
+    GrB_Matrix_nvals(&new_nnz, matrix);                                                  \
+    if (new_nnz == 0) {                                                                  \
+        continue;                                                                        \
     }
 
 #define TRY(GrB_method)                                                                  \
