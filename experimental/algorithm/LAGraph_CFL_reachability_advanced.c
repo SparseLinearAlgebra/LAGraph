@@ -389,7 +389,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         iteration++;
         changed = false;
 
+#if BENCH_CFL_REACHBILITY
         printf("\n--- ITERATARION %ld ---\n", iteration);
+#endif
 
         for (size_t i = 0; i < nonterms_count; i++) {
             GRB_TRY(GrB_Matrix_new(&temp_matrices[i], GrB_BOOL, n, n));
@@ -493,8 +495,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #endif
     }
 
+#if BENCH_CFL_REACHBILITY
     printf("MXM1: %.3f, wise1: %.3f, MXM2: %.3f, wise2: %.3f, rsub: %.3f", mxm1, wise1,
            mxm2, wise2, rsub);
+#endif
 
 #ifdef DEBUG_CFL_REACHBILITY
     for (int32_t i = 0; i < nonterms_count; i++) {
