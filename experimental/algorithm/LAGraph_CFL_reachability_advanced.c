@@ -90,10 +90,34 @@
             *(accumulator) += (end_time - start_time);                                   \
         }                                                                                \
     }
+
+    #define IS_ROW(matrix, str)                                                              \
+    {                                                                                    \
+        int32_t orientation;                                                             \
+        GrB_get(matrix, &orientation, GrB_STORAGE_ORIENTATION_HINT);                     \
+        if (orientation != GrB_ROWMAJOR) {                                               \
+            printf("-----NOT A ROW----- (%s)\n", str);                                   \
+            GxB_print(matrix, 1);                                                        \
+            printf("-------------------\n");                                             \
+        }                                                                                \
+    }
+
+    #define IS_COL(matrix, str)                                                              \
+    {                                                                                    \
+        int32_t orientation;                                                             \
+        GrB_get(matrix, &orientation, GrB_STORAGE_ORIENTATION_HINT);                     \
+        if (orientation != GrB_COLMAJOR) {                                               \
+            printf("-----NOT A COL----- (%s)\n", str);                                   \
+            GxB_print(matrix, 1);                                                        \
+            printf("-------------------\n");                                             \
+        }                                                                                \
+    }
 #else
     #define IS_ISO(matrix, str)
     #define TIMER_START()
     #define TIMER_STOP(label, accumulator)
+    #define IS_ROW(matrix, str)
+    #define IS_COL(matrix, str)
 #endif
 // clang-format on
 
@@ -103,6 +127,9 @@
         continue;                                                                        \
     }
 
+#define TO_COL(matrix) GrB_set(matrix, GrB_COLMAJOR, GrB_STORAGE_ORIENTATION_HINT)
+#define TO_ROW(matrix) GrB_set(matrix, GrB_ROWMAJOR, GrB_STORAGE_ORIENTATION_HINT)
+
 #define TRY(GrB_method)                                                                  \
     {                                                                                    \
         GrB_Info LG_GrB_Info = GrB_method;                                               \
@@ -111,16 +138,200 @@
         }                                                                                \
     }
 
-GrB_Info matrix_apply_mask_i(GrB_Matrix matrix, GrB_Matrix mask, GrB_Index size) {
-    GrB_eWiseAdd(matrix, mask, GrB_NULL, GxB_ANY_BOOL, matrix, matrix, GrB_DESC_RSC);
-    IS_ISO(matrix, "RSUB RESULT");
+typedef struct {
+    GrB_Matrix base;
+    GrB_Matrix base_col;
+    GrB_Index nvals;
+    GrB_Index size;
+    int32_t format;
+} Matrix;
+
+void matrix_update(Matrix *matrix) {
+    GrB_Matrix_nvals(&matrix->nvals, matrix->base);
+    GrB_Matrix_nrows(&matrix->size, matrix->base);
+    GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
 }
+
+Matrix matrix_from_base(GrB_Matrix matrix) {
+    Matrix result;
+    result.base = matrix;
+    result.base_col = NULL;
+    result.nvals = 0;
+    result.size = 0;
+    result.format = GrB_ROWMAJOR;
+    matrix_update(&result);
+    return result;
+}
+
+// void matrix_to_row(Matrix matrix) {
+//     if (matrix.base == NULL) {
+//         matrix.base = matrix.base_col;
+//         matrix.base_col = NULL;
+//         matrix.format = GrB_ROWMAJOR;
+//         TO_ROW(matrix.base);
+//     }
+// }
+
+// void matrix_to_col(Matrix matrix) {
+//     if (matrix.base_col == NULL) {
+//         matrix.base_col = matrix.base;
+//         matrix.base = NULL;
+//         matrix.format = GrB_COLMAJOR;
+//         TO_COL(matrix.base_col);
+//     }
+// }
+
+// void matrix_to_col_both(Matrix matrix) {
+//     if (matrix.base_col == NULL) {
+//         GrB_Matrix new_matrix;
+//         GrB_Matrix_new(&new_matrix, GrB_BOOL, matrix.size, matrix.size);
+//         TO_COL(new_matrix);
+//         matrix.base_col = new_matrix;
+//         matrix.format = GrB_BOTH;
+//     }
+// }
+
+// GrB_Info matrix_apply_mask_i(GrB_Matrix matrix, GrB_Matrix mask, GrB_Index size) {
+//     GrB_eWiseAdd(matrix, mask, GrB_NULL, GxB_ANY_BOOL, matrix, matrix, GrB_DESC_RSC);
+//     IS_ISO(matrix, "RSUB RESULT");
+// }
+
+GrB_Info matrix_dup(Matrix output, Matrix input) {
+    // if (output.format == GrB_ROWMAJOR || output.format == GrB_BOTH) {
+    //     matrix_to_row(input);
+    //     GrB_Matrix_dup(&output.base, input.base);
+    // }
+
+    // if (output.format == GrB_COLMAJOR || output.format == GrB_BOTH) {
+    //     matrix_to_col(input);
+    //     GrB_Matrix_dup(&output.base_col, input.base_col);
+    // }
+
+    GrB_Matrix_assign(output.base, GrB_NULL, GrB_NULL, input.base, GrB_ALL, input.size,
+                      GrB_ALL, input.size, GrB_NULL);
+
+    // GrB_Matrix_dup(&output->base, input.base);
+}
+
+GrB_Info matrix_mxm(Matrix output, Matrix first, Matrix second, bool accum) {
+    GrB_mxm(output.base, GrB_NULL, accum ? GxB_ANY_BOOL : NULL, GxB_ANY_PAIR_BOOL,
+            first.base, second.base, GrB_NULL);
+    IS_ISO(output.base, "MXM output");
+}
+
+// GrB_Info matrix_mxm_format(Matrix output, Matrix first, Matrix second, bool accum) {
+//     int32_t desired_orientation =
+//         first.nvals > second.nvals ? GrB_COLMAJOR : GrB_ROWMAJOR;
+
+//     if (first.format == desired_orientation || first.format == GrB_BOTH) {
+//         GrB_set(second.base, desired_orientation, GrB_STORAGE_ORIENTATION_HINT);
+//         GrB_set(output.base, desired_orientation, GrB_STORAGE_ORIENTATION_HINT);
+//         return matrix_mxm(output, first, second, accum);
+//     }
+
+//     if (first.nvals > second.nvals / 3.0) {
+//         matrix_to_col_both(first);
+//         matrix_to_row(second);
+//         matrix_to_row(output);
+//         return matrix_mxm(output, first, second, accum);
+//     }
+
+//     return matrix_mxm(output, first, second, accum);
+// }
+
+GrB_Info matrix_mxm_empty(Matrix output, Matrix first, Matrix second, bool accum) {
+    if (first.nvals == 0 || second.nvals == 0)
+        return GrB_SUCCESS;
+
+    matrix_mxm(output, first, second, accum);
+}
+
+GrB_Info matrix_wise(Matrix output, Matrix first, Matrix second, bool accum) {
+    GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
+
+    return GrB_eWiseAdd(output.base, GrB_NULL, accum_op, GxB_ANY_BOOL, first.base,
+                        second.base, GrB_NULL);
+}
+
+GrB_Info matrix_wise_empty(Matrix output, Matrix first, Matrix second, bool accum) {
+    GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
+
+    if (first.nvals == 0 && second.nvals == 0) {
+        if (accum) {
+            return GrB_SUCCESS;
+        }
+
+        return GrB_Matrix_clear(output.base);
+    }
+
+    if (first.nvals == 0) {
+        if (accum) {
+            return matrix_wise(output, output, second, false);
+        }
+
+        return matrix_dup(output, second);
+    }
+
+    if (second.nvals == 0) {
+        if (accum) {
+            return matrix_wise(output, output, first, false);
+        }
+
+        return matrix_dup(output, first);
+    }
+
+    return matrix_wise(output, first, second, accum);
+}
+
+// GrB_Info matrix_wise_format(Matrix output, Matrix first, Matrix second, bool accum) {
+//     GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
+
+//     if (first.format == GrB_ROWMAJOR || first.format == GrB_BOTH) {
+//         matrix_to_row(second);
+//         matrix_to_row(output);
+//         GrB_eWiseAdd(output.base, GrB_NULL, accum_op, GxB_ANY_BOOL, first.base,
+//                      second.base, GrB_NULL);
+//     }
+
+//     if (first.format == GrB_COLMAJOR || first.format == GrB_BOTH) {
+//         matrix_to_col(second);
+//         matrix_to_col(output);
+//         GrB_eWiseAdd(output.base_col, GrB_NULL, accum_op, GxB_ANY_BOOL, first.base_col,
+//                      second.base_col, GrB_NULL);
+//     }
+
+//     return GrB_SUCCESS;
+// }
+
+GrB_Info matrix_rsub(Matrix output, Matrix mask) {
+    GrB_eWiseAdd(output.base, mask.base, GrB_NULL, GxB_ANY_BOOL, output.base, output.base,
+                 GrB_DESC_RSC);
+}
+
+GrB_Info matrix_rsub_empty(Matrix output, Matrix mask) {
+    if (mask.nvals == 0 || output.nvals == 0) {
+        return GrB_SUCCESS;
+    }
+
+    return matrix_rsub(output, mask);
+}
+
+// GrB_Info matrix_wise(Matrix output, Matrix first, Matrix second, bool accum) {
+//     GrB_eWiseAdd(output.base, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, matrices[i].base,
+//                  delta_matrices[i].base, GrB_NULL);
+// }
+
+// GrB_Info matrix_mxm_format(GrB_Matrix output, GrB_Matrix first, GrB_Matrix second)
+// {
+
+// }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
-// adjacency matrices) such that there is a path from u to v, where the edge labels form a
-// word from the language generated by the context-free grammar (represented by `rules`).
+// adjacency matrices) such that there is a path from u to v, where the edge labels
+// form a word from the language generated by the context-free grammar (represented by
+// `rules`).
 //
 // Terminals and non-terminals are enumerated by integers starting from zero.
 // The start non-terminal is the non-terminal with index 0.
@@ -138,14 +349,14 @@ GrB_Info matrix_apply_mask_i(GrB_Matrix matrix, GrB_Matrix mask, GrB_Index size)
 //
 // Grammar: S -> aSb | ab
 //
-// There are paths from node [1] to node [3] and from node [1] to node [2] that form the
-// word "ab" ([1]-a->[2]-b->[3] and [1]-a->[5]-b->[2]). The word "ab" is in the language
-// generated by our context-free grammar, so the pairs (1, 3) and (1, 2) will be included
-// in the result.
+// There are paths from node [1] to node [3] and from node [1] to node [2] that form
+// the word "ab" ([1]-a->[2]-b->[3] and [1]-a->[5]-b->[2]). The word "ab" is in the
+// language generated by our context-free grammar, so the pairs (1, 3) and (1, 2) will
+// be included in the result.
 //
-// Note: It doesn't matter how many paths exist from node [A] to node [B] that form a word
-// in the language. If at least one path exists, the pair ([A], [B]) will be included in
-// the result.
+// Note: It doesn't matter how many paths exist from node [A] to node [B] that form a
+// word in the language. If at least one path exists, the pair ([A], [B]) will be
+// included in the result.
 //
 // In contrast, the path from node [1] to node [4] forms the word "abb"
 // ([1]-a->[2]-b->[3]-b->[4]) and the word "abbb" ([1]-a->[5]-b->[2]-b->[3]-b->[4]).
@@ -182,9 +393,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
 ) {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
-    GrB_Matrix *delta_matrices;
-    GrB_Matrix *matrices;
-    GrB_Matrix *temp_matrices;
+    Matrix *delta_matrices;
+    Matrix *matrices;
+    Matrix *temp_matrices;
     bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
     GrB_Matrix identity_matrix = NULL;
     uint64_t *nnzs = NULL;
@@ -198,11 +409,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GrB_Scalar_setElement_BOOL(true_scalar, true);
 
     LG_TRY(LAGraph_Calloc((void **)&T, nonterms_count, sizeof(GrB_Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **)&delta_matrices, nonterms_count, sizeof(GrB_Matrix),
-                          msg));
-    LG_TRY(LAGraph_Calloc((void **)&matrices, nonterms_count, sizeof(GrB_Matrix), msg));
-    LG_TRY(
-        LAGraph_Calloc((void **)&temp_matrices, nonterms_count, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&delta_matrices, nonterms_count, sizeof(Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&matrices, nonterms_count, sizeof(Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&temp_matrices, nonterms_count, sizeof(Matrix), msg));
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
@@ -241,10 +450,19 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Create nonterms matrices
     for (int32_t i = 0; i < nonterms_count; i++) {
+        GrB_Matrix matrix;
+
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
-        GRB_TRY(GrB_Matrix_new(&delta_matrices[i], GrB_BOOL, n, n));
-        GRB_TRY(GrB_Matrix_new(&matrices[i], GrB_BOOL, n, n));
-        GRB_TRY(GrB_Matrix_new(&temp_matrices[i], GrB_BOOL, n, n));
+
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        delta_matrices[i] = matrix_from_base(matrix);
+
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        matrices[i] = matrix_from_base(matrix);
+
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        temp_matrices[i] = matrix_from_base(matrix);
+
         t_empty_flags[i] = true;
     }
 
@@ -339,9 +557,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
             continue;
         }
 
-        GxB_eWiseUnion(delta_matrices[term_rule.nonterm], GrB_NULL, GrB_NULL,
-                       GxB_PAIR_BOOL, delta_matrices[term_rule.nonterm], true_scalar,
+        GxB_eWiseUnion(delta_matrices[term_rule.nonterm].base, GrB_NULL, GrB_NULL,
+                       GxB_PAIR_BOOL, delta_matrices[term_rule.nonterm].base, true_scalar,
                        adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
+        matrix_update(&delta_matrices[term_rule.nonterm]);
 
         t_empty_flags[term_rule.nonterm] = false;
 
@@ -361,9 +580,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
-        GxB_eWiseUnion(delta_matrices[eps_rule.nonterm], GrB_NULL, GxB_PAIR_BOOL,
-                       GxB_PAIR_BOOL, delta_matrices[eps_rule.nonterm], true_scalar,
+        GxB_eWiseUnion(delta_matrices[eps_rule.nonterm].base, GrB_NULL, GxB_PAIR_BOOL,
+                       GxB_PAIR_BOOL, delta_matrices[eps_rule.nonterm].base, true_scalar,
                        identity_matrix, true_scalar, GrB_NULL);
+        matrix_update(&delta_matrices[eps_rule.nonterm]);
 
         t_empty_flags[eps_rule.nonterm] = false;
 
@@ -394,59 +614,24 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #endif
 
         for (size_t i = 0; i < nonterms_count; i++) {
-            GRB_TRY(GrB_Matrix_new(&temp_matrices[i], GrB_BOOL, n, n));
+            GRB_TRY(GrB_Matrix_clear(temp_matrices[i].base));
+            matrix_update(&temp_matrices[i]);
         }
 
         TIMER_START();
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            SKIP_IF_NULL(matrices[bin_rule.prod_A]);
-            SKIP_IF_NULL(delta_matrices[bin_rule.prod_B]);
-
-            GrB_Index left_nnz;
-            GrB_Index right_nnz;
-
-            GrB_Matrix res;
-            GrB_Matrix_new(&res, GrB_BOOL, n, n);
-
-            GRB_TRY(GrB_mxm(res, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
-                            matrices[bin_rule.prod_A], delta_matrices[bin_rule.prod_B],
-                            GrB_NULL));
-            SKIP_IF_NULL(res);
-            IS_ISO(res, "MXM RES");
-
-            GrB_Index nnz;
-            GrB_Matrix_nvals(&nnz, temp_matrices[bin_rule.nonterm]);
-            if (nnz == 0) {
-                GrB_Matrix_dup(&temp_matrices[bin_rule.nonterm], res);
-            } else {
-                GrB_eWiseAdd(temp_matrices[bin_rule.nonterm], GrB_NULL, GrB_NULL,
-                             GxB_ANY_BOOL, temp_matrices[bin_rule.nonterm], res,
-                             GrB_NULL);
-            }
-
-            IS_ISO(temp_matrices[bin_rule.nonterm], "ALERT");
-            IS_ISO(matrices[bin_rule.prod_A], "ALERT");
-            IS_ISO(delta_matrices[bin_rule.prod_B], "ALERT");
+            matrix_mxm_empty(temp_matrices[bin_rule.nonterm], matrices[bin_rule.prod_A],
+                             delta_matrices[bin_rule.prod_B], false);
+            matrix_update(&temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
         for (size_t i = 0; i < nonterms_count; i++) {
-            SKIP_IF_NULL(delta_matrices[i]);
-
-            GrB_Matrix_nvals(&new_nnz, matrices[i]);
-            if (new_nnz == 0) {
-                GrB_Matrix_dup(&matrices[i], delta_matrices[i]);
-                IS_ISO(matrices[i], "ALERT WISE 1");
-                continue;
-            }
-
-            GrB_eWiseAdd(matrices[i], GrB_NULL, GrB_NULL, GxB_ANY_BOOL, matrices[i],
-                         delta_matrices[i], GrB_NULL);
-
-            IS_ISO(matrices[i], "ALERT WISE 1");
+            matrix_wise_empty(matrices[i], matrices[i], delta_matrices[i], false);
+            matrix_update(&matrices[i]);
         }
         TIMER_STOP("WISE 1", &wise1);
 
@@ -454,41 +639,29 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            SKIP_IF_NULL(delta_matrices[bin_rule.prod_A]);
-            SKIP_IF_NULL(matrices[bin_rule.prod_B]);
-
-            GRB_TRY(GrB_mxm(temp_matrices[bin_rule.nonterm], GrB_NULL, GxB_ANY_BOOL,
-                            GxB_ANY_PAIR_BOOL, delta_matrices[bin_rule.prod_A],
-                            matrices[bin_rule.prod_B], GrB_NULL))
+            matrix_mxm_empty(temp_matrices[bin_rule.nonterm],
+                             delta_matrices[bin_rule.prod_A], matrices[bin_rule.prod_B],
+                             true);
+            matrix_update(&temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
         TIMER_START();
         for (size_t i = 0; i < nonterms_count; i++) {
-            GrB_Matrix_new(&delta_matrices[i], GrB_BOOL, n, n);
-            SKIP_IF_NULL(temp_matrices[i]);
-
-            GrB_Matrix_apply(delta_matrices[i], GrB_NULL, GrB_NULL, GrB_IDENTITY_BOOL,
-                             temp_matrices[i], GrB_NULL);
-
-            IS_ISO(delta_matrices[i], "WISE 2");
+            matrix_dup(delta_matrices[i], temp_matrices[i]);
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
 
         TIMER_START();
         for (size_t i = 0; i < nonterms_count; i++) {
-            SKIP_IF_NULL(delta_matrices[i]);
-            SKIP_IF_NULL(matrices[i]);
-
-            GRB_TRY(matrix_apply_mask_i(delta_matrices[i], matrices[i], n));
-
-            IS_ISO(delta_matrices[i], "WISE 3");
+            matrix_rsub_empty(delta_matrices[i], matrices[i]);
+            matrix_update(&delta_matrices[i]);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsub);
 
         for (size_t i = 0; i < nonterms_count; i++) {
             GrB_Index new_nnz;
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrices[i]));
+            GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrices[i].base));
             if (new_nnz != 0)
                 t_empty_flags[i] = false;
 
@@ -517,7 +690,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #endif
 
     for (int32_t i = 0; i < nonterms_count; i++) {
-        outputs[i] = matrices[i];
+        outputs[i] = matrices[i].base;
     }
 
     LG_FREE_WORK;
