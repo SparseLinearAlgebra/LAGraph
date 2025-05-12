@@ -414,8 +414,17 @@ GrB_Info LAGraph_CFL_reachability_adv(
                             matrices[bin_rule.prod_A], delta_matrices[bin_rule.prod_B],
                             GrB_NULL));
             SKIP_IF_NULL(res);
-            GrB_eWiseAdd(temp_matrices[bin_rule.nonterm], GrB_NULL, GrB_NULL,
-                         GxB_ANY_BOOL, temp_matrices[bin_rule.nonterm], res, GrB_NULL);
+            IS_ISO(res, "MXM RES");
+
+            GrB_Index nnz;
+            GrB_Matrix_nvals(&nnz, temp_matrices[bin_rule.nonterm]);
+            if (nnz == 0) {
+                GrB_Matrix_dup(&temp_matrices[bin_rule.nonterm], res);
+            } else {
+                GrB_eWiseAdd(temp_matrices[bin_rule.nonterm], GrB_NULL, GrB_NULL,
+                             GxB_ANY_BOOL, temp_matrices[bin_rule.nonterm], res,
+                             GrB_NULL);
+            }
 
             IS_ISO(temp_matrices[bin_rule.nonterm], "ALERT");
             IS_ISO(matrices[bin_rule.prod_A], "ALERT");
