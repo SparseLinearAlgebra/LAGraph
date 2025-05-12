@@ -140,6 +140,7 @@
 
 typedef struct {
     GrB_Matrix base;
+    GrB_Matrix base_row;
     GrB_Matrix base_col;
     GrB_Index nvals;
     GrB_Index size;
@@ -155,6 +156,7 @@ void matrix_update(Matrix *matrix) {
 Matrix matrix_from_base(GrB_Matrix matrix) {
     Matrix result;
     result.base = matrix;
+    result.base_row = matrix;
     result.base_col = NULL;
     result.nvals = 0;
     result.size = 0;
@@ -163,14 +165,39 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     return result;
 }
 
-// void matrix_to_row(Matrix matrix) {
-//     if (matrix.base == NULL) {
-//         matrix.base = matrix.base_col;
-//         matrix.base_col = NULL;
-//         matrix.format = GrB_ROWMAJOR;
-//         TO_ROW(matrix.base);
-//     }
-// }
+void matrix_to_row(Matrix *matrix) {
+    if (matrix->format == GrB_ROWMAJOR) {
+        return;
+    }
+
+    if (matrix->format == GrB_BOTH) {
+        matrix->base = matrix->base_row;
+        return;
+    }
+
+    matrix->format = GrB_ROWMAJOR;
+    matrix->base_row = matrix->base_col;
+    matrix->base_col = NULL;
+    TO_ROW(matrix->base_row);
+    matrix->base = matrix->base_row;
+}
+
+void matrix_to_col(Matrix *matrix) {
+    if (matrix->format == GrB_COLMAJOR) {
+        return;
+    }
+
+    if (matrix->format == GrB_BOTH) {
+        matrix->base = matrix->base_col;
+        return;
+    }
+
+    matrix->format = GrB_COLMAJOR;
+    matrix->base_col = matrix->base_row;
+    matrix->base_row = NULL;
+    TO_COL(matrix->base_col);
+    matrix->base = matrix->base_col;
+}
 
 // void matrix_to_col(Matrix matrix) {
 //     if (matrix.base_col == NULL) {
@@ -213,6 +240,18 @@ GrB_Info matrix_dup(Matrix output, Matrix input) {
     // GrB_Matrix_dup(&output->base, input.base);
 }
 
+GrB_Info matrix_dup_format(Matrix output, Matrix input) {
+    return matrix_dup(output, input);
+}
+
+GrB_Info matrix_dup_empty(Matrix output, Matrix input) {
+    if (input.nvals == 0) {
+        return GrB_Matrix_clear(output.base);
+    }
+
+    return matrix_dup_format(output, input);
+}
+
 GrB_Info matrix_mxm(Matrix output, Matrix first, Matrix second, bool accum) {
     GrB_mxm(output.base, GrB_NULL, accum ? GxB_ANY_BOOL : NULL, GxB_ANY_PAIR_BOOL,
             first.base, second.base, GrB_NULL);
@@ -253,6 +292,29 @@ GrB_Info matrix_wise(Matrix output, Matrix first, Matrix second, bool accum) {
                         second.base, GrB_NULL);
 }
 
+GrB_Info matrix_wise_format(Matrix output, Matrix first, Matrix second, bool accum) {
+    GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
+    GrB_Info result;
+
+    if (first.format == GrB_ROWMAJOR || first.format == GrB_BOTH) {
+        matrix_to_row(&second);
+        matrix_to_row(&output);
+        result = matrix_wise(output, first, second, accum);
+    }
+
+    if (result < GrB_SUCCESS) {
+        return result;
+    }
+
+    if (first.format == GrB_COLMAJOR || first.format == GrB_BOTH) {
+        matrix_to_col(&second);
+        matrix_to_col(&output);
+        result = matrix_wise(output, first, second, accum);
+    }
+
+    return result;
+}
+
 GrB_Info matrix_wise_empty(Matrix output, Matrix first, Matrix second, bool accum) {
     GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
 
@@ -280,7 +342,7 @@ GrB_Info matrix_wise_empty(Matrix output, Matrix first, Matrix second, bool accu
         return matrix_dup(output, first);
     }
 
-    return matrix_wise(output, first, second, accum);
+    return matrix_wise_format(output, first, second, accum);
 }
 
 // GrB_Info matrix_wise_format(Matrix output, Matrix first, Matrix second, bool accum) {
@@ -308,12 +370,24 @@ GrB_Info matrix_rsub(Matrix output, Matrix mask) {
                  GrB_DESC_RSC);
 }
 
+GrB_Info matrix_rsub_format(Matrix output, Matrix mask) {
+    if (mask.format == GrB_ROWMAJOR) {
+        matrix_to_row(&output);
+        matrix_to_row(&mask);
+        return matrix_rsub(output, mask);
+    }
+
+    matrix_to_col(&output);
+    matrix_to_col(&mask);
+    return matrix_rsub(output, mask);
+}
+
 GrB_Info matrix_rsub_empty(Matrix output, Matrix mask) {
     if (mask.nvals == 0 || output.nvals == 0) {
         return GrB_SUCCESS;
     }
 
-    return matrix_rsub(output, mask);
+    return matrix_rsub_format(output, mask);
 }
 
 // GrB_Info matrix_wise(Matrix output, Matrix first, Matrix second, bool accum) {
@@ -648,7 +722,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (size_t i = 0; i < nonterms_count; i++) {
-            matrix_dup(delta_matrices[i], temp_matrices[i]);
+            matrix_dup_empty(delta_matrices[i], temp_matrices[i]);
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
 
