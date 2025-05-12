@@ -112,7 +112,8 @@
     }
 
 GrB_Info matrix_apply_mask_i(GrB_Matrix matrix, GrB_Matrix mask, GrB_Index size) {
-    TRY(GrB_Matrix_apply(matrix, mask, GrB_NULL, GrB_IDENTITY_BOOL, matrix, GrB_DESC_SC));
+    GrB_eWiseAdd(matrix, mask, GrB_NULL, GxB_ANY_BOOL, matrix, matrix, GrB_DESC_RSC);
+    IS_ISO(matrix, "RSUB RESULT");
 }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
