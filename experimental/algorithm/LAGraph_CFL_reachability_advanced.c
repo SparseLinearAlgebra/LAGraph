@@ -345,23 +345,23 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
             return GrB_SUCCESS;
         }
 
-        return matrix_clear_format(output);
+        return matrix_clear_empty(output);
     }
 
     if (first->nvals == 0) {
         if (accum) {
-            return matrix_wise_format(output, output, second, false);
+            return matrix_wise_empty(output, output, second, false);
         }
 
-        return matrix_dup_format(output, second);
+        return matrix_dup_empty(output, second);
     }
 
     if (second->nvals == 0) {
         if (accum) {
-            return matrix_wise_format(output, output, first, false);
+            return matrix_wise_empty(output, output, first, false);
         }
 
-        return matrix_dup_format(output, first);
+        return matrix_dup_empty(output, first);
     }
 
     return matrix_wise_format(output, first, second, accum);
