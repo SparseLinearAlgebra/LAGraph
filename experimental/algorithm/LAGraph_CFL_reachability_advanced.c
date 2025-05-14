@@ -430,14 +430,18 @@ GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
 }
 
 GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask) {
-    if (mask->format == GrB_ROWMAJOR) {
-        matrix_to_row(output);
-        matrix_to_row(mask);
+    if (!output->is_both) {
         return matrix_rsub(output, mask);
     }
 
-    matrix_to_col(output);
-    matrix_to_col(mask);
+    matrix_to_format(output, GrB_ROWMAJOR, false);
+    GrB_Info result = matrix_rsub(output, mask);
+
+    if (result < GrB_SUCCESS) {
+        return result;
+    }
+
+    matrix_to_format(output, GrB_COLMAJOR, false);
     return matrix_rsub(output, mask);
 }
 
