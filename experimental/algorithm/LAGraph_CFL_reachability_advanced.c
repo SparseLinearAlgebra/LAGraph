@@ -241,11 +241,6 @@ void matrix_to_row_both(Matrix *matrix) {
     }
 }
 
-// GrB_Info matrix_apply_mask_i(GrB_Matrix matrix, GrB_Matrix mask, GrB_Index size) {
-//     GrB_eWiseAdd(matrix, mask, GrB_NULL, GxB_ANY_BOOL, matrix, matrix, GrB_DESC_RSC);
-//     IS_ISO(matrix, "RSUB RESULT");
-// }
-
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     // if (output.format == GrB_ROWMAJOR || output.format == GrB_BOTH) {
     //     matrix_to_row(input);
@@ -259,8 +254,6 @@ GrB_Info matrix_dup(Matrix *output, Matrix *input) {
 
     GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL, input->size,
                       GrB_ALL, input->size, GrB_NULL);
-
-    // GrB_Matrix_dup(&output->base, input.base);
 }
 
 GrB_Info matrix_dup_format(Matrix *output, Matrix *input) {
@@ -411,26 +404,6 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
     return matrix_wise_format(output, first, second, accum);
 }
 
-// GrB_Info matrix_wise_format(Matrix output, Matrix first, Matrix second, bool accum) {
-//     GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
-
-//     if (first.format == GrB_ROWMAJOR || first.format == GrB_BOTH) {
-//         matrix_to_row(second);
-//         matrix_to_row(output);
-//         GrB_eWiseAdd(output.base, GrB_NULL, accum_op, GxB_ANY_BOOL, first.base,
-//                      second.base, GrB_NULL);
-//     }
-
-//     if (first.format == GrB_COLMAJOR || first.format == GrB_BOTH) {
-//         matrix_to_col(second);
-//         matrix_to_col(output);
-//         GrB_eWiseAdd(output.base_col, GrB_NULL, accum_op, GxB_ANY_BOOL, first.base_col,
-//                      second.base_col, GrB_NULL);
-//     }
-
-//     return GrB_SUCCESS;
-// }
-
 GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
     return GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL, output->base,
                         output->base, GrB_DESC_RSC);
@@ -455,16 +428,6 @@ GrB_Info matrix_rsub_empty(Matrix *output, Matrix *mask) {
 
     return matrix_rsub_format(output, mask);
 }
-
-// GrB_Info matrix_wise(Matrix output, Matrix first, Matrix second, bool accum) {
-//     GrB_eWiseAdd(output.base, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, matrices[i].base,
-//                  delta_matrices[i].base, GrB_NULL);
-// }
-
-// GrB_Info matrix_mxm_format(GrB_Matrix output, GrB_Matrix first, GrB_Matrix second)
-// {
-
-// }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
