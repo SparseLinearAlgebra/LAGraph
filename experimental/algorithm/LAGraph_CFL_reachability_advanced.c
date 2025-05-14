@@ -138,14 +138,17 @@
         }                                                                                \
     }
 
-typedef struct {
+typedef struct Matrix {
     GrB_Matrix base;
     GrB_Matrix base_row;
     GrB_Matrix base_col;
+    struct Matrix *base_matrices;
+    size_t base_matrices_count;
     GrB_Index nvals;
     GrB_Index size;
     int32_t format;
     bool is_both;
+    bool is_lazy;
 } Matrix;
 
 void matrix_update(Matrix *matrix) {
@@ -159,6 +162,8 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.base = matrix;
     result.base_row = matrix;
     result.base_col = NULL;
+    result.base_matrices = NULL;
+    result.base_matrices_count = 0;
     result.nvals = 0;
     result.size = 0;
     result.format = GrB_ROWMAJOR;
@@ -312,32 +317,38 @@ GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool ac
     return matrix_mxm_format(output, first, second, accum, swap);
 }
 
-GrB_Info matrix_rmxm_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    Matrix *temp = first;
-    first = second;
-    second = temp;
-
-    int32_t desired_orientation =
-        first->nvals > second->nvals ? GrB_ROWMAJOR : GrB_COLMAJOR;
-
-    if (!first->is_both && first->format != desired_orientation &&
-        !(first->nvals > second->nvals / 3.0)) {
-        GrB_Info result = matrix_mxm(output, second, first, accum);
-        return result;
+GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool accum,
+                         bool swap) {
+    if (swap) {
+        Matrix *temp = first;
+        first = second;
+        second = temp;
     }
 
-    matrix_to_format(first, desired_orientation, true);
-    matrix_to_format(second, desired_orientation, false);
-    matrix_to_format(output, desired_orientation, false);
-    GrB_Info result = matrix_mxm(output, second, first, accum);
-    return result;
-}
+    if (first->base_matrices_count == 0) {
+        return matrix_mxm_empty(output, first, second, accum, swap);
+    }
 
-GrB_Info matrix_rmxm_empty(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    if (first->nvals == 0 || second->nvals == 0)
-        return GrB_SUCCESS;
+    GrB_Matrix *accs = malloc(sizeof(GrB_Matrix) * first->base_matrices_count);
+    Matrix *acc_matrices = malloc(sizeof(Matrix) * first->base_matrices_count);
+    for (size_t i = 0; i < first->base_matrices_count; i++) {
+        GrB_Matrix_new(&accs[i], GrB_BOOL, output->size, output->size);
+        acc_matrices[i] = matrix_from_base(accs[i]);
+    }
 
-    return matrix_rmxm_format(output, first, second, accum);
+    for (size_t i = 0; i < first->base_matrices_count; i++) {
+        matrix_mxm_empty(&acc_matrices[i], &first->base_matrices[i], second, accum, swap);
+    }
+
+    GrB_Matrix acc;
+    GrB_Matrix_new(&acc, GrB_BOOL, first->size, first->size);
+    Matrix acc_matrix = matrix_from_base(acc);
+
+    for (size_t i = 0; i < first->base_matrices_count; i++) {
+        matrix_wise_empty(&acc_matrix, &acc_matrix, &acc_matrices[i], false);
+    }
+
+    return matrix_dup_empty(output, &acc_matrix);
 }
 
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
@@ -405,7 +416,43 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
     return matrix_wise_format(output, first, second, accum);
 }
 
-                printf("");
+GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool accum) {
+    if (first->base_matrices_count == 0) {
+        return matrix_wise_empty(output, first, second, accum);
+    }
+
+    GrB_Matrix _other;
+    GrB_Matrix_new(&_other, GrB_BOOL, output->size, output->size);
+    Matrix other = matrix_from_base(_other);
+    matrix_dup_empty(&other, second);
+
+    while (true) {
+        bool found = false;
+
+        for (size_t i = 0; i < first->base_matrices_count; i++) {
+            if (other.nvals / 10 < first->base_matrices[i].nvals &&
+                first->base_matrices[i].nvals < other.nvals * 10) {
+                matrix_wise_empty(&other, &other, &first->base_matrices[i], false);
+                for (size_t j = i + 1; j < first->base_matrices_count; j++) {
+                    first->base_matrices[j - 1] = first->base_matrices[j];
+                }
+                first->base_matrices_count--;
+                found = true;
+                break;
+            }
+        }
+
+        if (found) {
+            continue;
+        }
+
+        first->base_matrices[first->base_matrices_count++] = other;
+        break;
+    }
+
+    return GrB_SUCCESS;
+}
+
 GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
     GrB_Info result = GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL,
                                    output->base, output->base, GrB_DESC_RSC);
@@ -442,6 +489,18 @@ GrB_Info matrix_rsub_empty(Matrix *output, Matrix *mask) {
     }
 
     return matrix_rsub_format(output, mask);
+}
+
+GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
+    if (mask->base_matrices_count == 0) {
+        return matrix_rsub_empty(output, mask);
+    }
+
+    for (size_t i = 0; i < mask->base_matrices_count; i++) {
+        matrix_rsub_empty(output, &mask->base_matrices[i]);
+    }
+
+    return GrB_SUCCESS;
 }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
