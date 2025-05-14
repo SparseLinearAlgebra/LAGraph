@@ -167,38 +167,6 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     return result;
 }
 
-void matrix_format_sync(Matrix *matrix) {
-    if (!matrix->is_both) {
-        // if (matrix->format == GrB_ROWMAJOR) {
-        //     GrB_Matrix_assign(matrix->base_row, GrB_NULL, GrB_NULL, matrix->base,
-        //     GrB_ALL,
-        //                       matrix->size, GrB_ALL, matrix->size, GrB_NULL);
-        // } else {
-        //     GrB_Matrix_assign(matrix->base_col, GrB_NULL, GrB_NULL, matrix->base,
-        //     GrB_ALL,
-        //                       matrix->size, GrB_ALL, matrix->size, GrB_NULL);
-        // }
-
-        return;
-    }
-
-    // GrB_Matrix_assign(matrix->base_row, GrB_NULL, GrB_NULL, matrix->base, GrB_ALL,
-    //                   matrix->size, GrB_ALL, matrix->size, GrB_NULL);
-    // GrB_Matrix_assign(matrix->base_col, GrB_NULL, GrB_NULL, matrix->base, GrB_ALL,
-    //                   matrix->size, GrB_ALL, matrix->size, GrB_NULL);
-
-    GrB_Matrix *new_matrix =
-        matrix->format == GrB_ROWMAJOR ? &matrix->base_col : &matrix->base_row;
-    GrB_Matrix *old_matrix =
-        matrix->format == GrB_ROWMAJOR ? &matrix->base_row : &matrix->base_col;
-
-    GrB_Matrix_assign(*new_matrix, GrB_NULL, GrB_NULL, *old_matrix, GrB_ALL, matrix->size,
-                      GrB_ALL, matrix->size, GrB_NULL);
-
-    // is_matrix_equal(matrix->base_row, matrix->base_col);
-    // is_matrix_equal(matrix->base_row, matrix->base);
-}
-
 void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     // Matrix contain both formats so just switch base matrix
     if (matrix->is_both) {
