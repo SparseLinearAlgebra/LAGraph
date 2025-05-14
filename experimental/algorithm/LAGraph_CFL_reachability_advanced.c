@@ -397,30 +397,28 @@ GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool 
 }
 
 GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
-
     if (first->nvals == 0 && second->nvals == 0) {
         if (accum) {
             return GrB_SUCCESS;
         }
 
-        return GrB_Matrix_clear(output->base);
+        return matrix_clear_format(output);
     }
 
     if (first->nvals == 0) {
         if (accum) {
-            return matrix_wise(output, output, second, false);
+            return matrix_wise_format(output, output, second, false);
         }
 
-        return matrix_dup(output, second);
+        return matrix_dup_format(output, second);
     }
 
     if (second->nvals == 0) {
         if (accum) {
-            return matrix_wise(output, output, first, false);
+            return matrix_wise_format(output, output, first, false);
         }
 
-        return matrix_dup(output, first);
+        return matrix_dup_format(output, first);
     }
 
     return matrix_wise_format(output, first, second, accum);
