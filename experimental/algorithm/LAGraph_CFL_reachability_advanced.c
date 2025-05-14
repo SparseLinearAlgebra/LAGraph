@@ -234,7 +234,7 @@ void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     return;
 }
 
-GrB_Info matrix_clear(Matrix *A) { return GrB_Matrix_clear(A); }
+GrB_Info matrix_clear(Matrix *A) { return GrB_Matrix_clear(A->base); }
 
 GrB_Info matrix_clear_format(Matrix *A) {
     if (!A->is_both) {
@@ -300,70 +300,52 @@ GrB_Info matrix_mxm_format(Matrix *output, Matrix *first, Matrix *second, bool a
     int32_t desired_orientation =
         first->nvals > second->nvals ? GrB_COLMAJOR : GrB_ROWMAJOR;
 
-    if (first->format == desired_orientation || first->format == GrB_BOTH) {
-        if (desired_orientation == GrB_COLMAJOR) {
-            matrix_to_col(second);
-            matrix_to_col(output);
-            return matrix_mxm(output, first, second, accum);
-        } else {
-            matrix_to_row(second);
-            matrix_to_row(output);
-            return matrix_mxm(output, first, second, accum);
-        }
+    if (!first->is_both && first->format != desired_orientation &&
+        !(first->nvals > second->nvals / 3.0)) {
+        GrB_Info result = matrix_mxm(output, first, second, accum);
+        return result;
     }
 
-    if (first->nvals > second->nvals / 3.0) {
-        matrix_to_col_both(first);
-        matrix_to_row(second);
-        matrix_to_row(output);
-        return matrix_mxm(output, first, second, accum);
-    }
-
-    return matrix_mxm(output, first, second, accum);
-}
-
-GrB_Info matrix_rmxm_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    Matrix *temp = first;
-    second = first;
-    first = temp;
-
-    int32_t desired_orientation =
-        first->nvals > second->nvals ? GrB_ROWMAJOR : GrB_COLMAJOR;
-
-    if (first->format == desired_orientation || first->format == GrB_BOTH) {
-        if (desired_orientation == GrB_COLMAJOR) {
-            matrix_to_row(second);
-            matrix_to_row(output);
-            return matrix_mxm(output, first, second, accum);
-        } else {
-            matrix_to_col(second);
-            matrix_to_col(output);
-            return matrix_mxm(output, first, second, accum);
-        }
-    }
-
-    if (first->nvals > second->nvals / 3.0) {
-        matrix_to_row_both(first);
-        matrix_to_col(second);
-        matrix_to_col(output);
-        return matrix_mxm(output, first, second, accum);
-    }
-
-    return matrix_mxm(output, first, second, accum);
+    matrix_to_format(first, desired_orientation, true);
+    matrix_to_format(second, desired_orientation, false);
+    matrix_to_format(output, desired_orientation, false);
+    GrB_Info result = matrix_mxm(output, first, second, accum);
+    return result;
 }
 
 GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     if (first->nvals == 0 || second->nvals == 0)
         return GrB_SUCCESS;
 
-    matrix_mxm_format(output, first, second, accum);
+    return matrix_mxm_format(output, first, second, accum);
+}
+
+GrB_Info matrix_rmxm_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
+    Matrix *temp = first;
+    first = second;
+    second = temp;
+
+    int32_t desired_orientation =
+        first->nvals > second->nvals ? GrB_ROWMAJOR : GrB_COLMAJOR;
+
+    if (!first->is_both && first->format != desired_orientation &&
+        !(first->nvals > second->nvals / 3.0)) {
+        GrB_Info result = matrix_mxm(output, second, first, accum);
+        return result;
+    }
+
+    matrix_to_format(first, desired_orientation, true);
+    matrix_to_format(second, desired_orientation, false);
+    matrix_to_format(output, desired_orientation, false);
+    GrB_Info result = matrix_mxm(output, second, first, accum);
+    return result;
 }
 
 GrB_Info matrix_rmxm_empty(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     if (first->nvals == 0 || second->nvals == 0)
         return GrB_SUCCESS;
 
-    matrix_rmxm_format(output, first, second, accum);
+    return matrix_rmxm_format(output, first, second, accum);
 }
 
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
@@ -423,9 +405,15 @@ GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
 }
 
 GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask) {
+    Matrix *larger_matrix = output->nvals > mask->nvals ? output : mask;
+    matrix_to_format(output, larger_matrix->format, false);
+    matrix_to_format(mask, larger_matrix->format, false);
+
     if (!output->is_both) {
         return matrix_rsub(output, mask);
     }
+
+    printf("LOOOOOO\n\n");
 
     matrix_to_format(output, GrB_ROWMAJOR, false);
     GrB_Info result = matrix_rsub(output, mask);
@@ -742,8 +730,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
-                       &delta_matrices[bin_rule.prod_B], false);
+            matrix_mxm_empty(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
+                             &delta_matrices[bin_rule.prod_B], false);
             matrix_update(&temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 1", &mxm1);
@@ -759,9 +747,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm_empty(&temp_matrices[bin_rule.nonterm],
-                             &delta_matrices[bin_rule.prod_A], &matrices[bin_rule.prod_B],
-                             true);
+            matrix_rmxm_empty(&temp_matrices[bin_rule.nonterm],
+                              &delta_matrices[bin_rule.prod_A],
+                              &matrices[bin_rule.prod_B], true);
             matrix_update(&temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 2", &mxm2);
