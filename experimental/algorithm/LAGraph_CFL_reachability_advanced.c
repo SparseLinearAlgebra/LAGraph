@@ -504,12 +504,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
     Matrix *delta_matrices;
     Matrix *matrices;
     Matrix *temp_matrices;
-    bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
     GrB_Matrix identity_matrix = NULL;
     uint64_t *nnzs = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
-    bool iso_flag = false;
     GrB_Index *indexes = NULL;
 
     GrB_Scalar true_scalar;
@@ -570,8 +568,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         temp_matrices[i] = matrix_from_base(matrix);
-
-        t_empty_flags[i] = true;
     }
 
     // Arrays for processing rules
@@ -670,8 +666,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
                        adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
         matrix_update(&delta_matrices[term_rule.nonterm]);
 
-        t_empty_flags[term_rule.nonterm] = false;
-
 #ifdef DEBUG_CFL_REACHBILITY
         GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
         printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
@@ -693,8 +687,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
                        identity_matrix, true_scalar, GrB_NULL);
         matrix_update(&delta_matrices[eps_rule.nonterm]);
 
-        t_empty_flags[eps_rule.nonterm] = false;
-
 #ifdef DEBUG_CFL_REACHBILITY
         GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
         printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n", eps_rule.nonterm, iso_flag);
@@ -712,7 +704,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     double mxm2 = 0.0;
     double wise2 = 0.0;
     double rsub = 0.0;
-    GrB_Index new_nnz;
     while (changed) {
         iteration++;
         changed = false;
@@ -770,8 +761,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (int32_t i = 0; i < nonterms_count; i++) {
             GrB_Index new_nnz;
             GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrices[i].base));
-            if (new_nnz != 0)
-                t_empty_flags[i] = false;
 
             changed = changed || (nnzs[i] != new_nnz);
             nnzs[i] = new_nnz;
