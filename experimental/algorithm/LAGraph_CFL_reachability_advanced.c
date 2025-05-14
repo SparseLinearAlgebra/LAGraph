@@ -290,9 +290,10 @@ GrB_Info matrix_dup_empty(Matrix *output, Matrix *input) {
 }
 
 GrB_Info matrix_mxm(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    GrB_mxm(output->base, GrB_NULL, accum ? GxB_ANY_BOOL : GrB_NULL, GxB_ANY_PAIR_BOOL,
-            first->base, second->base, GrB_NULL);
+    GrB_Info result = GrB_mxm(output->base, GrB_NULL, accum ? GxB_ANY_BOOL : GrB_NULL,
+                              GxB_ANY_PAIR_BOOL, first->base, second->base, GrB_NULL);
     IS_ISO(output->base, "MXM output");
+    return result;
 }
 
 GrB_Info matrix_mxm_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
