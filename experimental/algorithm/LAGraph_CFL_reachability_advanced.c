@@ -26,7 +26,7 @@
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
-        for (size_t i = 0; i < nonterms_count; i++) {                                    \
+        for (int32_t i = 0; i < nonterms_count; i++) {                                   \
             GrB_free(&T[i]);                                                             \
         }                                                                                \
                                                                                          \
