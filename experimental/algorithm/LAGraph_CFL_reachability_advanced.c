@@ -235,6 +235,11 @@ GrB_Info matrix_dup(Matrix *output, Matrix *input) {
 
 GrB_Info matrix_dup_format(Matrix *output, Matrix *input) {
     if (!output->is_both) {
+        Matrix *larger = output->nvals > input->nvals ? output : input;
+
+        matrix_to_format(output, larger->format, false);
+        matrix_to_format(input, larger->format, false);
+
         return matrix_dup(output, input);
     }
 
@@ -325,10 +330,19 @@ GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) 
 
 GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     if (!output->is_both) {
+        Matrix *larger = output->nvals > first->nvals ? output : first;
+        larger = larger->nvals > second->nvals ? larger : second;
+
+        matrix_to_format(output, larger->format, false);
+        matrix_to_format(first, larger->format, false);
+        matrix_to_format(second, larger->format, false);
+
         return matrix_wise(output, first, second, accum);
     }
 
     matrix_to_format(output, GrB_ROWMAJOR, false);
+    matrix_to_format(first, output->format, false);
+    matrix_to_format(second, output->format, false);
     GrB_Info result = matrix_wise(output, first, second, accum);
 
     if (result < GrB_SUCCESS) {
@@ -336,6 +350,8 @@ GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool 
     }
 
     matrix_to_format(output, GrB_COLMAJOR, false);
+    matrix_to_format(first, output->format, false);
+    matrix_to_format(second, output->format, false);
     return matrix_wise(output, first, second, accum);
 }
 
