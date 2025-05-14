@@ -145,6 +145,7 @@ typedef struct {
     GrB_Index nvals;
     GrB_Index size;
     int32_t format;
+    bool is_both;
 } Matrix;
 
 void matrix_update(Matrix *matrix) {
@@ -161,6 +162,7 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.nvals = 0;
     result.size = 0;
     result.format = GrB_ROWMAJOR;
+    result.is_both = false;
     matrix_update(&result);
     return result;
 }
@@ -230,39 +232,30 @@ void matrix_to_row_both(Matrix *matrix) {
         return;
     }
 
-    if (matrix->format == GrB_COLMAJOR) {
-        GrB_Matrix new_matrix;
-        GrB_Matrix_new(&new_matrix, GrB_BOOL, matrix->size, matrix->size);
-        TO_ROW(new_matrix);
-        matrix->base_row = new_matrix;
-        matrix->base = matrix->base_row;
-        matrix->format = GrB_BOTH;
-        return;
-    }
-}
-
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
-    // if (output.format == GrB_ROWMAJOR || output.format == GrB_BOTH) {
-    //     matrix_to_row(input);
-    //     GrB_Matrix_dup(&output.base, input.base);
-    // }
-
-    // if (output.format == GrB_COLMAJOR || output.format == GrB_BOTH) {
-    //     matrix_to_col(input);
-    //     GrB_Matrix_dup(&output.base_col, input.base_col);
-    // }
-
-    GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL, input->size,
-                      GrB_ALL, input->size, GrB_NULL);
+    return GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
+                             input->size, GrB_ALL, input->size, GrB_NULL);
 }
 
 GrB_Info matrix_dup_format(Matrix *output, Matrix *input) {
+    if (!output->is_both) {
+        return matrix_dup(output, input);
+    }
+
+    matrix_to_format(output, GrB_ROWMAJOR, false);
+    GrB_Info result = matrix_dup(output, input);
+
+    if (result < GrB_SUCCESS) {
+        return result;
+    }
+
+    matrix_to_format(output, GrB_COLMAJOR, false);
     return matrix_dup(output, input);
 }
 
 GrB_Info matrix_dup_empty(Matrix *output, Matrix *input) {
     if (input->nvals == 0) {
-        return GrB_Matrix_clear(output->base);
+        return matrix_clear_empty(output);
     }
 
     return matrix_dup_format(output, input);
