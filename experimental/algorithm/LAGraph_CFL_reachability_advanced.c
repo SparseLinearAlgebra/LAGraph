@@ -749,7 +749,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
-        for (size_t i = 0; i < nonterms_count; i++) {
+        for (int32_t i = 0; i < nonterms_count; i++) {
             matrix_wise_empty(&matrices[i], &matrices[i], &delta_matrices[i], false);
             matrix_update(&matrices[i]);
         }
@@ -767,19 +767,19 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_STOP("MXM 2", &mxm2);
 
         TIMER_START();
-        for (size_t i = 0; i < nonterms_count; i++) {
+        for (int32_t i = 0; i < nonterms_count; i++) {
             matrix_dup_empty(&delta_matrices[i], &temp_matrices[i]);
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
 
         TIMER_START();
-        for (size_t i = 0; i < nonterms_count; i++) {
+        for (int32_t i = 0; i < nonterms_count; i++) {
             matrix_rsub_empty(&delta_matrices[i], &matrices[i]);
             matrix_update(&delta_matrices[i]);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsub);
 
-        for (size_t i = 0; i < nonterms_count; i++) {
+        for (int32_t i = 0; i < nonterms_count; i++) {
             GrB_Index new_nnz;
             GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrices[i].base));
             if (new_nnz != 0)
