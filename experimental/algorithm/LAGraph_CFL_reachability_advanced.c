@@ -374,26 +374,19 @@ GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) 
 }
 
 GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
-    GrB_Info result;
-
-    if (first->format == GrB_ROWMAJOR || first->format == GrB_BOTH) {
-        matrix_to_row(second);
-        matrix_to_row(output);
-        result = matrix_wise(output, first, second, accum);
+    if (!output->is_both) {
+        return matrix_wise(output, first, second, accum);
     }
+
+    matrix_to_format(output, GrB_ROWMAJOR, false);
+    GrB_Info result = matrix_wise(output, first, second, accum);
 
     if (result < GrB_SUCCESS) {
         return result;
     }
 
-    if (first->format == GrB_COLMAJOR || first->format == GrB_BOTH) {
-        matrix_to_col(second);
-        matrix_to_col(output);
-        result = matrix_wise(output, first, second, accum);
-    }
-
-    return result;
+    matrix_to_format(output, GrB_COLMAJOR, false);
+    return matrix_wise(output, first, second, accum);
 }
 
 GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool accum) {
