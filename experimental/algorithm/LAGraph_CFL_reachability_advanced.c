@@ -734,7 +734,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #endif
 
         for (size_t i = 0; i < nonterms_count; i++) {
-            GRB_TRY(GrB_Matrix_clear(temp_matrices[i].base));
+            GRB_TRY(matrix_clear_empty(&temp_matrices[i]));
             matrix_update(&temp_matrices[i]);
         }
 
