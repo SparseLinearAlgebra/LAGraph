@@ -721,7 +721,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         printf("\n--- ITERATARION %ld ---\n", iteration);
 #endif
 
-        for (size_t i = 0; i < nonterms_count; i++) {
+        for (int32_t i = 0; i < nonterms_count; i++) {
             GRB_TRY(matrix_clear_empty(&temp_matrices[i]));
             matrix_update(&temp_matrices[i]);
         }
