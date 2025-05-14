@@ -151,7 +151,7 @@ typedef struct {
 void matrix_update(Matrix *matrix) {
     GrB_Matrix_nvals(&matrix->nvals, matrix->base);
     GrB_Matrix_nrows(&matrix->size, matrix->base);
-    GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
+    // GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
 }
 
 Matrix matrix_from_base(GrB_Matrix matrix) {
@@ -202,11 +202,15 @@ void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     return;
 }
 
-GrB_Info matrix_clear(Matrix *A) { return GrB_Matrix_clear(A->base); }
+GrB_Info matrix_clear(Matrix *A) {
+    GrB_Info result = GrB_Matrix_clear(A->base);
+    matrix_update(A);
+    return result;
+}
 
 GrB_Info matrix_clear_format(Matrix *A) {
     if (!A->is_both) {
-        matrix_clear(A);
+        return matrix_clear(A);
     }
 
     matrix_to_format(A, GrB_ROWMAJOR, false);
@@ -229,8 +233,12 @@ GrB_Info matrix_clear_empty(Matrix *A) {
 }
 
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
-    return GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
-                             input->size, GrB_ALL, input->size, GrB_NULL);
+    GrB_Info result =
+        GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
+                          input->size, GrB_ALL, input->size, GrB_NULL);
+
+    matrix_update(output);
+    return result;
 }
 
 GrB_Info matrix_dup_format(Matrix *output, Matrix *input) {
@@ -266,6 +274,7 @@ GrB_Info matrix_mxm(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     GrB_Info result = GrB_mxm(output->base, GrB_NULL, accum ? GxB_ANY_BOOL : GrB_NULL,
                               GxB_ANY_PAIR_BOOL, first->base, second->base, GrB_NULL);
     IS_ISO(output->base, "MXM output");
+    matrix_update(output);
     return result;
 }
 
@@ -324,8 +333,11 @@ GrB_Info matrix_rmxm_empty(Matrix *output, Matrix *first, Matrix *second, bool a
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
 
-    return GrB_eWiseAdd(output->base, GrB_NULL, accum_op, GxB_ANY_BOOL, first->base,
-                        second->base, GrB_NULL);
+    GrB_Info result = GrB_eWiseAdd(output->base, GrB_NULL, accum_op, GxB_ANY_BOOL,
+                                   first->base, second->base, GrB_NULL);
+
+    matrix_update(output);
+    return result;
 }
 
 GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool accum) {
@@ -384,8 +396,11 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
 }
 
 GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
-    return GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL, output->base,
-                        output->base, GrB_DESC_RSC);
+    GrB_Info result = GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL,
+                                   output->base, output->base, GrB_DESC_RSC);
+
+    matrix_update(output);
+    return result;
 }
 
 GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask) {
@@ -698,7 +713,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         for (int32_t i = 0; i < nonterms_count; i++) {
             GRB_TRY(matrix_clear_empty(&temp_matrices[i]));
-            matrix_update(&temp_matrices[i]);
         }
 
         TIMER_START();
@@ -707,14 +721,12 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
             matrix_mxm_empty(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
                              &delta_matrices[bin_rule.prod_B], false);
-            matrix_update(&temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
         for (int32_t i = 0; i < nonterms_count; i++) {
             matrix_wise_empty(&matrices[i], &matrices[i], &delta_matrices[i], false);
-            matrix_update(&matrices[i]);
         }
         TIMER_STOP("WISE 1", &wise1);
 
@@ -725,7 +737,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
             matrix_rmxm_empty(&temp_matrices[bin_rule.nonterm],
                               &delta_matrices[bin_rule.prod_A],
                               &matrices[bin_rule.prod_B], true);
-            matrix_update(&temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
@@ -738,7 +749,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START();
         for (int32_t i = 0; i < nonterms_count; i++) {
             matrix_rsub_empty(&delta_matrices[i], &matrices[i]);
-            matrix_update(&delta_matrices[i]);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsub);
 
