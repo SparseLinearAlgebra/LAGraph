@@ -286,19 +286,10 @@ GrB_Info matrix_mxm(Matrix *output, Matrix *first, Matrix *second, bool accum,
 
 GrB_Info matrix_mxm_format(Matrix *output, Matrix *first, Matrix *second, bool accum,
                            bool swap) {
-    if (swap) {
-        Matrix *temp = first;
-        first = second;
-        second = temp;
-    }
+    GrB_Index left_nvals = swap ? second->nvals : first->nvals;
+    GrB_Index right_nvals = swap ? first->nvals : second->nvals;
 
-    int32_t desired_orientation =
-        first->nvals > second->nvals ? GrB_COLMAJOR : GrB_ROWMAJOR;
-
-    if (swap) {
-        desired_orientation =
-            desired_orientation == GrB_ROWMAJOR ? GrB_COLMAJOR : GrB_ROWMAJOR;
-    }
+    int32_t desired_orientation = left_nvals < right_nvals ? GrB_ROWMAJOR : GrB_COLMAJOR;
 
     if (!first->is_both && first->format != desired_orientation &&
         !(first->nvals > second->nvals / 3.0)) {
@@ -754,9 +745,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm_empty(&temp_matrices[bin_rule.nonterm],
-                             &delta_matrices[bin_rule.prod_A], &matrices[bin_rule.prod_B],
-                             true, true);
+            matrix_mxm_empty(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_B],
+                             &delta_matrices[bin_rule.prod_A], true, true);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
