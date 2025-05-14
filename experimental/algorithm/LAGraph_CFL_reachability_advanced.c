@@ -207,30 +207,31 @@ void matrix_to_col_both(Matrix *matrix) {
         return;
     }
 
-    if (matrix->format == GrB_COLMAJOR) {
-        return;
+GrB_Info matrix_clear(Matrix *A) { return GrB_Matrix_clear(A); }
+
+GrB_Info matrix_clear_format(Matrix *A) {
+    if (!A->is_both) {
+        matrix_clear(A);
     }
 
-    if (matrix->format == GrB_ROWMAJOR) {
-        GrB_Matrix new_matrix;
-        GrB_Matrix_new(&new_matrix, GrB_BOOL, matrix->size, matrix->size);
-        TO_COL(new_matrix);
-        matrix->base_col = new_matrix;
-        matrix->base = matrix->base_col;
-        matrix->format = GrB_BOTH;
-        return;
+    matrix_to_format(A, GrB_ROWMAJOR, false);
+    GrB_Info result = matrix_clear(A);
+
+    if (result < GrB_SUCCESS) {
+        return result;
     }
+
+    matrix_to_format(A, GrB_COLMAJOR, false);
+    return matrix_clear(A);
 }
 
-void matrix_to_row_both(Matrix *matrix) {
-    if (matrix->format == GrB_BOTH) {
-        matrix->base = matrix->base_row;
-        return;
+GrB_Info matrix_clear_empty(Matrix *A) {
+    if (A->nvals == 0) {
+        return GrB_SUCCESS;
     }
 
-    if (matrix->format == GrB_ROWMAJOR) {
-        return;
-    }
+    return matrix_clear_format(A);
+}
 
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     return GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
