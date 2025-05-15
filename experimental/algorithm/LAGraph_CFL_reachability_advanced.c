@@ -156,7 +156,16 @@ typedef struct Matrix {
 } Matrix;
 
 void matrix_update(Matrix *matrix) {
-    GrB_Matrix_nvals(&matrix->nvals, matrix->base);
+    if (matrix->base_matrices_count == 0) {
+        GrB_Matrix_nvals(&matrix->nvals, matrix->base);
+    } else {
+        size_t new_nnz = 0;
+        for (size_t i = 0; i < matrix->base_matrices_count; i++) {
+            new_nnz += matrix->base_matrices[i].nvals;
+        }
+
+        matrix->nvals = new_nnz;
+    }
     GrB_Matrix_nrows(&matrix->size, matrix->base);
     // GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
 }
@@ -166,7 +175,7 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.base = matrix;
     result.base_row = matrix;
     result.base_col = NULL;
-    result.base_matrices = malloc(sizeof(Matrix) * 10);
+    result.base_matrices = malloc(sizeof(Matrix) * 40);
     result.base_matrices_count = 0;
     result.nvals = 0;
     result.size = 0;
@@ -346,6 +355,10 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         matrix_wise_empty(&acc_matrix, &acc_matrix, &acc_matrices[i], false);
     }
 
+    if (accum) {
+        return matrix_wise_empty(output, output, &acc_matrix, false);
+    }
+
     return matrix_dup_empty(output, &acc_matrix);
 }
 
@@ -520,7 +533,8 @@ void matrix_print_lazy(Matrix *A) {
         matrix_wise_empty(&temp, &temp, &A->base_matrices[i], false);
     }
 
-    GxB_print(temp.base, 1);
+    A = &temp;
+    GxB_print(A->base, 1);
 }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
@@ -842,6 +856,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *C = &temp_matrices[bin_rule.nonterm];
 
             mxm(C, A, B, false, false);
+            // matrix_print_lazy(A);
+            // matrix_print_lazy(B);
+            // matrix_print_lazy(C);
         }
         TIMER_STOP("MXM 1", &mxm1);
 
@@ -851,6 +868,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *C = &matrices[i];
 
             wise(C, C, A, false);
+            // matrix_print_lazy(A);
+            // matrix_print_lazy(C);
         }
         TIMER_STOP("WISE 1", &wise1);
 
@@ -860,8 +879,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *A = &matrices[bin_rule.prod_B];
             Matrix *B = &delta_matrices[bin_rule.prod_A];
             Matrix *C = &temp_matrices[bin_rule.nonterm];
-
+            // printf("ITER: %ld\n", i);
             mxm(C, A, B, true, true);
+            // matrix_print_lazy(A);
+            // matrix_print_lazy(B);
+            // matrix_print_lazy(C);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
@@ -877,6 +899,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *C = &delta_matrices[i];
 
             rsub(C, A);
+            // matrix_print_lazy(A);
+            // matrix_print_lazy(C);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
 
@@ -915,7 +939,20 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #endif
 
     for (int32_t i = 0; i < nonterms_count; i++) {
-        outputs[i] = matrices[i].base;
+        if (matrices[i].base_matrices_count == 0) {
+            outputs[i] = matrices[i].base;
+        } else {
+            GrB_Matrix _acc;
+            GrB_Matrix_new(&_acc, GrB_BOOL, matrices[i].size, matrices[i].size);
+            Matrix acc = matrix_from_base(_acc);
+
+            for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
+                matrix_wise_empty(&acc, &acc, &matrices[i].base_matrices[j], false);
+            }
+
+            outputs[i] = acc.base;
+        }
+        // outputs[i] = matrices[i].base;
     }
 
     LG_FREE_WORK;
