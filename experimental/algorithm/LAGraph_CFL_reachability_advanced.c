@@ -502,22 +502,22 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
     return GrB_SUCCESS;
 }
 
-void matrix_print_lazy(Matrix A) {
-    if (A.base_matrices_count == 0) {
-        GxB_print(A.base, 1);
+void matrix_print_lazy(Matrix *A) {
+    if (A->base_matrices_count == 0) {
+        GxB_print(A->base, 1);
         return;
     }
 
-    if (A.base_matrices_count == 1) {
-        GxB_print(A.base_matrices[0].base, 1);
+    if (A->base_matrices_count == 1) {
+        GxB_print(A->base_matrices[0].base, 1);
         return;
     }
 
     GrB_Matrix _temp;
-    GrB_Matrix_new(&_temp, GrB_BOOL, A.size, A.size);
+    GrB_Matrix_new(&_temp, GrB_BOOL, A->size, A->size);
     Matrix temp = matrix_from_base(_temp);
-    for (size_t i = 0; i < A.base_matrices_count; i++) {
-        matrix_wise_empty(&temp, &temp, &A.base_matrices[i], false);
+    for (size_t i = 0; i < A->base_matrices_count; i++) {
+        matrix_wise_empty(&temp, &temp, &A->base_matrices[i], false);
     }
 
     GxB_print(temp.base, 1);
