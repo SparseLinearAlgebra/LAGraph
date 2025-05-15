@@ -294,7 +294,7 @@ GrB_Info matrix_mxm_format(Matrix *output, Matrix *first, Matrix *second, bool a
     GrB_Index left_nvals = swap ? second->nvals : first->nvals;
     GrB_Index right_nvals = swap ? first->nvals : second->nvals;
 
-    int32_t desired_orientation = left_nvals < right_nvals ? GrB_ROWMAJOR : GrB_COLMAJOR;
+    int32_t desired_orientation = left_nvals <= right_nvals ? GrB_ROWMAJOR : GrB_COLMAJOR;
 
     if (!first->is_both && first->format != desired_orientation &&
         !(first->nvals > second->nvals / 3.0)) {
