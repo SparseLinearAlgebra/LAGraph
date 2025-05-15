@@ -324,8 +324,13 @@ GrB_Info matrix_mxm_format(Matrix *output, Matrix *first, Matrix *second, bool a
 
 GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool accum,
                           bool swap) {
-    if (first->nvals == 0 || second->nvals == 0)
-        return GrB_SUCCESS;
+    if (first->nvals == 0 || second->nvals == 0) {
+        if (accum) {
+            return GrB_SUCCESS;
+        }
+
+        matrix_clear_empty(output);
+    }
 
     return matrix_mxm_format(output, first, second, accum, swap);
 }
