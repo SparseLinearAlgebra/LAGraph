@@ -162,7 +162,7 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.base = matrix;
     result.base_row = matrix;
     result.base_col = NULL;
-    result.base_matrices = NULL;
+    result.base_matrices = malloc(sizeof(Matrix) * 10);
     result.base_matrices_count = 0;
     result.nvals = 0;
     result.size = 0;
@@ -319,12 +319,6 @@ GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool ac
 
 GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool accum,
                          bool swap) {
-    if (swap) {
-        Matrix *temp = first;
-        first = second;
-        second = temp;
-    }
-
     if (first->base_matrices_count == 0) {
         return matrix_mxm_empty(output, first, second, accum, swap);
     }
@@ -418,7 +412,8 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
 
 GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     if (first->base_matrices_count == 0) {
-        return matrix_wise_empty(output, first, second, accum);
+        first->base_matrices_count = 1;
+        first->base_matrices[0] = matrix_from_base(first->base);
     }
 
     GrB_Matrix _other;
@@ -501,6 +496,25 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
     }
 
     return GrB_SUCCESS;
+}
+
+void matrix_print_lazy(Matrix A) {
+    if (A.base_matrices_count == 0) {
+        GxB_print(A.base, 1);
+    }
+
+    if (A.base_matrices_count == 1) {
+        GxB_print(A.base_matrices[0].base, 1);
+    }
+
+    GrB_Matrix _temp;
+    GrB_Matrix_new(&_temp, GrB_BOOL, A.size, A.size);
+    Matrix temp = matrix_from_base(_temp);
+    for (size_t i = 0; i < A.base_matrices_count; i++) {
+        matrix_wise_empty(&temp, &temp, &A.base_matrices[i], false);
+    }
+
+    GxB_print(temp.base, 1);
 }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
@@ -789,14 +803,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm_empty(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
-                             &delta_matrices[bin_rule.prod_B], false, false);
+            matrix_mxm_lazy(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
+                            &delta_matrices[bin_rule.prod_B], false, false);
+            matrix_print_lazy(temp_matrices[bin_rule.nonterm]);
         }
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
         for (int32_t i = 0; i < nonterms_count; i++) {
-            matrix_wise_empty(&matrices[i], &matrices[i], &delta_matrices[i], false);
+            matrix_wise_lazy(&matrices[i], &matrices[i], &delta_matrices[i], false);
         }
         TIMER_STOP("WISE 1", &wise1);
 
@@ -804,8 +819,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm_empty(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_B],
-                             &delta_matrices[bin_rule.prod_A], true, true);
+            matrix_mxm_lazy(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_B],
+                            &delta_matrices[bin_rule.prod_A], true, true);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
@@ -817,13 +832,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (int32_t i = 0; i < nonterms_count; i++) {
-            matrix_rsub_empty(&delta_matrices[i], &matrices[i]);
+            matrix_rsub_lazy(&delta_matrices[i], &matrices[i]);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsub);
 
         for (int32_t i = 0; i < nonterms_count; i++) {
-            GrB_Index new_nnz;
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, matrices[i].base));
+            size_t new_nnz = 0;
+            for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
+                new_nnz += matrices[i].base_matrices[j].nvals;
+            }
 
             changed = changed || (nnzs[i] != new_nnz);
             nnzs[i] = new_nnz;
