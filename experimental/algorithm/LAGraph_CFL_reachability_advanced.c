@@ -121,6 +121,10 @@
 #endif
 // clang-format on
 
+#define OPT_EMPTY (1 << 0)
+#define OPT_FORMAT (1 << 1)
+#define OPT_LAZY (1 << 2)
+
 #define SKIP_IF_NULL(matrix)                                                             \
     GrB_Matrix_nvals(&new_nnz, matrix);                                                  \
     if (new_nnz == 0) {                                                                  \
@@ -501,10 +505,12 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
 void matrix_print_lazy(Matrix A) {
     if (A.base_matrices_count == 0) {
         GxB_print(A.base, 1);
+        return;
     }
 
     if (A.base_matrices_count == 1) {
         GxB_print(A.base_matrices[0].base, 1);
+        return;
     }
 
     GrB_Matrix _temp;
@@ -580,7 +586,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
     int32_t nonterms_count, // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    char *msg,                      // Message string for error reporting.
+    int8_t optimizations            // Optimizations flags
 ) {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
@@ -779,6 +786,34 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // Rule [Variable -> Variable1 Variable2]
     LG_TRY(LAGraph_Calloc((void **)&nnzs, nonterms_count, sizeof(uint64_t), msg));
 
+    typedef GrB_Info (*matrix_mxm_fn)(Matrix *output, Matrix *first, Matrix *second,
+                                      bool accum, bool swap);
+    typedef GrB_Info (*matrix_wise_fn)(Matrix *output, Matrix *first, Matrix *second,
+                                       bool accum);
+    typedef GrB_Info (*matrix_rsub_fn)(Matrix *input, Matrix *mask);
+
+    matrix_mxm_fn mxm;
+    matrix_wise_fn wise;
+    matrix_rsub_fn rsub;
+
+    if (optimizations & OPT_LAZY) {
+        mxm = matrix_mxm_lazy;
+        wise = matrix_wise_lazy;
+        rsub = matrix_rsub_lazy;
+    } else if (optimizations & OPT_EMPTY) {
+        mxm = matrix_mxm_empty;
+        wise = matrix_wise_empty;
+        rsub = matrix_rsub_empty;
+    } else if (optimizations & OPT_FORMAT) {
+        mxm = matrix_mxm_format;
+        wise = matrix_wise_format;
+        rsub = matrix_rsub_format;
+    } else {
+        mxm = matrix_mxm;
+        wise = matrix_wise;
+        rsub = matrix_rsub;
+    }
+
     double start_time, end_time;
     bool changed = true;
     size_t iteration = 0;
@@ -786,7 +821,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     double wise1 = 0.0;
     double mxm2 = 0.0;
     double wise2 = 0.0;
-    double rsub = 0.0;
+    double rsubt = 0.0;
     while (changed) {
         iteration++;
         changed = false;
@@ -803,15 +838,14 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm_lazy(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
-                            &delta_matrices[bin_rule.prod_B], false, false);
-            matrix_print_lazy(temp_matrices[bin_rule.nonterm]);
+            mxm(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
+                &delta_matrices[bin_rule.prod_B], false, false);
         }
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
         for (int32_t i = 0; i < nonterms_count; i++) {
-            matrix_wise_lazy(&matrices[i], &matrices[i], &delta_matrices[i], false);
+            wise(&matrices[i], &matrices[i], &delta_matrices[i], false);
         }
         TIMER_STOP("WISE 1", &wise1);
 
@@ -819,8 +853,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
-            matrix_mxm_lazy(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_B],
-                            &delta_matrices[bin_rule.prod_A], true, true);
+            mxm(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_B],
+                &delta_matrices[bin_rule.prod_A], true, true);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
@@ -832,14 +866,18 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (int32_t i = 0; i < nonterms_count; i++) {
-            matrix_rsub_lazy(&delta_matrices[i], &matrices[i]);
+            rsub(&delta_matrices[i], &matrices[i]);
         }
-        TIMER_STOP("WISE 3 (MASK)", &rsub);
+        TIMER_STOP("WISE 3 (MASK)", &rsubt);
 
         for (int32_t i = 0; i < nonterms_count; i++) {
             size_t new_nnz = 0;
-            for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
-                new_nnz += matrices[i].base_matrices[j].nvals;
+            if (matrices[i].base_matrices_count == 0) {
+                new_nnz = matrices[i].nvals;
+            } else {
+                for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
+                    new_nnz += matrices[i].base_matrices[j].nvals;
+                }
             }
 
             changed = changed || (nnzs[i] != new_nnz);
@@ -856,7 +894,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
 #if BENCH_CFL_REACHBILITY
     printf("MXM1: %.3f, wise1: %.3f, MXM2: %.3f, wise2: %.3f, rsub: %.3f", mxm1, wise1,
-           mxm2, wise2, rsub);
+           mxm2, wise2, rsubt);
 #endif
 
 #ifdef DEBUG_CFL_REACHBILITY
