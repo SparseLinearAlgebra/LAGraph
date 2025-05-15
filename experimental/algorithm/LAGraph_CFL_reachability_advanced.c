@@ -837,24 +837,31 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START();
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+            Matrix *A = &matrices[bin_rule.prod_A];
+            Matrix *B = &delta_matrices[bin_rule.prod_B];
+            Matrix *C = &temp_matrices[bin_rule.nonterm];
 
-            mxm(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_A],
-                &delta_matrices[bin_rule.prod_B], false, false);
+            mxm(C, A, B, false, false);
         }
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
         for (int32_t i = 0; i < nonterms_count; i++) {
-            wise(&matrices[i], &matrices[i], &delta_matrices[i], false);
+            Matrix *A = &delta_matrices[i];
+            Matrix *C = &matrices[i];
+
+            wise(C, C, A, false);
         }
         TIMER_STOP("WISE 1", &wise1);
 
         TIMER_START()
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+            Matrix *A = &matrices[bin_rule.prod_B];
+            Matrix *B = &delta_matrices[bin_rule.prod_A];
+            Matrix *C = &temp_matrices[bin_rule.nonterm];
 
-            mxm(&temp_matrices[bin_rule.nonterm], &matrices[bin_rule.prod_B],
-                &delta_matrices[bin_rule.prod_A], true, true);
+            mxm(C, A, B, true, true);
         }
         TIMER_STOP("MXM 2", &mxm2);
 
@@ -866,7 +873,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (int32_t i = 0; i < nonterms_count; i++) {
-            rsub(&delta_matrices[i], &matrices[i]);
+            Matrix *A = &matrices[i];
+            Matrix *C = &delta_matrices[i];
+
+            rsub(C, A);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
 
