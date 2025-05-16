@@ -290,6 +290,41 @@ GrB_Info matrix_dup_empty(Matrix *output, Matrix *input) {
 
 GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool accum);
 
+GrB_Info matrix_sort_lazy(Matrix *A, bool reverse) {
+    for (size_t i = 0; i < A->base_matrices_count; i++) {
+        for (size_t j = i + 1; j < A->base_matrices_count; j++) {
+            Matrix first = reverse ? A->base_matrices[i] : A->base_matrices[j];
+            Matrix second = reverse ? A->base_matrices[j] : A->base_matrices[i];
+            if (first.nvals < second.nvals) {
+                Matrix temp = A->base_matrices[i];
+                A->base_matrices[i] = A->base_matrices[j];
+                A->base_matrices[j] = temp;
+            }
+        }
+    }
+}
+
+GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold) {
+    Matrix *new_matrices = malloc(sizeof(Matrix) * 50);
+    size_t new_size = 0;
+
+    matrix_sort_lazy(A, false);
+
+    for (size_t i = 0; i < A->base_matrices_count; i++) {
+        if (A->base_matrices[i].nvals <= threshold && new_size > 0) {
+            matrix_wise_empty(&new_matrices[new_size - 1], &new_matrices[new_size - 1],
+                              &A->base_matrices[i], false);
+        } else {
+            new_matrices[new_size++] = A->base_matrices[i];
+        }
+    }
+
+    A->base_matrices = new_matrices;
+    A->base_matrices_count = new_size;
+
+    return GrB_SUCCESS;
+}
+
 GrB_Info matrix_mxm(Matrix *output, Matrix *first, Matrix *second, bool accum,
                     bool swap) {
     Matrix *left = swap ? second : first;
@@ -341,6 +376,9 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         return matrix_mxm_empty(output, first, second, accum, swap);
     }
 
+    matrix_sort_lazy(first, true);
+    matrix_combine_lazy(first, second->nvals);
+
     GrB_Matrix *accs = malloc(sizeof(GrB_Matrix) * first->base_matrices_count);
     Matrix *acc_matrices = malloc(sizeof(Matrix) * first->base_matrices_count);
     for (size_t i = 0; i < first->base_matrices_count; i++) {
@@ -350,6 +388,16 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
         matrix_mxm_empty(&acc_matrices[i], &first->base_matrices[i], second, accum, swap);
+    }
+
+    for (size_t i = 0; i < first->base_matrices_count; i++) {
+        for (size_t j = i + 1; j < first->base_matrices_count; j++) {
+            if (acc_matrices[i].nvals < acc_matrices[j].nvals) {
+                Matrix temp = acc_matrices[i];
+                acc_matrices[i] = acc_matrices[j];
+                acc_matrices[j] = temp;
+            }
+        }
     }
 
     GrB_Matrix acc;
@@ -443,12 +491,15 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
     Matrix other = matrix_from_base(_other);
     matrix_dup_empty(&other, second);
 
+    size_t other_nvals = other.nvals >= 10 ? other.nvals : 10;
+
     while (true) {
         bool found = false;
 
         for (size_t i = 0; i < first->base_matrices_count; i++) {
-            if (other.nvals / 10 < first->base_matrices[i].nvals &&
-                first->base_matrices[i].nvals < other.nvals * 10) {
+            size_t self_nvals = first->base_matrices[i].nvals >= 10 ? first->nvals : 10;
+
+            if (other.nvals / 10 <= self_nvals && self_nvals <= other.nvals * 10) {
                 matrix_wise_empty(&other, &other, &first->base_matrices[i], false);
                 for (size_t j = i + 1; j < first->base_matrices_count; j++) {
                     first->base_matrices[j - 1] = first->base_matrices[j];
@@ -512,6 +563,9 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
     if (mask->base_matrices_count == 0) {
         return matrix_rsub_empty(output, mask);
     }
+
+    matrix_sort_lazy(mask, true);
+    matrix_combine_lazy(mask, output->nvals);
 
     for (size_t i = 0; i < mask->base_matrices_count; i++) {
         matrix_rsub_empty(output, &mask->base_matrices[i]);
