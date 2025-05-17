@@ -149,7 +149,8 @@ typedef struct Matrix {
     struct Matrix *base_matrices;
     size_t base_matrices_count;
     GrB_Index nvals;
-    GrB_Index size;
+    GrB_Index nrows;
+    GrB_Index ncols;
     int32_t format;
     bool is_both;
     bool is_lazy;
@@ -166,7 +167,8 @@ void matrix_update(Matrix *matrix) {
 
         matrix->nvals = new_nnz;
     }
-    GrB_Matrix_nrows(&matrix->size, matrix->base);
+    GrB_Matrix_nrows(&matrix->nrows, matrix->base);
+    GrB_Matrix_ncols(&matrix->ncols, matrix->base);
     // GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
 }
 
@@ -178,7 +180,8 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.base_matrices = malloc(sizeof(Matrix) * 40);
     result.base_matrices_count = 0;
     result.nvals = 0;
-    result.size = 0;
+    result.nrows = 0;
+    result.ncols = 0;
     result.format = GrB_ROWMAJOR;
     result.is_both = false;
     matrix_update(&result);
@@ -205,9 +208,9 @@ void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
         matrix->format == GrB_ROWMAJOR ? &matrix->base_row : &matrix->base_col;
 
     if (is_both) {
-        GrB_Matrix_new(new_matrix, GrB_BOOL, matrix->size, matrix->size);
+        GrB_Matrix_new(new_matrix, GrB_BOOL, matrix->nrows, matrix->ncols);
         GrB_Matrix_assign(*new_matrix, GrB_NULL, GrB_NULL, *old_matrix, GrB_ALL,
-                          matrix->size, GrB_ALL, matrix->size, GrB_NULL);
+                          matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
         matrix->is_both = true;
     } else {
         *new_matrix = *old_matrix;
@@ -253,7 +256,7 @@ GrB_Info matrix_clear_empty(Matrix *A) {
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     GrB_Info result =
         GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
-                          input->size, GrB_ALL, input->size, GrB_NULL);
+                          input->nrows, GrB_ALL, input->ncols, GrB_NULL);
 
     matrix_update(output);
     return result;
@@ -383,7 +386,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     GrB_Matrix *accs = malloc(sizeof(GrB_Matrix) * first->base_matrices_count);
     Matrix *acc_matrices = malloc(sizeof(Matrix) * first->base_matrices_count);
     for (size_t i = 0; i < first->base_matrices_count; i++) {
-        GrB_Matrix_new(&accs[i], GrB_BOOL, output->size, output->size);
+        GrB_Matrix_new(&accs[i], GrB_BOOL, output->nrows, output->ncols);
         acc_matrices[i] = matrix_from_base(accs[i]);
     }
 
@@ -402,7 +405,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     }
 
     GrB_Matrix acc;
-    GrB_Matrix_new(&acc, GrB_BOOL, first->size, first->size);
+    GrB_Matrix_new(&acc, GrB_BOOL, first->nrows, first->ncols);
     Matrix acc_matrix = matrix_from_base(acc);
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
@@ -492,7 +495,7 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
     }
 
     GrB_Matrix _other;
-    GrB_Matrix_new(&_other, GrB_BOOL, output->size, output->size);
+    GrB_Matrix_new(&_other, GrB_BOOL, output->nrows, output->ncols);
     Matrix other = matrix_from_base(_other);
     matrix_dup_empty(&other, second);
 
@@ -592,7 +595,7 @@ void matrix_print_lazy(Matrix *A) {
     }
 
     GrB_Matrix _temp;
-    GrB_Matrix_new(&_temp, GrB_BOOL, A->size, A->size);
+    GrB_Matrix_new(&_temp, GrB_BOOL, A->nrows, A->ncols);
     Matrix temp = matrix_from_base(_temp);
     for (size_t i = 0; i < A->base_matrices_count; i++) {
         matrix_wise_empty(&temp, &temp, &A->base_matrices[i], false);
@@ -1009,7 +1012,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             outputs[i] = matrices[i].base;
         } else {
             GrB_Matrix _acc;
-            GrB_Matrix_new(&_acc, GrB_BOOL, matrices[i].size, matrices[i].size);
+            GrB_Matrix_new(&_acc, GrB_BOOL, matrices[i].nrows, matrices[i].ncols);
             Matrix acc = matrix_from_base(_acc);
 
             for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
