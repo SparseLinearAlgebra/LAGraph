@@ -314,6 +314,7 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold) {
         if (A->base_matrices[i].nvals <= threshold && new_size > 0) {
             matrix_wise_empty(&new_matrices[new_size - 1], &new_matrices[new_size - 1],
                               &A->base_matrices[i], false);
+            GrB_free(&A->base_matrices[i].base);
         } else {
             new_matrices[new_size++] = A->base_matrices[i];
         }
@@ -406,13 +407,17 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
         matrix_wise_empty(&acc_matrix, &acc_matrix, &acc_matrices[i], false);
+        GrB_free(&acc_matrices[i].base);
     }
 
     if (accum) {
         return matrix_wise_empty(output, output, &acc_matrix, false);
     }
 
-    return matrix_dup_empty(output, &acc_matrix);
+    GrB_Info result = matrix_dup_empty(output, &acc_matrix);
+    GrB_free(&acc_matrix.base);
+
+    return result;
 }
 
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
@@ -501,6 +506,7 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
 
             if (other.nvals / 10 <= self_nvals && self_nvals <= other.nvals * 10) {
                 matrix_wise_empty(&other, &other, &first->base_matrices[i], false);
+                GrB_free(&first->base_matrices[i].base);
                 for (size_t j = i + 1; j < first->base_matrices_count; j++) {
                     first->base_matrices[j - 1] = first->base_matrices[j];
                 }
@@ -594,6 +600,7 @@ void matrix_print_lazy(Matrix *A) {
 
     A = &temp;
     GxB_print(A->base, 1);
+    GrB_free(&_temp);
 }
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
@@ -1007,6 +1014,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
             for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
                 matrix_wise_empty(&acc, &acc, &matrices[i].base_matrices[j], false);
+                GrB_free(&matrices[i].base_matrices[j].base);
             }
 
             outputs[i] = acc.base;
