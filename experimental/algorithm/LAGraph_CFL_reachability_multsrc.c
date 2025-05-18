@@ -24,7 +24,7 @@
         GrB_free(&true_scalar);                                                          \
         GrB_free(&identity_matrix);                                                      \
         LAGraph_Free ((void **) &T, msg);       \
-        LAGraph_Free ((void **) &indexes, msg); \
+        LAGraph_Free ((void **) &indices, msg); \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -59,8 +59,8 @@
 
 #define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                 \
     {                                                                                    \
-        rule.len_indexes_str += snprintf(rule.indexes_str + rule.len_indexes_str,        \
-                                         LAGRAPH_MSG_LEN - rule.len_indexes_str,         \
+        rule.len_indices_str += snprintf(rule.indices_str + rule.len_indices_str,        \
+                                         LAGRAPH_MSG_LEN - rule.len_indices_str,         \
                                          rule.count == 0 ? "%ld" : ", %ld", i);          \
         rule.count++;                                                                    \
     }
@@ -112,6 +112,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
     GrB_Matrix *TSrc;
+    GrB_Matrix MSrc;
     bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
     bool t_src_empty_flags[nonterms_count]; // t_src_empty_flags[i] == true <=> TSrc[i] is empty
     GrB_Matrix identity_matrix = NULL;
@@ -119,7 +120,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
-    GrB_Index *indexes = NULL;
+    GrB_Index *indices = NULL;
     GrB_Scalar true_scalar;
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
@@ -137,42 +138,45 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     LG_ASSERT_MSG(src_count > 0, GrB_NULL_POINTER,
                   "The number of source vertices must be greater than zero.");
 
-    // Find null adjacency matrices
-    bool found_null_adj = false;
-    for (int32_t i = 0; i < terms_count; i++) {
-        if (adj_matrices[i] != NULL)
-            continue;
 
-        if (!found_null_adj) {
-            ADD_TO_MSG("Adjacency matrices with these indices are null: ");
-            ADD_TO_MSG("%d", i);
-        } else {
-            ADD_TO_MSG(", %d", i);
-        }
+    // NOTICE: alphabet of terminals is a union of edge terminals and vertex terminals.
+    // It would be an absolutely valid situation if null matrices were found.
+    // // Find null adjacency matrices
+    // bool found_null_adj = false;
+    // for (int32_t i = 0; i < terms_count; i++) {
+    //     if (adj_matrices[i] != NULL)
+    //         continue;
 
-        found_null_adj = true;
-    }
+    //     if (!found_null_adj) {
+    //         ADD_TO_MSG("Adjacency matrices with these indices are null: ");
+    //         ADD_TO_MSG("%d", i);
+    //     } else {
+    //         ADD_TO_MSG(", %d", i);
+    //     }
 
-    // Find null vertex label matrices
-    bool found_null_vert = false;
-    for (int32_t i = 0; i < terms_count; i++) {
-        if (adj_matrices[i] != NULL)
-            continue;
+    //     found_null_adj = true;
+    // }
 
-        if (!found_null_vert) {
-            ADD_TO_MSG("Vertex label matrices with these indices are null: ");
-            ADD_TO_MSG("%d", i);
-        } else {
-            ADD_TO_MSG(", %d", i);
-        }
+    // // Find null vertex label matrices
+    // bool found_null_vert = false;
+    // for (int32_t i = 0; i < terms_count; i++) {
+    //     if (vert_label_matrices[i] != NULL)
+    //         continue;
 
-        found_null_vert = true;
-    }
+    //     if (!found_null_vert) {
+    //         ADD_TO_MSG("Vertex label matrices with these indices are null: ");
+    //         ADD_TO_MSG("%d", i);
+    //     } else {
+    //         ADD_TO_MSG(", %d", i);
+    //     }
 
-    if (found_null_adj || found_null_vert) {
-        LG_FREE_ALL;
-        return GrB_NULL_POINTER;
-    }
+    //     found_null_vert = true;
+    // }
+
+    // if (found_null_adj || found_null_vert) {
+    //     LG_FREE_ALL;
+    //     return GrB_NULL_POINTER;
+    // }
 
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
@@ -191,6 +195,11 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         t_src_empty_flags[i] = true;
     }
 
+    for (int32_t i = 0; i < src_count; i++) {
+        GrB_Matrix_setElement(TSrc[0], true, i, i);
+    }
+    MSrc = TSrc[0];
+
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
     size_t term_rules[rules_count], term_rules_count = 0; // [Variable -> term]
@@ -199,12 +208,14 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     // Process rules
     typedef struct {
         size_t count;
-        size_t len_indexes_str;
-        char indexes_str[LAGRAPH_MSG_LEN];
+        size_t len_indices_str;
+        char indices_str[LAGRAPH_MSG_LEN];
     } rule_error_s;
+
     rule_error_s term_err = {0};
     rule_error_s nonterm_err = {0};
     rule_error_s invalid_err = {0};
+
     for (size_t i = 0; i < rules_count; i++) {
         LAGraph_rule_WCNF rule = rules[i];
 
@@ -257,22 +268,22 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 
         if (nonterm_err.count > 0) {
             ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str)
+            ADD_TO_MSG("indices of invalid rules: %s\n", nonterm_err.indices_str)
         }
         if (term_err.count > 0) {
             ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str)
+            ADD_TO_MSG("indices of invalid rules: %s\n", term_err.indices_str)
         }
         if (invalid_err.count > 0) {
             ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str)
+            ADD_TO_MSG("indices of invalid rules: %.120s\n", invalid_err.indices_str)
         }
 
         LG_FREE_ALL;
         return GrB_INVALID_VALUE;
     }
 
-    // Rule [Variable -> term]
+    // Rule [Variable -> term] for edges
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
         GrB_Index adj_matrix_nnz = 0;
@@ -285,6 +296,29 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         GxB_eWiseUnion(
             T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
             T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
+        );
+
+        t_empty_flags[term_rule.nonterm] = false;
+
+        #ifdef DEBUG_CFL_REACHBILITY
+        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
+        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
+        #endif
+    }
+
+    // Rule [Variable -> term] for vertices
+    for (size_t i = 0; i < term_rules_count; i++) {
+        LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+        GrB_Index vert_label_matrix_nnz = 0;
+        GRB_TRY(GrB_Matrix_nvals(&vert_label_matrix_nnz, vert_label_matrices[term_rule.prod_A]));
+
+        if (vert_label_matrix_nnz == 0) {
+            continue;
+        }
+
+        GxB_eWiseUnion(
+            T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
+            T[term_rule.nonterm], true_scalar, vert_label_matrices[term_rule.prod_A], true_scalar, GrB_NULL
         );
 
         t_empty_flags[term_rule.nonterm] = false;
