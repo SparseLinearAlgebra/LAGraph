@@ -15,22 +15,22 @@
 //  * URL: https://openproceedings.org/2021/conf/edbt/p48.pdf
 
 
-// FIXED: "free" cannot be combined with LAGraph_Malloc.  The latter may not
-// use 'malloc', but a different memory allocator.
-
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        LAGraph_Free ((void **) &nnzs, msg) ;   \
+        LAGraph_Free ((void **) &nnzs, msg);                                             \
         GrB_free(&true_scalar);                                                          \
         GrB_free(&identity_matrix);                                                      \
-        LAGraph_Free ((void **) &T, msg);       \
-        LAGraph_Free ((void **) &indices, msg); \
+        LAGraph_Free ((void **) &T, msg);                                                \
+        LAGraph_Free ((void **) &TSrc, msg);                                             \
+        LAGraph_Free ((void **) &indices, msg);                                          \
+        GxB_Iterator_free(&iter);                                                        \
     }
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
         for (size_t i = 0; i < nonterms_count; i++) {                                    \
             GrB_free(&T[i]);                                                             \
+            GrB_free(&TSrc[i]);                                                          \
         }                                                                                \
                                                                                          \
         LG_FREE_WORK;                                                                    \
@@ -57,15 +57,13 @@
         }                                                                                \
     }
 
-#define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                 \
-    {                                                                                    \
-        rule.len_indices_str += snprintf(rule.indices_str + rule.len_indices_str,        \
-                                         LAGRAPH_MSG_LEN - rule.len_indices_str,         \
-                                         rule.count == 0 ? "%ld" : ", %ld", i);          \
-        rule.count++;                                                                    \
+#define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                \
+    {                                                                                   \
+        rule.len_indices_str += snprintf(rule.indices_str + rule.len_indices_str,           \
+        LAGRAPH_MSG_LEN - rule.len_indices_str,                                         \
+                                         rule.count == 0 ? "%ld" : ", %ld", i);         \
+        rule.count++;                                                                   \
     }
-
-
 
 // LAGraph_CFL_reachability_multsrc: Multiple-Source Context-Free Language Reachability Matrix-Based Algorithm
 //
@@ -77,12 +75,11 @@
 GrB_Info LAGraph_CFL_reachability_multsrc
 (
     // Output
-    GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to nonterms_count.
-                         //
-                         // outputs[k]: (i, j) = true if and only if there is a path
-                         // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
+    GrB_Matrix *output, // A handle for the matrix containing results.
+                        //
+                        // output: (i, j) = true if and only if there is a path
+                        // from node i to node j whose edge labels form a word
+                        // derivable from the specified CFG.
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -92,14 +89,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
-    const GrB_Matrix *vert_label_matrices,  // Array of matrices representing vertex labels.
-                                            // The length of this array is equal to the count of
-                                            // terminals (terms_count).
-                                            //
-                                            // vert_label_matrices[t]: (i, i) == 1 if and only if
-                                            // vertex i has a label of the terminal corresponding
-                                            // to index 't' (where t is in the range [0, terms_count - 1]).
-                                            // Matrices are diagonal, i.e. (i, j) == 0 if i != j
     GrB_Index *src,                 // Array of source vertices
     int32_t src_count,              // The total number of source vertices
     int32_t terms_count,            // The total number of terminal symbols in the CFG.
@@ -122,6 +111,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     bool iso_flag = false;
     GrB_Index *indices = NULL;
     GrB_Scalar true_scalar;
+    GxB_Iterator iter;
+
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
@@ -129,7 +120,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
                   "The number of non-terminals must be greater than zero.");
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
                   "The number of rules must be greater than zero.");
-    LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
+    LG_ASSERT_MSG(output != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
     LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
@@ -139,50 +130,35 @@ GrB_Info LAGraph_CFL_reachability_multsrc
                   "The number of source vertices must be greater than zero.");
 
 
-    // NOTICE: alphabet of terminals is a union of edge terminals and vertex terminals.
-    // It would be an absolutely valid situation if null matrices were found.
-    // // Find null adjacency matrices
-    // bool found_null_adj = false;
-    // for (int32_t i = 0; i < terms_count; i++) {
-    //     if (adj_matrices[i] != NULL)
-    //         continue;
+    // Find null adjacency matrices
+    bool found_null = false;
+    for (int32_t i = 0; i < terms_count; i++) {
+        if (adj_matrices[i] != NULL)
+            continue;
 
-    //     if (!found_null_adj) {
-    //         ADD_TO_MSG("Adjacency matrices with these indices are null: ");
-    //         ADD_TO_MSG("%d", i);
-    //     } else {
-    //         ADD_TO_MSG(", %d", i);
-    //     }
+        if (!found_null) {
+            ADD_TO_MSG("Adjacency matrices with these indices are null: ");
+            ADD_TO_MSG("%d", i);
+        } else {
+            ADD_TO_MSG(", %d", i);
+        }
 
-    //     found_null_adj = true;
-    // }
+        found_null = true;
+    }
 
-    // // Find null vertex label matrices
-    // bool found_null_vert = false;
-    // for (int32_t i = 0; i < terms_count; i++) {
-    //     if (vert_label_matrices[i] != NULL)
-    //         continue;
+    if (found_null) {
+        LG_FREE_ALL;
+        return GrB_NULL_POINTER;
+    }
 
-    //     if (!found_null_vert) {
-    //         ADD_TO_MSG("Vertex label matrices with these indices are null: ");
-    //         ADD_TO_MSG("%d", i);
-    //     } else {
-    //         ADD_TO_MSG(", %d", i);
-    //     }
-
-    //     found_null_vert = true;
-    // }
-
-    // if (found_null_adj || found_null_vert) {
-    //     LG_FREE_ALL;
-    //     return GrB_NULL_POINTER;
-    // }
 
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
 
     LG_TRY(LAGraph_Calloc((void **) &T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **) &TSrc, nonterms_count, sizeof(GrB_Matrix), msg));
+
+    GxB_Iterator_new(&iter);
 
     GrB_Index n;
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
@@ -198,7 +174,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0], true, i, i);
     }
-    MSrc = TSrc[0];
+    GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
+
 
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
@@ -283,7 +260,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         return GrB_INVALID_VALUE;
     }
 
-    // Rule [Variable -> term] for edges
+    // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
         GrB_Index adj_matrix_nnz = 0;
@@ -296,29 +273,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         GxB_eWiseUnion(
             T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
             T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
-        );
-
-        t_empty_flags[term_rule.nonterm] = false;
-
-        #ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
-        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
-        #endif
-    }
-
-    // Rule [Variable -> term] for vertices
-    for (size_t i = 0; i < term_rules_count; i++) {
-        LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
-        GrB_Index vert_label_matrix_nnz = 0;
-        GRB_TRY(GrB_Matrix_nvals(&vert_label_matrix_nnz, vert_label_matrices[term_rule.prod_A]));
-
-        if (vert_label_matrix_nnz == 0) {
-            continue;
-        }
-
-        GxB_eWiseUnion(
-            T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
-            T[term_rule.nonterm], true_scalar, vert_label_matrices[term_rule.prod_A], true_scalar, GrB_NULL
         );
 
         t_empty_flags[term_rule.nonterm] = false;
@@ -360,16 +314,20 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+            GrB_Matrix M;
+            GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
 
             // If one of matrices is empty then their product will be empty
             if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B]) {
                 continue;
             }
 
+            GRB_TRY(GrB_mxm(M, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
+                        TSrc[bin_rule.nonterm], T[bin_rule.prod_A], GrB_NULL));
+
             GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : GxB_ANY_BOOL;
-            GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op,
-                        GxB_ANY_PAIR_BOOL, T[bin_rule.prod_A], T[bin_rule.prod_B],
-                        GrB_NULL))
+            GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op, GxB_ANY_PAIR_BOOL,
+                        M, T[bin_rule.prod_B], GrB_NULL))
 
             GrB_Index new_nnz;
             GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
@@ -377,6 +335,28 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 
             changed = changed || (nnzs[bin_rule.nonterm] != new_nnz);
             nnzs[bin_rule.nonterm] = new_nnz;
+
+            GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_A], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
+                        TSrc[bin_rule.prod_A], T[bin_rule.nonterm], GrB_NULL));
+
+            // Update source vertices matrix to find appropriate paths only
+            GrB_Matrix A;
+            GrB_Index n;
+
+            GRB_TRY(GrB_Matrix_ncols(&n, M));
+            GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
+
+            GRB_TRY(GxB_colIterator_attach(iter, M, GrB_NULL));
+
+            for (int32_t k = 0; k < n; k++) {
+                GrB_Info info = GxB_colIterator_kseek (iter, k) ;
+                if (info == GrB_SUCCESS) {
+                    GrB_Matrix_setElement(A, true, k, k);
+                }
+            }
+
+            GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_B], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
+                TSrc[bin_rule.prod_B], A, GrB_NULL));
 
             #ifdef DEBUG_CFL_REACHBILITY
             GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
@@ -388,16 +368,15 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         }
     }
 
-    #ifdef DEBUG_CFL_REACHBILITY
-        for (int32_t i = 0; i < nonterms_count; i++) {
-            printf("MATRIX WITH INDEX %d:\n", i);
-            GxB_print(T[i], GxB_SUMMARY);
-        }
-    #endif
+    GRB_TRY(GrB_mxm(MSrc, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
+            MSrc, T[0], GrB_NULL));
 
-    for (int32_t i = 0; i < nonterms_count; i++) {
-        outputs[i] = T[i];
-    }
+    (*output) = MSrc;
+
+    #ifdef DEBUG_CFL_REACHBILITY
+        printf("MATRIX ON OUTPUT:\n");
+        GxB_print(*output, GxB_SUMMARY);
+    #endif
 
     LG_FREE_WORK;
     return GrB_SUCCESS;
