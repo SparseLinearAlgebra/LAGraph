@@ -16,6 +16,8 @@
 
 // #define DEBUG_CFL_REACHABILITY
 
+#define DEBUG_CFL_REACHBILITY
+
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         LAGraph_Free((void **) &nnzs_T, msg);                                            \
@@ -71,43 +73,6 @@
         rule.count++;                                                                   \
     }
 
-#define PRINT_MATRIX(_m) {                                                              \
-    for (size_t _i = 0; _i < n; _i++) {                                                 \
-        for (size_t _j = 0; _j < n; _j++) {                                             \
-            if (GxB_Matrix_isStoredElement(_m, _i, _j) == GrB_SUCCESS) {                \
-                printf("1 ");                                                           \
-            }                                                                           \
-            else {                                                                      \
-                printf("0 ");                                                           \
-            }                                                                           \
-        }                                                                               \
-        printf("\n");                                                                   \
-    }                                                                                   \
-}
-
-#define PRINT_VECTOR(_v) {                                                              \
-    for (size_t _i = 0; _i < n; _i++) {                                                 \
-        if (GxB_Vector_isStoredElement(_v, _i) == GrB_SUCCESS) {                        \
-            printf("1 ");                                                               \
-        }                                                                               \
-        else {                                                                          \
-            printf("0 ");                                                               \
-        }                                                                               \
-    }                                                                                   \
-    printf("\n");                                                                       \
-}
-
-#define PRINT_RULE(_r) {                                                                \
-    printf("%c -> ", _r.nonterm + 'A' - 1);                                             \
-    if (_r.prod_A == -1 && _r.prod_B == -1) {                                           \
-        printf("eps\n");                                                                \
-    } else if (_r.prod_A != -1 && _r.prod_B == -1) {                                    \
-        printf("%c\n", _r.prod_A + 'a');                                                \
-    } else {                                                                            \
-        printf("%c %c\n", _r.prod_A + 'A'- 1 ,_r.prod_B + 'A' - 1);                     \
-    }                                                                                   \
-}
-
 // LAGraph_CFL_reachability_multsrc: Multiple-Source Context-Free Language Reachability
 // Matrix-Based Algorithm
 //
@@ -162,20 +127,25 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     GrB_Scalar true_scalar;
     GrB_Vector ones_vec;
 
-    // Will change the interface and omit this check in the future
-    if (nonterms_count < 0 || terms_count < 0)
-        return GrB_INVALID_VALUE;
+    LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
+                  "The number of terminals must be greater than zero.");
+    LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
+                  "The number of non-terminals must be greater than zero.");
+    LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
+                  "The number of rules must be greater than zero.");
+    LG_ASSERT_MSG(output != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
+    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
+    LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
+                  "The adjacency matrices array cannot be null.");
+    LG_ASSERT_MSG(src != NULL, GrB_NULL_POINTER,
+                  "The source vertices array cannot be null.");
+    LG_ASSERT_MSG(src_count > 0, GrB_NULL_POINTER,
+                  "The number of source vertices must be greater than zero.");
 
-    if (!nonterms_count || !rules_count)
-        return GrB_INVALID_VALUE;
+    for (int i = 0; i < src_count; i++) {
+        printf("src[%d] = %d\n", i, src[i]);
+    }
 
-    bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
-    bool t_src_empty_flags[nonterms_count]; // t_src_empty_flags[i] == true <=> TSrc[i] is empty
-
-    if (!output || !rules || !adj_matrices || !src)
-        return GrB_NULL_POINTER;
-    if (src_count <= 0)
-        return GrB_INVALID_VALUE;
 
     // Find null adjacency matrices
     bool found_null = false;
@@ -359,6 +329,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     // Rule [Variable -> Variable1 Variable2]
     bool changed = true;
     while (changed) {
+
         changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
