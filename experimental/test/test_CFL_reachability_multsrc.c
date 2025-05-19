@@ -478,7 +478,7 @@ void test_CFL_reachability_complex_grammar_allsrc(void) {
 void test_CFL_reachability_tree_allsrc(void) {
     setup();
     GrB_Info retval;
-    GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
 
     init_grammar_aSb();
