@@ -362,6 +362,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     // Rule [Variable -> Variable1 Variable2]
     bool changed = true;
     while (changed) {
+        changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
             GrB_Matrix M;
@@ -481,13 +482,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             if (nnz_TSrc_B != 0) t_src_empty_flags[bin_rule.prod_A] = false;
             if (nnz_TSrc_C != 0) t_src_empty_flags[bin_rule.prod_B] = false;
 
-            if (nnzs_T[bin_rule.nonterm] == nnz_T &&
-                nnzs_TSrc_B[bin_rule.prod_A] == nnz_TSrc_B &&
-                nnzs_TSrc_C[bin_rule.prod_B] == nnz_TSrc_C) {
-                changed = false;
-            } else {
-                changed = true;
-            }
+            changed = changed || (nnzs_T[bin_rule.nonterm] != nnz_T);
+            changed = changed || (nnzs_TSrc_B[bin_rule.prod_A] != nnz_TSrc_B);
+            changed = changed || (nnzs_TSrc_C[bin_rule.prod_B] != nnz_TSrc_C);
+
             nnzs_T[bin_rule.nonterm] = nnz_T;
             nnzs_TSrc_B[bin_rule.prod_A] = nnz_TSrc_B;
             nnzs_TSrc_C[bin_rule.prod_B] = nnz_TSrc_C;
