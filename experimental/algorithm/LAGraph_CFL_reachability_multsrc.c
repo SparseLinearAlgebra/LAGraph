@@ -15,6 +15,8 @@
 //  * URL: https://openproceedings.org/2021/conf/edbt/p48.pdf
 
 
+#define DEBUG_CFL_REACHBILITY
+
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         LAGraph_Free ((void **) &nnzs, msg);                                             \
@@ -65,7 +67,8 @@
         rule.count++;                                                                   \
     }
 
-// LAGraph_CFL_reachability_multsrc: Multiple-Source Context-Free Language Reachability Matrix-Based Algorithm
+// LAGraph_CFL_reachability_multsrc: Multiple-Source Context-Free Language Reachability
+// Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
 // adjacency matrices) such that u is from the given set of source vertices, and
@@ -113,7 +116,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     GrB_Scalar true_scalar;
     GxB_Iterator iter;
 
-
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
     LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
@@ -128,6 +130,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc
                   "The source vertices array cannot be null.");
     LG_ASSERT_MSG(src_count > 0, GrB_NULL_POINTER,
                   "The number of source vertices must be greater than zero.");
+
+    for (int i = 0; i < src_count; i++) {
+        printf("src[%d] = %d\n", i, src[i]);
+    }
 
 
     // Find null adjacency matrices
@@ -172,7 +178,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     }
 
     for (int32_t i = 0; i < src_count; i++) {
-        GrB_Matrix_setElement(TSrc[0], true, i, i);
+        GrB_Matrix_setElement(TSrc[0], true, src[i], src[i]);
     }
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
 
@@ -311,6 +317,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     LG_TRY(LAGraph_Calloc((void **) &nnzs, nonterms_count, sizeof(uint64_t), msg));
     bool changed = true;
     while (changed) {
+
         changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
@@ -346,12 +353,29 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             GRB_TRY(GrB_Matrix_ncols(&n, M));
             GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
 
-            GRB_TRY(GxB_colIterator_attach(iter, M, GrB_NULL));
+            // ROWITERATOR POTENTIALLY SHOULD BE REPLACED WITH COLUMNITERATOR
+            // BUT WITH COLUMNITERATOR THIS FAILS
+            // GRB_TRY(GxB_rowIterator_attach(iter, M, GrB_NULL));
 
-            for (int32_t k = 0; k < n; k++) {
-                GrB_Info info = GxB_colIterator_kseek (iter, k) ;
-                if (info == GrB_SUCCESS) {
-                    GrB_Matrix_setElement(A, true, k, k);
+            // for (int32_t r = 0; r < n; r++) {
+            //     GrB_Info info = GxB_colIterator_kseek (iter, r) ;
+            //     if (info == GrB_SUCCESS) {
+            //         for (int32_t c = 0; c < n; c++) {
+
+            //             GrB_Matrix_setElement(A, true, r, r);
+            //         }
+            //     }
+            // }
+
+            // replace with vxm later
+            // M[r, c] == true => A[c, c] := true
+            for (size_t c = 0; c < n; c++ ) {
+                for (size_t r = 0; r < n; r++) {
+                    GrB_Info info = GxB_Matrix_isStoredElement(M, r, c);
+                    if (info == GrB_SUCCESS) {
+                        GrB_Matrix_setElement(A, true, c, c);
+                        break;
+                    }
                 }
             }
 
