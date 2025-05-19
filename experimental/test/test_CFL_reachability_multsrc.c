@@ -408,14 +408,13 @@ void init_graph_3() {
 //================================
 
 //================================
-// Tests with valid result
+// Tests with all vertices as sources
 //================================
 
-void test_CFL_reachability_ms_cycle(void) {
+void test_CFL_reachability_cycle_allsrc(void) {
     setup();
     GrB_Info retval;
-
-    GrB_Index src[] = { 2 };
+    GrB_Index src[] = { 0, 1, 2 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
 
     init_grammar_aS();
@@ -428,6 +427,114 @@ void test_CFL_reachability_ms_cycle(void) {
     teardown();
 }
 
-TEST_LIST = {{"CFL_reachability_cycle", test_CFL_reachability_ms_cycle},
+void test_CFL_reachability_two_cycle_allsrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0, 1, 2, 3 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_labels_more_than_nonterms_allsrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0, 1, 2 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_2();
+
+    OK(run_algorithm());
+    check_result("(0, 1)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_complex_grammar_allsrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_complex();
+    init_graph_1();
+
+    OK(run_algorithm());
+    check_result("(0, 7) (1, 6)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_tree_allsrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_tree();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
+                 "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_line_allsrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0, 1, 2, 3, 4 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_line();
+
+    OK(run_algorithm());
+    check_result("(0, 4) (1, 3)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_two_nodes_cycle_allsrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0, 1 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_3();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (1, 0)");
+
+    free_workspace();
+    teardown();
+}
+
+//================================
+// Tests with some vertices as sources
+//================================
+
+TEST_LIST = {
+             {"test_CFL_reachability_cycle_allsrc", test_CFL_reachability_cycle_allsrc},
+             {"CFL_reachability_two_cycle_allsrc", test_CFL_reachability_two_cycle_allsrc},
+             {"CFL_reachability_labels_more_than_nonterms_allsrc", test_CFL_reachability_labels_more_than_nonterms_allsrc},
+             {"CFL_reachability_complex_grammar_allsrc", test_CFL_reachability_complex_grammar_allsrc},
+             {"test_CFL_reachability_tree_allsrc", test_CFL_reachability_tree_allsrc},
+             {"CFL_reachability_line_allsrc", test_CFL_reachability_line_allsrc},
+             {"CFL_reachability_two_nodes_cycle_allsrc", test_CFL_reachability_two_nodes_cycle_allsrc},
              {NULL, NULL}};
 
