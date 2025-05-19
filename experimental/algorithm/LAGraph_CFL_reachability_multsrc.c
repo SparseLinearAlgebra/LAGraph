@@ -18,14 +18,16 @@
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        LAGraph_Free ((void **) &nnzs_T, msg);                                           \
-        GrB_free(&true_scalar);                                                          \
-        GrB_free(&identity_matrix);                                                      \
-        LAGraph_Free ((void **) &T, msg);                                                \
-        LAGraph_Free ((void **) &TSrc, msg);                                             \
-        LAGraph_Free ((void **) &indices, msg);                                          \
+        LAGraph_Free((void **) &nnzs_T, msg);                                            \
+        LAGraph_Free((void **) &nnzs_TSrc_B, msg);                                       \
+        LAGraph_Free((void **) &nnzs_TSrc_C, msg);                                       \
+        LAGraph_Free((void **) &ones_vec, msg);                                          \
+        LAGraph_Free((void **) &T, msg);                                                 \
+        LAGraph_Free((void **) &TSrc, msg);                                              \
+        LAGraph_Free((void **) &MSrc, msg);                                                 \
+        LAGraph_Free((void **) &identity_matrix, msg);                                   \
         GxB_Iterator_free(&iter);                                                        \
-        LAGraph_Free((void**) &ones_vec, msg);                                           \
+        GrB_free(&true_scalar);                                                          \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -152,7 +154,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
-    GrB_Index *indices = NULL;
     GrB_Scalar true_scalar;
     GxB_Iterator iter;
     GrB_Vector ones_vec;
@@ -176,21 +177,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
                   "The number of source vertices cannot be greater than \
                     number of dimensions of adj_matrices.");
 
-    #ifdef DEBUG_CFL_REACHABILITY
-    printf("number of all vertices: %d\n", n);
-    printf("number of src vertices: %d\n", src_count);
-    printf("src vertices: ");
-    for (size_t i = 0; i < src_count; i++) {
-        if (i < src_count - 1)
-            printf("%d, ", src[i]);
-        else
-            printf("%d\n", src[i]);
-    }
-    for (size_t i = 0; i < terms_count; i++) {
-        printf("adj_matrices[%d]:\n", i);
-        PRINT_MATRIX(adj_matrices[i]);
-    }
-    #endif
 
     // Find null adjacency matrices
     bool found_null = false;
@@ -209,10 +195,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     }
 
     if (found_null) {
-        LG_FREE_ALL;
         return GrB_NULL_POINTER;
     }
-
 
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
@@ -221,6 +205,14 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     LG_TRY(LAGraph_Calloc((void **) &TSrc, nonterms_count, sizeof(GrB_Matrix), msg));
 
     GxB_Iterator_new(&iter);
+
+    GRB_TRY(GrB_Vector_new(&ones_vec, GrB_BOOL, n));
+    GRB_TRY(GrB_Vector_assign_BOOL(ones_vec, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
+    GRB_TRY(GrB_Matrix_diag(&identity_matrix, ones_vec, 0));
+
+    LG_TRY(LAGraph_Calloc((void **) &nnzs_T, nonterms_count, sizeof(GrB_Index), msg));
+    LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_B, nonterms_count, sizeof(GrB_Index), msg));
+    LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_C, nonterms_count, sizeof(GrB_Index), msg));
 
     // Create nonterms matrices
     for (int32_t i = 0; i < nonterms_count; i++) {
@@ -238,10 +230,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
     
-    #ifdef DEBUG_CFL_REACHABILITY
-    printf("MSrc:\n");
-    PRINT_MATRIX(MSrc);
-    #endif
+    // #ifdef DEBUG_CFL_REACHABILITY
+    // printf("MSrc:\n");
+    // PRINT_MATRIX(MSrc);
+    // #endif
 
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
@@ -349,11 +341,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         // #endif
     }
 
-    GRB_TRY(GrB_Vector_new(&ones_vec, GrB_BOOL, n));
-    GRB_TRY(GrB_Vector_assign_BOOL(ones_vec, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
-    GRB_TRY(GrB_Matrix_diag(&identity_matrix, ones_vec, 0));
-    // GRB_TRY(GrB_free(&ones_vec));
-
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
@@ -373,9 +360,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     }
 
     // Rule [Variable -> Variable1 Variable2]
-    LG_TRY(LAGraph_Calloc((void **) &nnzs_T, nonterms_count, sizeof(GrB_Index), msg));
-    LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_B, nonterms_count, sizeof(GrB_Index), msg));
-    LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_C, nonterms_count, sizeof(GrB_Index), msg));
     bool changed = true;
     while (changed) {
         for (size_t i = 0; i < bin_rules_count; i++) {
@@ -486,7 +470,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             //        bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i, iso_flag);
             // #endif
 
-
             // Check if any of the matrices changed. If not, job is done.
             GrB_Index nnz_T, nnz_TSrc_B, nnz_TSrc_C;
 
@@ -505,41 +488,35 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             } else {
                 changed = true;
             }
-            // changed = changed || (nnzs_T[bin_rule.nonterm] != nnz_T);
-            // changed = changed || (nnzs_TSrc_B[bin_rule.prod_A] != nnz_TSrc_B);
-            // changed = changed || (nnzs_TSrc_C[bin_rule.prod_B] != nnz_TSrc_C);
             nnzs_T[bin_rule.nonterm] = nnz_T;
             nnzs_TSrc_B[bin_rule.prod_A] = nnz_TSrc_B;
             nnzs_TSrc_C[bin_rule.prod_B] = nnz_TSrc_C;
 
-            // LAGraph_Free ((void **) &M, msg);
+            LAGraph_Free ((void **) &M, msg);
+            LAGraph_Free ((void **) &A, msg);
+            LAGraph_Free ((void **) &a, msg);
         }
     }
 
-    #ifdef DEBUG_CFL_REACHABILITY
-    printf("Before MSrc = MSrc * T^S\n");
-    printf("MSrc:\n");
-    PRINT_MATRIX(MSrc)
-    printf("T^S:\n");
-    PRINT_MATRIX(T[0]);
-    #endif
+    // #ifdef DEBUG_CFL_REACHABILITY
+    // printf("Before MSrc = MSrc * T^S\n");
+    // printf("MSrc:\n");
+    // PRINT_MATRIX(MSrc)
+    // printf("T^S:\n");
+    // PRINT_MATRIX(T[0]);
+    // #endif
 
     GRB_TRY(GrB_mxm(MSrc, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
             MSrc, T[0], GrB_NULL));
 
-    #ifdef DEBUG_CFL_REACHABILITY
-    printf("After MSrc = MSrc * T^S\n");
-    printf("MSrc:\n");
-    PRINT_MATRIX(MSrc)
-    #endif
-
-    (*output) = MSrc;
-
     // #ifdef DEBUG_CFL_REACHABILITY
-    //     printf("MATRIX ON OUTPUT:\n");
-    //     GxB_print(*output, GxB_SUMMARY);
+    // printf("After MSrc = MSrc * T^S\n");
+    // printf("MSrc, output:\n");
+    // PRINT_MATRIX(MSrc)
     // #endif
 
-    LG_FREE_WORK;
+    GRB_TRY(GrB_Matrix_dup(&(*output), MSrc));
+
+    LG_FREE_ALL;
     return GrB_SUCCESS;
 }
