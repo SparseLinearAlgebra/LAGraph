@@ -14,18 +14,18 @@
 //  * Arseny Terekhov et al., "Multiple-Source Context-Free Path Querying in Terms of Linear Algebra"
 //  * URL: https://openproceedings.org/2021/conf/edbt/p48.pdf
 
-
-#define DEBUG_CFL_REACHBILITY
+#define DEBUG_CFL_REACHABILITY
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        LAGraph_Free ((void **) &nnzs, msg);                                             \
+        LAGraph_Free ((void **) &nnzs_T, msg);                                           \
         GrB_free(&true_scalar);                                                          \
         GrB_free(&identity_matrix);                                                      \
         LAGraph_Free ((void **) &T, msg);                                                \
         LAGraph_Free ((void **) &TSrc, msg);                                             \
         LAGraph_Free ((void **) &indices, msg);                                          \
         GxB_Iterator_free(&iter);                                                        \
+        LAGraph_Free((void**) &ones_vec, msg);                                           \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -61,11 +61,48 @@
 
 #define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                \
     {                                                                                   \
-        rule.len_indices_str += snprintf(rule.indices_str + rule.len_indices_str,           \
+        rule.len_indices_str += snprintf(rule.indices_str + rule.len_indices_str,       \
         LAGRAPH_MSG_LEN - rule.len_indices_str,                                         \
                                          rule.count == 0 ? "%ld" : ", %ld", i);         \
         rule.count++;                                                                   \
     }
+
+#define PRINT_MATRIX(_m) {                                                              \
+    for (size_t _i = 0; _i < n; _i++) {                                                 \
+        for (size_t _j = 0; _j < n; _j++) {                                             \
+            if (GxB_Matrix_isStoredElement(_m, _i, _j) == GrB_SUCCESS) {                \
+                printf("1 ");                                                           \
+            }                                                                           \
+            else {                                                                      \
+                printf("0 ");                                                           \
+            }                                                                           \
+        }                                                                               \
+        printf("\n");                                                                   \
+    }                                                                                   \
+}
+
+#define PRINT_VECTOR(_v) {                                                              \
+    for (size_t _i = 0; _i < n; _i++) {                                                 \
+        if (GxB_Vector_isStoredElement(_v, _i) == GrB_SUCCESS) {                        \
+            printf("1 ");                                                               \
+        }                                                                               \
+        else {                                                                          \
+            printf("0 ");                                                               \
+        }                                                                               \
+    }                                                                                   \
+    printf("\n");                                                                       \
+}
+
+#define PRINT_RULE(_r) {                                                                \
+    printf("%c -> ", _r.nonterm + 'A' - 1);                                             \
+    if (_r.prod_A == -1 && _r.prod_B == -1) {                                           \
+        printf("eps\n");                                                                \
+    } else if (_r.prod_A != -1 && _r.prod_B == -1) {                                    \
+        printf("%c\n", _r.prod_A + 'a');                                                \
+    } else {                                                                            \
+        printf("%c %c\n", _r.prod_A + 'A'- 1 ,_r.prod_B + 'A' - 1);                     \
+    }                                                                                   \
+}
 
 // LAGraph_CFL_reachability_multsrc: Multiple-Source Context-Free Language Reachability
 // Matrix-Based Algorithm
@@ -105,17 +142,22 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     GrB_Matrix *T;
     GrB_Matrix *TSrc;
     GrB_Matrix MSrc;
+    GrB_Index n; // number of vertices in the graph
     bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
     bool t_src_empty_flags[nonterms_count]; // t_src_empty_flags[i] == true <=> TSrc[i] is empty
     GrB_Matrix identity_matrix = NULL;
-    uint64_t *nnzs = NULL;
+    GrB_Index *nnzs_T = NULL;
+    GrB_Index *nnzs_TSrc_B = NULL;
+    GrB_Index *nnzs_TSrc_C = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
     GrB_Index *indices = NULL;
     GrB_Scalar true_scalar;
     GxB_Iterator iter;
+    GrB_Vector ones_vec;
 
+    GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
     LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
@@ -130,11 +172,25 @@ GrB_Info LAGraph_CFL_reachability_multsrc
                   "The source vertices array cannot be null.");
     LG_ASSERT_MSG(src_count > 0, GrB_NULL_POINTER,
                   "The number of source vertices must be greater than zero.");
+    LG_ASSERT_MSG(n >= src_count, GrB_INVALID_VALUE,
+                  "The number of source vertices cannot be greater than \
+                    number of dimensions of adj_matrices.");
 
-    for (int i = 0; i < src_count; i++) {
-        printf("src[%d] = %d\n", i, src[i]);
+    #ifdef DEBUG_CFL_REACHABILITY
+    printf("number of all vertices: %d\n", n);
+    printf("number of src vertices: %d\n", src_count);
+    printf("src vertices: ");
+    for (size_t i = 0; i < src_count; i++) {
+        if (i < src_count - 1)
+            printf("%d, ", src[i]);
+        else
+            printf("%d\n", src[i]);
     }
-
+    for (size_t i = 0; i < terms_count; i++) {
+        printf("adj_matrices[%d]:\n", i);
+        PRINT_MATRIX(adj_matrices[i]);
+    }
+    #endif
 
     // Find null adjacency matrices
     bool found_null = false;
@@ -166,9 +222,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 
     GxB_Iterator_new(&iter);
 
-    GrB_Index n;
-    GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
-
     // Create nonterms matrices
     for (int32_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
@@ -180,8 +233,15 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0], true, src[i], src[i]);
     }
-    GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
 
+    t_src_empty_flags[0] = false;
+
+    GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
+    
+    #ifdef DEBUG_CFL_REACHABILITY
+    printf("MSrc:\n");
+    PRINT_MATRIX(MSrc);
+    #endif
 
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
@@ -283,17 +343,16 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 
         t_empty_flags[term_rule.nonterm] = false;
 
-        #ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
-        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
-        #endif
+        // #ifdef DEBUG_CFL_REACHABILITY
+        // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
+        // printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
+        // #endif
     }
 
-    GrB_Vector v_diag;
-    GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
-    GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
-    GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
-    GRB_TRY(GrB_free(&v_diag));
+    GRB_TRY(GrB_Vector_new(&ones_vec, GrB_BOOL, n));
+    GRB_TRY(GrB_Vector_assign_BOOL(ones_vec, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
+    GRB_TRY(GrB_Matrix_diag(&identity_matrix, ones_vec, 0));
+    // GRB_TRY(GrB_free(&ones_vec));
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
@@ -306,101 +365,180 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         
         t_empty_flags[eps_rule.nonterm] = false;
 
-        #ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
-        printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n",
-                eps_rule.nonterm, iso_flag);
-        #endif
+        // #ifdef DEBUG_CFL_REACHABILITY
+        // GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
+        // printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n",
+        //         eps_rule.nonterm, iso_flag);
+        // #endif
     }
 
     // Rule [Variable -> Variable1 Variable2]
-    LG_TRY(LAGraph_Calloc((void **) &nnzs, nonterms_count, sizeof(uint64_t), msg));
+    LG_TRY(LAGraph_Calloc((void **) &nnzs_T, nonterms_count, sizeof(GrB_Index), msg));
+    LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_B, nonterms_count, sizeof(GrB_Index), msg));
+    LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_C, nonterms_count, sizeof(GrB_Index), msg));
     bool changed = true;
     while (changed) {
-
-        changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
             GrB_Matrix M;
+
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("Rule: ");
+            // PRINT_RULE(bin_rule)
+            // #endif
+
             GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
 
-            // If one of matrices is empty then their product will be empty
-            if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B]) {
-                continue;
-            }
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("Before M = TSrc^A * T^B:\n");
+            // printf("TSrc^A:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.nonterm]);
+            // printf("T^B:\n");
+            // PRINT_MATRIX(T[bin_rule.prod_A]);
+            // #endif
 
             GRB_TRY(GrB_mxm(M, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
                         TSrc[bin_rule.nonterm], T[bin_rule.prod_A], GrB_NULL));
+
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("After M = TSrc^A * T^B:\n");
+            // printf("M:\n");
+            // PRINT_MATRIX(M);
+            // printf("Before T^A = T^A + M * T^C:\n");
+            // printf("T^A:\n");
+            // PRINT_MATRIX(T[bin_rule.nonterm]);
+            // printf("T^C:\n");
+            // PRINT_MATRIX(T[bin_rule.prod_B]);
+            // #endif
 
             GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : GxB_ANY_BOOL;
             GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op, GxB_ANY_PAIR_BOOL,
                         M, T[bin_rule.prod_B], GrB_NULL))
 
-            GrB_Index new_nnz;
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
-            if (new_nnz != 0) t_empty_flags[bin_rule.nonterm] = false;
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("After T^A = T^A + M * T^C:\n");
+            // printf("T^A:\n");
+            // PRINT_MATRIX(T[bin_rule.nonterm]);
+            // #endif
 
-            changed = changed || (nnzs[bin_rule.nonterm] != new_nnz);
-            nnzs[bin_rule.nonterm] = new_nnz;
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("Before TSrc^B = TSrc^B + TSrc^A:\n");
+            // printf("TSrc^A:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.nonterm]);
+            // printf("TSrc^B:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.prod_A]);
+            // #endif
 
             GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_A], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
-                        TSrc[bin_rule.prod_A], T[bin_rule.nonterm], GrB_NULL));
+                        TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], GrB_NULL));
+
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("After TSrc^B = TSrc^B + TSrc^A:\n");
+            // printf("TSrc^B:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.prod_A]);
+            // #endif
 
             // Update source vertices matrix to find appropriate paths only
             GrB_Matrix A;
-            GrB_Index n;
-
-            GRB_TRY(GrB_Matrix_ncols(&n, M));
+            GrB_Vector a;
             GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
+            GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
-            // ROWITERATOR POTENTIALLY SHOULD BE REPLACED WITH COLUMNITERATOR
-            // BUT WITH COLUMNITERATOR THIS FAILS
-            // GRB_TRY(GxB_rowIterator_attach(iter, M, GrB_NULL));
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("Before A = dest(M)\n");
+            // printf("M:\n");
+            // PRINT_MATRIX(M);
+            // #endif
 
-            // for (int32_t r = 0; r < n; r++) {
-            //     GrB_Info info = GxB_colIterator_kseek (iter, r) ;
-            //     if (info == GrB_SUCCESS) {
-            //         for (int32_t c = 0; c < n; c++) {
+            // M[i, j] == 1 => A[j, j] == 1
+            GRB_TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M, GrB_NULL));
+            GRB_TRY(GrB_Matrix_diag(&A, a, 0));
 
-            //             GrB_Matrix_setElement(A, true, r, r);
-            //         }
-            //     }
-            // }
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("After A = dest(M)\n");
+            // printf("a:\n");
+            // PRINT_VECTOR(a);
+            // printf("A:\n");
+            // PRINT_MATRIX(A);
+            // #endif
 
-            // replace with vxm later
-            // M[r, c] == true => A[c, c] := true
-            for (size_t c = 0; c < n; c++ ) {
-                for (size_t r = 0; r < n; r++) {
-                    GrB_Info info = GxB_Matrix_isStoredElement(M, r, c);
-                    if (info == GrB_SUCCESS) {
-                        GrB_Matrix_setElement(A, true, c, c);
-                        break;
-                    }
-                }
-            }
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("Before TSrc^C = TSrc^c + A\n");
+            // printf("TSrc^C:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.prod_B])
+            // printf("A:\n");
+            // PRINT_MATRIX(A)
+            // #endif
 
             GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_B], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                 TSrc[bin_rule.prod_B], A, GrB_NULL));
 
-            #ifdef DEBUG_CFL_REACHBILITY
-            GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
-            printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
-                   "I: %ld (ISO: %d)\n",
-                   bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i, iso_flag);
-            #endif
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // printf("After TSrc^C = TSrc^c + A\n");
+            // printf("TSrc^C:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.prod_B])
+            // #endif
+
+            // #ifdef DEBUG_CFL_REACHABILITY
+            // GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
+            // printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
+            //        "I: %ld (ISO: %d)\n",
+            //        bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i, iso_flag);
+            // #endif
+
+
+            // Check if any of the matrices changed. If not, job is done.
+            GrB_Index nnz_T, nnz_TSrc_B, nnz_TSrc_C;
+
+            GRB_TRY(GrB_Matrix_nvals(&nnz_T, T[bin_rule.nonterm]));
+            GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_B, TSrc[bin_rule.prod_A]));
+            GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_C, TSrc[bin_rule.prod_B]));
             
+            if (nnz_T != 0) t_empty_flags[bin_rule.nonterm] = false;
+            if (nnz_TSrc_B != 0) t_src_empty_flags[bin_rule.prod_A] = false;
+            if (nnz_TSrc_C != 0) t_src_empty_flags[bin_rule.prod_B] = false;
+
+            if (nnzs_T[bin_rule.nonterm] == nnz_T &&
+                nnzs_TSrc_B[bin_rule.prod_A] == nnz_TSrc_B &&
+                nnzs_TSrc_C[bin_rule.prod_B] == nnz_TSrc_C) {
+                changed = false;
+            } else {
+                changed = true;
+            }
+            // changed = changed || (nnzs_T[bin_rule.nonterm] != nnz_T);
+            // changed = changed || (nnzs_TSrc_B[bin_rule.prod_A] != nnz_TSrc_B);
+            // changed = changed || (nnzs_TSrc_C[bin_rule.prod_B] != nnz_TSrc_C);
+            nnzs_T[bin_rule.nonterm] = nnz_T;
+            nnzs_TSrc_B[bin_rule.prod_A] = nnz_TSrc_B;
+            nnzs_TSrc_C[bin_rule.prod_B] = nnz_TSrc_C;
+
+            // LAGraph_Free ((void **) &M, msg);
         }
     }
+
+    #ifdef DEBUG_CFL_REACHABILITY
+    printf("Before MSrc = MSrc * T^S\n");
+    printf("MSrc:\n");
+    PRINT_MATRIX(MSrc)
+    printf("T^S:\n");
+    PRINT_MATRIX(T[0]);
+    #endif
 
     GRB_TRY(GrB_mxm(MSrc, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
             MSrc, T[0], GrB_NULL));
 
+    #ifdef DEBUG_CFL_REACHABILITY
+    printf("After MSrc = MSrc * T^S\n");
+    printf("MSrc:\n");
+    PRINT_MATRIX(MSrc)
+    #endif
+
     (*output) = MSrc;
 
-    #ifdef DEBUG_CFL_REACHBILITY
-        printf("MATRIX ON OUTPUT:\n");
-        GxB_print(*output, GxB_SUMMARY);
-    #endif
+    // #ifdef DEBUG_CFL_REACHABILITY
+    //     printf("MATRIX ON OUTPUT:\n");
+    //     GxB_print(*output, GxB_SUMMARY);
+    // #endif
 
     LG_FREE_WORK;
     return GrB_SUCCESS;
