@@ -321,12 +321,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
-        GrB_Index adj_matrix_nnz = 0;
-        GRB_TRY(GrB_Matrix_nvals(&adj_matrix_nnz, adj_matrices[term_rule.prod_A]));
-
-        if (adj_matrix_nnz == 0) {
-            continue;
-        }
 
         GxB_eWiseUnion(
             T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
