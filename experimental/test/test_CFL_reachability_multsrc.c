@@ -10,6 +10,12 @@
 
 //------------------------------------------------------------------------------
 
+/*
+ * Note:
+ * Tests than end with *_allsrc are the same as tests for CFL_reachability, with
+ * all vertices selected as sources. Their behaviour should be identical to CFL_reachability.
+*/
+
 #include <LAGraphX.h>
 #include <LAGraph_test.h>
 #include <LG_Xtest.h>
@@ -127,6 +133,33 @@ void init_grammar_aSb() {
 
     grammar = (grammar_t){
         .nonterms_count = 4, .terms_count = 2, .rules_count = 5, .rules = rules};
+}
+
+// S -> aSb | ab | eps in WCNF
+//
+// Terms: [0 a] [1 b]
+// Nonterms: [0 S] [1 A] [2 B] [3 C]
+// S -> AB  [0 1 2 0]
+// S -> AC  [0 1 3 0]
+// S -> eps [0 -1 -1 0]
+// C -> SB  [3 0 2 0]
+// A -> a   [1 0 -1 0]
+// B -> b   [2 1 -1 0]
+void init_grammar_aSb_eps() {
+//  LAGraph_rule_WCNF *rules = calloc(5, sizeof(LAGraph_rule_WCNF));
+    LAGraph_rule_WCNF *rules = NULL ;
+    LAGraph_Calloc ((void **) &rules, 6, sizeof(LAGraph_rule_WCNF), msg);
+
+    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
+    rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
+    rules[2] = (LAGraph_rule_WCNF){3, 0, 2, 0};
+    rules[3] = (LAGraph_rule_WCNF){1, 0, -1, 0};
+    rules[4] = (LAGraph_rule_WCNF){2, 1, -1, 0};
+    rules[5] = (LAGraph_rule_WCNF){0, -1, -1, 0};
+
+
+    grammar = (grammar_t){
+        .nonterms_count = 4, .terms_count = 2, .rules_count = 6, .rules = rules};
 }
 
 // S -> aS | a in WCNF
@@ -403,9 +436,62 @@ void init_graph_3() {
     adj_matrices[1] = adj_matrix_b;
 }
 
-//================================
-// Graphs with vertex labels
-//================================
+// Graph:
+//
+// 1 -a-> 0
+// 2 -a-> 0
+// 3 -a-> 0
+// 4 -a-> 0
+// 5 -a-> 0
+// 1 -a-> 2
+// 2 -a-> 3
+// 3 -a-> 4
+// 4 -a-> 5
+// 5 -a-> 1
+void init_graph_whirlpool() {
+//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
+    LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
+
+    GrB_Matrix adj_matrix_a;
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 6, 6));
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 3, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 4, 0));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 5, 0));
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 3));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 3, 4));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 4, 5));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 5, 1));
+
+    adj_matrices[0] = adj_matrix_a;
+}
+
+// Graph:
+//
+// 0 -a-> 1
+// 0 -a-> 2
+// 0 -a-> 3
+// 0 -a-> 4
+// 0 -b-> 0
+void init_graph_allout() {
+//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
+    LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
+
+    GrB_Matrix adj_matrix_a, adj_matrix_b;
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5));
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 3));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 4));
+
+    adj_matrices[0] = adj_matrix_a;
+}
 
 //================================
 // Tests with all vertices as sources
@@ -528,7 +614,173 @@ void test_CFL_reachability_two_nodes_cycle_allsrc(void) {
 // Tests with some vertices as sources
 //================================
 
+void test_CFL_reachability_tree_msrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 2, 3 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_tree();
+
+    OK(run_algorithm());
+    check_result("(2, 2) (2, 5) (3, 0) (3, 1) (3, 3) (3, 4)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_allin_1_4(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 1, 4 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aS();
+    init_graph_whirlpool();
+
+    OK(run_algorithm());
+    check_result(
+        "(1, 0) (1, 1) (1, 2) (1, 3) (1, 4) (1, 5) (4, 0) (4, 1) (4, 2) (4, 3) (4, 4) (4, 5)");
+
+    free_workspace();
+    teardown();
+}
+
+//================================
+// Tests with one source vertex
+//================================
+
+void test_CFL_reachability_cycle_onesrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aS();
+    init_graph_one_cycle();
+
+    OK(run_algorithm());
+    check_result("(0, 0) (0, 1) (0, 2)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_allin_1(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aS();
+    init_graph_whirlpool();
+
+    OK(run_algorithm());
+    check_result("");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_allout_0(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aS();
+    init_graph_allout();
+
+    OK(run_algorithm());
+    check_result("(0, 1) (0, 2) (0, 3) (0, 4)");
+
+    free_workspace();
+    teardown();
+}
+
+void test_CFL_reachability_allout_1(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 1 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aS();
+    init_graph_allout();
+
+    OK(run_algorithm());
+    check_result("");
+
+    free_workspace();
+    teardown();
+}
+
+//====================
+// Tests with invalid result
+//====================
+
+void test_CFL_reachability_invalid_rules(void) {
+    setup();
+    GrB_Info retval;
+
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb_eps();
+    init_graph_double_cycle();
+
+    // Rule [Variable -> _ B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [_ -> A B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> A B], where C >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> t], where t >= terms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    free_workspace();
+    teardown();
+
+    return;
+}
+
+void test_CFL_reachability_null_matrices(void) {
+    setup();
+    GrB_Info retval;
+
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+
+    LAGraph_Free ((void **) adj_matrices[0], msg);
+    LAGraph_Free ((void **) adj_matrices[1], msg);
+
+    adj_matrices[0] = NULL;
+    adj_matrices[1] = NULL;
+    check_error(GrB_INVALID_VALUE);
+
+    free_workspace();
+    teardown();
+
+    return;
+}
+
+
 TEST_LIST = {
+             // Tests from LAGraph_CFL_reachability as special cases
              {"test_CFL_reachability_cycle_allsrc", test_CFL_reachability_cycle_allsrc},
              {"CFL_reachability_two_cycle_allsrc", test_CFL_reachability_two_cycle_allsrc},
              {"CFL_reachability_labels_more_than_nonterms_allsrc", test_CFL_reachability_labels_more_than_nonterms_allsrc},
@@ -536,5 +788,13 @@ TEST_LIST = {
              {"test_CFL_reachability_tree_allsrc", test_CFL_reachability_tree_allsrc},
              {"CFL_reachability_line_allsrc", test_CFL_reachability_line_allsrc},
              {"CFL_reachability_two_nodes_cycle_allsrc", test_CFL_reachability_two_nodes_cycle_allsrc},
+             {"CFL_reachability_invalid_rules", test_CFL_reachability_invalid_rules},
+            //  {"CFL_reachability_null_matrices", test_CFL_reachability_null_matrices},
+             // Tests for several (not all) source vertices.
+             {"CFL_reachability_cycle_onesrc", test_CFL_reachability_cycle_onesrc},
+             {"CFL_reachability_whirlpool_0", test_CFL_reachability_allin_0},
+             {"test_CFL_reachability_whirlpool_1_4", test_CFL_reachability_allin_1_4}
+             {"CFL_reachability_allout_0", test_CFL_reachability_allout_0},
+             {"CFL_reachability_allout_1", test_CFL_reachability_allout_1},
              {NULL, NULL}};
 
