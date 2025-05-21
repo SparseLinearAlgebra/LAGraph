@@ -618,6 +618,26 @@ void matrix_print_lazy(Matrix *A) {
     GrB_free(&_temp);
 }
 
+#define IS_NONTERM(index)                                                                \
+    {                                                                                    \
+        for (size_t m = 0; m < rules_count; m++) {                                       \
+            if (rules[m].nonterm == index)                                               \
+                return true;                                                             \
+        }                                                                                \
+                                                                                         \
+        return false;                                                                    \
+    }
+
+bool is_nonterm(int index, const LAGraph_rule_WCNF *rules, size_t rules_count) {
+    for (size_t i = 0; i < rules_count; i++) {
+        if (rules[i].nonterm == index) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
@@ -677,8 +697,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
-    int32_t terms_count,            // The total number of terminal symbols in the CFG.
-    int32_t nonterms_count, // The total number of non-terminal symbols in the CFG.
+    int32_t nonterms_count,
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
     char *msg,                      // Message string for error reporting.
@@ -695,17 +714,25 @@ GrB_Info LAGraph_CFL_reachability_adv(
     size_t msg_len = 0; // For error formatting
     GrB_Index *indexes = NULL;
 
+    int32_t symbols_amount = 0;
+    for (size_t i = 0; i < rules_count; i++) {
+        symbols_amount =
+            rules[i].nonterm + 1 > symbols_amount ? rules[i].nonterm + 1 : symbols_amount;
+        symbols_amount =
+            rules[i].prod_A + 1 > symbols_amount ? rules[i].prod_A + 1 : symbols_amount;
+        symbols_amount =
+            rules[i].prod_B + 1 > symbols_amount ? rules[i].prod_B + 1 : symbols_amount;
+    }
+
     GrB_Scalar true_scalar;
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
 
-    LG_TRY(LAGraph_Calloc((void **)&T, nonterms_count, sizeof(GrB_Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **)&delta_matrices, nonterms_count, sizeof(Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **)&matrices, nonterms_count, sizeof(Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **)&temp_matrices, nonterms_count, sizeof(Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&T, symbols_amount, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&delta_matrices, symbols_amount, sizeof(Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&matrices, symbols_amount, sizeof(Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&temp_matrices, symbols_amount, sizeof(Matrix), msg));
 
-    LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
-                  "The number of terminals must be greater than zero.");
     LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
                   "The number of non-terminals must be greater than zero.");
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
@@ -717,7 +744,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Find null adjacency matrices
     bool found_null = false;
-    for (int32_t i = 0; i < terms_count; i++) {
+    for (int32_t i = 0; i < symbols_amount; i++) {
         if (adj_matrices[i] != NULL)
             continue;
 
@@ -740,7 +767,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
     // Create nonterms matrices
-    for (int32_t i = 0; i < nonterms_count; i++) {
+    for (int32_t i = 0; i < symbols_amount; i++) {
         GrB_Matrix matrix;
 
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
@@ -748,8 +775,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         delta_matrices[i] = matrix_from_base(matrix);
 
-        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
-        matrices[i] = matrix_from_base(matrix);
+        GrB_Matrix_dup(&matrices[i], adj_matrices[i]);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         temp_matrices[i] = matrix_from_base(matrix);
@@ -777,7 +803,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
 
         // Check that all rules are well-formed
-        if (rule.nonterm < 0 || rule.nonterm >= nonterms_count) {
+        if (rule.nonterm < 0 || rule.nonterm >= symbols_amount) {
             ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
         }
 
@@ -792,7 +818,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (is_rule_term) {
             term_rules[term_rules_count++] = i;
 
-            if (rule.prod_A < -1 || rule.prod_A >= terms_count) {
+            if (rule.prod_A < -1 || rule.prod_A >= symbols_amount) {
                 ADD_INDEX_TO_ERROR_RULE(term_err, i);
             }
 
@@ -803,8 +829,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (is_rule_bin) {
             bin_rules[bin_rules_count++] = i;
 
-            if (rule.prod_A < -1 || rule.prod_A >= nonterms_count || rule.prod_B < -1 ||
-                rule.prod_B >= nonterms_count) {
+            if (rule.prod_A < -1 || rule.prod_A >= symbols_amount || rule.prod_B < -1 ||
+                rule.prod_B >= symbols_amount) {
                 ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
             }
 
