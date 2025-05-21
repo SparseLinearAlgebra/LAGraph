@@ -142,6 +142,8 @@
         }                                                                                \
     }
 
+enum Matrix_block { CELL, VEC_HORIZ, VEC_VERT };
+
 typedef struct Matrix {
     GrB_Matrix base;
     GrB_Matrix base_row;
@@ -152,6 +154,7 @@ typedef struct Matrix {
     GrB_Index nrows;
     GrB_Index ncols;
     int32_t format;
+    enum Matrix_block block_type;
     bool is_both;
     bool is_lazy;
 } Matrix;
@@ -169,6 +172,14 @@ void matrix_update(Matrix *matrix) {
     }
     GrB_Matrix_nrows(&matrix->nrows, matrix->base);
     GrB_Matrix_ncols(&matrix->ncols, matrix->base);
+
+    if (matrix->nrows > matrix->ncols) {
+        matrix->block_type = VEC_VERT;
+    }
+
+    if (matrix->ncols > matrix->nrows) {
+        matrix->block_type = VEC_HORIZ;
+    }
     // GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
 }
 
@@ -182,6 +193,7 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.nvals = 0;
     result.nrows = 0;
     result.ncols = 0;
+    result.block_type = CELL;
     result.format = GrB_ROWMAJOR;
     result.is_both = false;
     matrix_update(&result);
