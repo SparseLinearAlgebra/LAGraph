@@ -435,6 +435,42 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     return result;
 }
 
+GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool accum,
+                          bool swap) {
+    if (first->block_type == CELL && second->block_type == CELL) {
+        matrix_mxm_lazy(output, first, second, accum, swap);
+    }
+
+    if (first->block_type == CELL) {
+        block_matrix_hyper_rotate_i(second, swap ? VEC_VERT : VEC_HORIZ);
+        block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
+
+        matrix_mxm_lazy(output, first, second, accum, swap);
+
+        return GrB_SUCCESS;
+    }
+
+    if (second->block_type == CELL) {
+        block_matrix_hyper_rotate_i(first, swap ? VEC_HORIZ : VEC_VERT);
+        block_matrix_hyper_rotate_i(output, swap ? VEC_HORIZ : VEC_VERT);
+
+        matrix_mxm_lazy(output, first, second, accum, swap);
+
+        return GrB_SUCCESS;
+    }
+
+    GrB_Index size = first->nrows > first->ncols ? first->nrows : first->ncols;
+    GrB_Matrix _diag;
+    GrB_Matrix_new(_diag, GrB_BOOL, size, size);
+    Matrix diag = matrix_from_base(_diag);
+    block_matrix_to_diag(&diag, second);
+
+    block_matrix_hyper_rotate_i(first, swap ? VEC_VERT : VEC_HORIZ);
+    block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
+
+    matrix_mxm_lazy(output, first, &diag, accum, swap);
+}
+
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
 
