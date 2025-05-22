@@ -998,7 +998,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *B = &delta_matrices[bin_rule.prod_B];
             Matrix *C = &temp_matrices[bin_rule.nonterm];
 
-            mxm(C, A, B, false, false);
+            mxm(C, A, B, true, false);
             // matrix_print_lazy(A);
             // matrix_print_lazy(B);
             // matrix_print_lazy(C);
