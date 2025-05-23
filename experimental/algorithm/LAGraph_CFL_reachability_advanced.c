@@ -278,6 +278,56 @@ GrB_Info matrix_clear_empty(Matrix *A) {
     return matrix_clear_format(A);
 }
 
+void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
+    if (matrix->block_type == CELL) {
+        return;
+    }
+
+    if (matrix->block_type == format) {
+        return;
+    }
+
+    GrB_Scalar scalar_true;
+    GrB_Scalar_new(&scalar_true, GrB_BOOL);
+    GrB_Scalar_setElement_BOOL(scalar_true, true);
+
+    if (matrix->format == VEC_VERT) {
+        GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
+        GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
+
+        GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
+
+        for (size_t i = 0; i < matrix->nvals; i++) {
+            ncols[i] = ncols[i] + ncols[i] / matrix->ncols * matrix->ncols;
+            nrows[i] = nrows[i] % matrix->ncols;
+        }
+
+        GxB_Matrix_build_Scalar(matrix->base, nrows, ncols, scalar_true, matrix->nvals);
+        free(nrows);
+        free(ncols);
+        GrB_free(&scalar_true);
+        return;
+    }
+
+    if (matrix->format == VEC_HORIZ) {
+        GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
+        GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
+
+        GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
+
+        for (size_t i = 0; i < matrix->nvals; i++) {
+            nrows[i] = nrows[i] + nrows[i] / matrix->nrows * matrix->nrows;
+            ncols[i] = ncols[i] % matrix->ncols;
+        }
+
+        GxB_Matrix_build_Scalar(matrix->base, nrows, ncols, scalar_true, matrix->nvals);
+        free(nrows);
+        free(ncols);
+        GrB_free(&scalar_true);
+        return;
+    }
+}
+
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     GrB_Info result =
         GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
