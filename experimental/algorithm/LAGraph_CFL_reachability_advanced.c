@@ -200,6 +200,19 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     return result;
 }
 
+Matrix matrix_create(GrB_Index nrows, GrB_Index ncols) {
+    GrB_Matrix _result;
+    GrB_Matrix_new(&_result, GrB_BOOL, nrows, ncols);
+    Matrix result = matrix_from_base(_result);
+
+    return result;
+};
+
+void matrix_free(Matrix *matrix) {
+    free(matrix->base_matrices);
+    GrB_free(&matrix->base);
+}
+
 void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     // Matrix contain both formats so just switch base matrix
     if (matrix->is_both) {
