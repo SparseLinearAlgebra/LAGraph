@@ -578,6 +578,46 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
     return GrB_SUCCESS;
 }
 
+// - Any operation on two hyper vectors is performed block-wise
+// - When hyper vector is added in-place to a cell, then sum of hyper vector's blocks is
+// added to a cell
+// - When cell is added in-place to a hyper vector, then cell is added to each of
+// hyper vector's blocks
+GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool accum) {
+    if (output != first) {
+        fprintf(stderr, "Matrix wise currently support only iadd operation");
+        exit(-122);
+    }
+
+    if (first->block_type == CELL && second->block_type == CELL) {
+        matrix_wise_lazy(output, first, second, accum);
+    }
+
+    // second is vector
+    if (first->block_type == CELL) {
+        Matrix temp_reduced = matrix_create(first->nrows, first->ncols);
+        block_matrix_reduce(&temp_reduced, second);
+
+        GrB_Info info = matrix_wise_lazy(output, first, &temp_reduced, accum);
+        matrix_free(&temp_reduced);
+        return info;
+    }
+
+    // first is vector
+    if (second->block_type == CELL) {
+        Matrix temp_vector = matrix_create(first->nrows, first->ncols);
+        block_matrix_repeat_into_vector(&temp_vector, second);
+
+        GrB_Info info = matrix_wise_lazy(output, first, &temp_vector, accum);
+        matrix_free(&temp_vector);
+        return info;
+    }
+
+    // both are vector
+    block_matrix_hyper_rotate_i(second, first->block_type);
+    return matrix_wise_block(output, first, second, accum);
+}
+
 GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
     GrB_Info result = GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL,
                                    output->base, output->base, GrB_DESC_RSC);
