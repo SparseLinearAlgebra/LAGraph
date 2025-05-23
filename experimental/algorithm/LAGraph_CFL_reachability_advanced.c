@@ -360,6 +360,8 @@ void block_matrix_to_diag(Matrix *diag, Matrix *input) {
     GrB_free(&scalar_true);
 }
 
+GrB_Info matrix_dup_empty(Matrix *output, Matrix *input);
+
 void block_matrix_reduce(Matrix *matrix, Matrix *input) {
     if (input->block_type == CELL) {
         matrix_dup_empty(matrix, input);
@@ -588,7 +590,7 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
 
     GrB_Index size = first->nrows > first->ncols ? first->nrows : first->ncols;
     GrB_Matrix _diag;
-    GrB_Matrix_new(_diag, GrB_BOOL, size, size);
+    GrB_Matrix_new(&_diag, GrB_BOOL, size, size);
     Matrix diag = matrix_from_base(_diag);
     block_matrix_to_diag(&diag, second);
 
