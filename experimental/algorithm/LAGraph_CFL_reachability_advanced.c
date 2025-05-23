@@ -1006,7 +1006,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         delta_matrices[i] = matrix_from_base(matrix);
 
-        GrB_Matrix_dup(&matrices[i], adj_matrices[i]);
+        GrB_Matrix_dup(&matrices[i].base, adj_matrices[i]);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         temp_matrices[i] = matrix_from_base(matrix);
