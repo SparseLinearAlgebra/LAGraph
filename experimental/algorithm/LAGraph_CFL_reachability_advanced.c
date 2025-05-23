@@ -819,12 +819,12 @@ GrB_Info matrix_rsub_empty(Matrix *output, Matrix *mask) {
 }
 
 GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
-    if (mask->base_matrices_count == 0) {
+    if (!mask->is_lazy) {
         return matrix_rsub_empty(output, mask);
     }
 
-    matrix_sort_lazy(mask, true);
     matrix_combine_lazy(mask, output->nvals);
+    matrix_sort_lazy(mask, true);
 
     for (size_t i = 0; i < mask->base_matrices_count; i++) {
         matrix_rsub_empty(output, &mask->base_matrices[i]);
