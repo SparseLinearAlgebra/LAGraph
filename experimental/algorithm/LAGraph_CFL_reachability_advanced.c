@@ -328,6 +328,38 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
     }
 }
 
+void block_matrix_to_diag(Matrix *diag, Matrix *input) {
+    if (input->block_type == CELL) {
+        exit(-1);
+    }
+
+    GrB_Scalar scalar_true;
+    GrB_Scalar_new(&scalar_true, GrB_BOOL);
+    GrB_Scalar_setElement_BOOL(scalar_true, true);
+
+    GrB_Index *rows = malloc(input->nvals * sizeof(GrB_Index));
+    GrB_Index *cols = malloc(input->nvals * sizeof(GrB_Index));
+    GrB_Matrix_extractTuples_BOOL(rows, cols, NULL, &input->nvals, input->base);
+
+    if (input->block_type == VEC_HORIZ) {
+        for (size_t i = 0; i < input->nvals; i++) {
+            rows[i] = rows[i] + cols[i] / input->nrows * input->nrows;
+        }
+    }
+
+    if (input->block_type == VEC_VERT) {
+        for (size_t i = 0; i < input->nvals; i++) {
+            cols[i] = cols[i] + rows[i] / input->ncols * input->ncols;
+        }
+    }
+
+    GxB_Matrix_build_Scalar(diag->base, rows, cols, scalar_true, input->nvals);
+
+    free(rows);
+    free(cols);
+    GrB_free(&scalar_true);
+}
+
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     GrB_Info result =
         GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
