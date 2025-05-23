@@ -124,6 +124,7 @@
 #define OPT_EMPTY (1 << 0)
 #define OPT_FORMAT (1 << 1)
 #define OPT_LAZY (1 << 2)
+#define OPT_BLOCK (1 << 3)
 
 #define SKIP_IF_NULL(matrix)                                                             \
     GrB_Matrix_nvals(&new_nnz, matrix);                                                  \
@@ -1163,6 +1164,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
         mxm = matrix_mxm_format;
         wise = matrix_wise_format;
         rsub = matrix_rsub_format;
+    } else if (optimizations & OPT_BLOCK) {
+        mxm = matrix_mxm_block;
+        wise = matrix_wise_block;
+        rsub = matrix_rsub_block;
     } else {
         mxm = matrix_mxm;
         wise = matrix_wise;
