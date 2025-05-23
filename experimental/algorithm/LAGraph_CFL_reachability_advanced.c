@@ -206,7 +206,7 @@ Matrix matrix_create(GrB_Index nrows, GrB_Index ncols) {
     Matrix result = matrix_from_base(_result);
 
     return result;
-};
+}
 
 void matrix_free(Matrix *matrix) {
     free(matrix->base_matrices);
@@ -456,6 +456,8 @@ GrB_Info matrix_sort_lazy(Matrix *A, bool reverse) {
             }
         }
     }
+
+    return GrB_SUCCESS;
 }
 
 GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold) {
@@ -607,7 +609,7 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
     block_matrix_hyper_rotate_i(first, swap ? VEC_VERT : VEC_HORIZ);
     block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
 
-    matrix_mxm_lazy(output, first, &diag, accum, swap);
+    return matrix_mxm_lazy(output, first, &diag, accum, swap);
 }
 
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
@@ -694,8 +696,8 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         for (size_t i = 0; i < first->base_matrices_count; i++) {
             size_t self_nvals = first->base_matrices[i].nvals >= 10 ? first->nvals : 10;
 
-            if (other.nvals / 10 <= self_nvals && self_nvals <= other.nvals * 10) {
-                matrix_wise_empty(&other, &other, &first->base_matrices[i], false);
+            if (other_nvals / 10 <= self_nvals && self_nvals <= other_nvals * 10) {
+                matrix_wise_empty(&other, &other, &first->base_matrices[i], accum);
                 GrB_free(&first->base_matrices[i].base);
                 for (size_t j = i + 1; j < first->base_matrices_count; j++) {
                     first->base_matrices[j - 1] = first->base_matrices[j];
@@ -812,8 +814,8 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
 }
 
 GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask) {
-    if (output->block_type == CELL && output->block_type != CELL ||
-        output->block_type != CELL && mask->block_type == CELL) {
+    if ((output->block_type == CELL && output->block_type != CELL) ||
+        (output->block_type != CELL && mask->block_type == CELL)) {
         fprintf(stderr, "Don't support rsub operation between cell and vector");
         exit(-1);
     }
