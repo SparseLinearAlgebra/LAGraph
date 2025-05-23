@@ -394,6 +394,16 @@ void block_matrix_reduce(Matrix *matrix, Matrix *input) {
     GrB_free(&scalar_true);
 }
 
+void block_matrix_repeat_into_vector(Matrix *matrix, Matrix *input,
+                                     GrB_Index block_count) {
+    GrB_Matrix *tiles = malloc(block_count * sizeof(GrB_Matrix));
+    for (size_t i = 0; i < block_count; i++) {
+        tiles[i] = input->base;
+    }
+
+    GxB_Matrix_concat(matrix->base, tiles, block_count, 1, GrB_NULL);
+}
+
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     GrB_Info result =
         GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
@@ -735,7 +745,8 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
     // first is vector
     if (second->block_type == CELL) {
         Matrix temp_vector = matrix_create(first->nrows, first->ncols);
-        block_matrix_repeat_into_vector(&temp_vector, second);
+        GrB_Index block_count = first->nrows > first->ncols ? first->nrows : first->ncols;
+        block_matrix_repeat_into_vector(&temp_vector, second, block_count);
 
         GrB_Info info = matrix_wise_lazy(output, first, &temp_vector, accum);
         matrix_free(&temp_vector);
