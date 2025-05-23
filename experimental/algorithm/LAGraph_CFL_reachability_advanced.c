@@ -197,7 +197,18 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
     result.block_type = CELL;
     result.format = GrB_ROWMAJOR;
     result.is_both = false;
+    result.is_lazy = false;
     matrix_update(&result);
+    return result;
+}
+
+Matrix matrix_from_base_lazy(GrB_Matrix matrix) {
+    Matrix result = matrix_from_base(matrix);
+    result.is_lazy = true;
+
+    result.base_matrices_count = 1;
+    result.base_matrices[0] = matrix_from_base(result.base);
+
     return result;
 }
 
@@ -679,9 +690,16 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
 }
 
 GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool accum) {
-    if (first->base_matrices_count == 0) {
-        first->base_matrices_count = 1;
-        first->base_matrices[0] = matrix_from_base(first->base);
+    if (!first->is_lazy && !second->is_lazy) {
+        return matrix_wise_empty(output, first, second, accum);
+    }
+
+    if (!first->is_lazy && second->is_lazy) {
+        for (size_t i = 0; i < second->base_matrices_count; i++) {
+            matrix_wise_empty(output, first, &second->base_matrices[i], false);
+        }
+
+        return GrB_SUCCESS;
     }
 
     GrB_Matrix _other;
@@ -695,7 +713,8 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         bool found = false;
 
         for (size_t i = 0; i < first->base_matrices_count; i++) {
-            size_t self_nvals = first->base_matrices[i].nvals >= 10 ? first->nvals : 10;
+            size_t self_nvals =
+                first->base_matrices[i].nvals >= 10 ? first->base_matrices[i].nvals : 10;
 
             if (other_nvals / 10 <= self_nvals && self_nvals <= other_nvals * 10) {
                 matrix_wise_empty(&other, &other, &first->base_matrices[i], accum);
@@ -1010,7 +1029,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         delta_matrices[i] = matrix_from_base(matrix);
 
         GrB_Matrix_dup(&matrices[i].base, adj_matrices[i]);
-        matrices[i] = matrix_from_base(matrices[i].base);
+        matrices[i] = matrix_from_base_lazy(matrices[i].base);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         temp_matrices[i] = matrix_from_base(matrix);
