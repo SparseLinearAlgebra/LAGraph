@@ -684,6 +684,21 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
     return GrB_SUCCESS;
 }
 
+GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask) {
+    if (output->block_type == CELL && output->block_type != CELL ||
+        output->block_type != CELL && mask->block_type == CELL) {
+        fprintf(stderr, "Don't support rsub operation between cell and vector");
+        exit(-1);
+    }
+
+    if (output->block_type == CELL) {
+        return matrix_rsub_lazy(output, mask);
+    }
+
+    block_matrix_hyper_rotate_i(output, mask->block_type);
+    return matrix_rsub_lazy(output, mask);
+}
+
 void matrix_print_lazy(Matrix *A) {
     if (A->base_matrices_count == 0) {
         GxB_print(A->base, 1);
