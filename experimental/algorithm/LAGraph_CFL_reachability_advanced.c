@@ -1250,6 +1250,12 @@ GrB_Info LAGraph_CFL_reachability_adv(
         }
         TIMER_STOP("MXM 2", &mxm2);
 
+        // Rule [Variable -> term]
+        for (size_t i = 0; i < term_rules_count; i++) {
+            LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+            Matrix *A = &temp_matrices[term_rule.nonterm];
+            Matrix *B = &delta_matrices[term_rule.prod_A];
+
             // printf("Simple rules iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
             // matrix_print_lazy(B);
