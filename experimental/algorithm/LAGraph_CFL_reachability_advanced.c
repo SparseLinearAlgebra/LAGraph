@@ -1108,51 +1108,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         return GrB_INVALID_VALUE;
     }
 
-    // Rule [Variable -> term]
-    for (size_t i = 0; i < term_rules_count; i++) {
-        LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
-        GrB_Index adj_matrix_nnz = 0;
-        GRB_TRY(GrB_Matrix_nvals(&adj_matrix_nnz, adj_matrices[term_rule.prod_A]));
-
-        if (adj_matrix_nnz == 0) {
-            continue;
-        }
-
-        GxB_eWiseUnion(delta_matrices[term_rule.nonterm].base, GrB_NULL, GrB_NULL,
-                       GxB_PAIR_BOOL, delta_matrices[term_rule.nonterm].base, true_scalar,
-                       adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
-        matrix_update(&delta_matrices[term_rule.nonterm]);
-
-#ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
-        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
-#endif
-    }
-
-    GrB_Vector v_diag;
-    GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
-    GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
-    GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
-    GRB_TRY(GrB_free(&v_diag));
-
-    // Rule [Variable -> eps]
-    for (size_t i = 0; i < eps_rules_count; i++) {
-        LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
-
-        GxB_eWiseUnion(delta_matrices[eps_rule.nonterm].base, GrB_NULL, GxB_PAIR_BOOL,
-                       GxB_PAIR_BOOL, delta_matrices[eps_rule.nonterm].base, true_scalar,
-                       identity_matrix, true_scalar, GrB_NULL);
-        matrix_update(&delta_matrices[eps_rule.nonterm]);
-
-#ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
-        printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n", eps_rule.nonterm, iso_flag);
-#endif
-    }
-
-    // Rule [Variable -> Variable1 Variable2]
-    LG_TRY(LAGraph_Calloc((void **)&nnzs, nonterms_count, sizeof(uint64_t), msg));
-
     typedef GrB_Info (*matrix_mxm_fn)(Matrix *output, Matrix *first, Matrix *second,
                                       bool accum, bool swap);
     typedef GrB_Info (*matrix_wise_fn)(Matrix *output, Matrix *first, Matrix *second,
@@ -1184,6 +1139,44 @@ GrB_Info LAGraph_CFL_reachability_adv(
         wise = matrix_wise;
         rsub = matrix_rsub;
     }
+
+    // Rule [Variable -> term]
+    for (size_t i = 0; i < term_rules_count; i++) {
+        LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+        Matrix *nonterm_matrix = &delta_matrices[term_rule.nonterm];
+        Matrix *term_matrix = &delta_matrices[term_rule.prod_A];
+
+        GRB_TRY(wise(nonterm_matrix, nonterm_matrix, term_matrix, true));
+
+#ifdef DEBUG_CFL_REACHBILITY
+        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
+        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
+#endif
+    }
+
+    GrB_Vector v_diag;
+    GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
+    GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
+    GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
+    GRB_TRY(GrB_free(&v_diag));
+    Matrix iden = matrix_from_base(identity_matrix);
+
+    // Rule [Variable -> eps]
+    for (size_t i = 0; i < eps_rules_count; i++) {
+        LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
+
+        Matrix *nonterm_matrix = &delta_matrices[eps_rule.nonterm];
+
+        wise(nonterm_matrix, nonterm_matrix, &iden, true);
+
+#ifdef DEBUG_CFL_REACHBILITY
+        GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
+        printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n", eps_rule.nonterm, iso_flag);
+#endif
+    }
+
+    // Rule [Variable -> Variable1 Variable2]
+    LG_TRY(LAGraph_Calloc((void **)&nnzs, symbols_amount, sizeof(uint64_t), msg));
 
     double start_time, end_time;
     bool changed = true;
