@@ -1017,11 +1017,13 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
 
-        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
-        delta_matrices[i] = matrix_from_base(matrix);
+        GrB_Matrix_dup(&delta_matrices[i].base, adj_matrices[i]);
+        delta_matrices[i] = matrix_from_base(delta_matrices[i].base);
 
-        GrB_Matrix_dup(&matrices[i].base, adj_matrices[i]);
-        matrices[i] = matrix_from_base_lazy(matrices[i].base);
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        matrices[i] = optimizations & OPT_LAZY ? matrix_from_base_lazy(matrix)
+                                               : matrix_from_base(matrix);
+        // matrix_print_lazy(&matrices[i]);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         temp_matrices[i] = matrix_from_base(matrix);
