@@ -1261,18 +1261,14 @@ GrB_Info LAGraph_CFL_reachability_adv(
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
 
-        for (int32_t i = 0; i < nonterms_count; i++) {
-            size_t new_nnz = 0;
-            if (matrices[i].base_matrices_count == 0) {
-                new_nnz = matrices[i].nvals;
-            } else {
-                for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
-                    new_nnz += matrices[i].base_matrices[j].nvals;
-                }
-            }
+        size_t new_nnz = 0;
+        for (size_t i = 0; i < symbols_amount; i++) {
+            matrix_update(&delta_matrices[i]);
+            new_nnz += delta_matrices[i].nvals;
+        }
 
-            changed = changed || (nnzs[i] != new_nnz);
-            nnzs[i] = new_nnz;
+        if (new_nnz != 0) {
+            changed = true;
         }
 
 #ifdef DEBUG_CFL_REACHBILITY
