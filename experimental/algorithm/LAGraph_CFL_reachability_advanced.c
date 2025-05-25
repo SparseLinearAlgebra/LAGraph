@@ -161,11 +161,13 @@ typedef struct Matrix {
 } Matrix;
 
 void matrix_update(Matrix *matrix) {
-    if (matrix->base_matrices_count == 0) {
+    if (!matrix->is_lazy) {
         GrB_Matrix_nvals(&matrix->nvals, matrix->base);
     } else {
         size_t new_nnz = 0;
         for (size_t i = 0; i < matrix->base_matrices_count; i++) {
+            GrB_Matrix_nvals(&matrix->base_matrices[i].nvals,
+                             matrix->base_matrices[i].base);
             new_nnz += matrix->base_matrices[i].nvals;
         }
 
