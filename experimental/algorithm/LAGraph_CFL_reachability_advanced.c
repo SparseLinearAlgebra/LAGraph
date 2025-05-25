@@ -627,6 +627,8 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
 
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
     GrB_BinaryOp accum_op = accum ? GxB_ANY_BOOL : GrB_NULL;
+    if (output == first)
+        accum_op = GrB_NULL;
 
     GrB_Info result = GrB_eWiseAdd(output->base, GrB_NULL, accum_op, GxB_ANY_BOOL,
                                    first->base, second->base, GrB_NULL);
@@ -663,8 +665,20 @@ GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool 
 }
 
 GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool accum) {
+    if (output == first) {
+        if (first->nvals == 0) {
+            return matrix_dup_empty(first, second);
+        }
+
+        if (second->nvals == 0) {
+            return GrB_SUCCESS;
+        }
+
+        return matrix_wise_format(output, first, second, accum);
+    }
+
     if (first->nvals == 0 && second->nvals == 0) {
-        if (accum) {
+        if (accum || output->nvals == 0) {
             return GrB_SUCCESS;
         }
 
