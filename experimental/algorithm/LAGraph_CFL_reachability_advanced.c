@@ -605,7 +605,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
 GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool accum,
                           bool swap) {
     if (first->block_type == CELL && second->block_type == CELL) {
-        matrix_mxm_lazy(output, first, second, accum, swap);
+        return matrix_mxm_lazy(output, first, second, accum, swap);
     }
 
     if (first->block_type == CELL) {
