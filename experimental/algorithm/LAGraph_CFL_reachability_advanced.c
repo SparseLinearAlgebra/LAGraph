@@ -139,7 +139,8 @@
     {                                                                                    \
         GrB_Info LG_GrB_Info = GrB_method;                                               \
         if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
-            return LG_GrB_Info;                                                          \
+            fprintf(stderr, "LAGraph failure (file %s, line %d): ", __FILE__, __LINE__); \
+            exit(LG_GrB_Info);                                                           \
         }                                                                                \
     }
 
@@ -162,19 +163,24 @@ typedef struct Matrix {
 
 void matrix_update(Matrix *matrix) {
     if (!matrix->is_lazy) {
-        GrB_Matrix_nvals(&matrix->nvals, matrix->base);
+        TRY(GrB_Matrix_nvals(&matrix->nvals, matrix->base));
     } else {
         size_t new_nnz = 0;
         for (size_t i = 0; i < matrix->base_matrices_count; i++) {
-            GrB_Matrix_nvals(&matrix->base_matrices[i].nvals,
-                             matrix->base_matrices[i].base);
+            TRY(GrB_Matrix_nvals(&matrix->base_matrices[i].nvals,
+                                 matrix->base_matrices[i].base));
             new_nnz += matrix->base_matrices[i].nvals;
         }
 
         matrix->nvals = new_nnz;
     }
-    GrB_Matrix_nrows(&matrix->nrows, matrix->base);
-    GrB_Matrix_ncols(&matrix->ncols, matrix->base);
+    if (!matrix->is_lazy) {
+        TRY(GrB_Matrix_nrows(&matrix->nrows, matrix->base));
+        TRY(GrB_Matrix_ncols(&matrix->ncols, matrix->base));
+    } else {
+        TRY(GrB_Matrix_nrows(&matrix->nrows, matrix->base_matrices[0].base));
+        TRY(GrB_Matrix_ncols(&matrix->ncols, matrix->base_matrices[0].base));
+    }
 
     if (matrix->nrows > matrix->ncols) {
         matrix->block_type = VEC_VERT;
@@ -216,7 +222,7 @@ Matrix matrix_from_base_lazy(GrB_Matrix matrix) {
 
 Matrix matrix_create(GrB_Index nrows, GrB_Index ncols) {
     GrB_Matrix _result;
-    GrB_Matrix_new(&_result, GrB_BOOL, nrows, ncols);
+    TRY(GrB_Matrix_new(&_result, GrB_BOOL, nrows, ncols));
     Matrix result = matrix_from_base(_result);
 
     return result;
@@ -224,7 +230,7 @@ Matrix matrix_create(GrB_Index nrows, GrB_Index ncols) {
 
 void matrix_free(Matrix *matrix) {
     free(matrix->base_matrices);
-    GrB_free(&matrix->base);
+    TRY(GrB_free(&matrix->base));
 }
 
 void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
@@ -247,9 +253,9 @@ void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
         matrix->format == GrB_ROWMAJOR ? &matrix->base_row : &matrix->base_col;
 
     if (is_both) {
-        GrB_Matrix_new(new_matrix, GrB_BOOL, matrix->nrows, matrix->ncols);
-        GrB_Matrix_assign(*new_matrix, GrB_NULL, GrB_NULL, *old_matrix, GrB_ALL,
-                          matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
+        TRY(GrB_Matrix_new(new_matrix, GrB_BOOL, matrix->nrows, matrix->ncols));
+        TRY(GrB_Matrix_assign(*new_matrix, GrB_NULL, GrB_NULL, *old_matrix, GrB_ALL,
+                              matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL));
         matrix->is_both = true;
     } else {
         *new_matrix = *old_matrix;
@@ -264,6 +270,7 @@ void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
 
 GrB_Info matrix_clear(Matrix *A) {
     GrB_Info result = GrB_Matrix_clear(A->base);
+    TRY(result);
     matrix_update(A);
     return result;
 }
