@@ -535,6 +535,10 @@ GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool ac
             return GrB_SUCCESS;
         }
 
+        if (output->nvals == 0) {
+            return GrB_SUCCESS;
+        }
+
         matrix_clear_empty(output);
     }
 
@@ -548,6 +552,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     }
 
     matrix_combine_lazy(first, second->nvals);
+    matrix_sort_lazy(first, false);
 
     GrB_Matrix *accs = malloc(sizeof(GrB_Matrix) * first->base_matrices_count);
     Matrix *acc_matrices = malloc(sizeof(Matrix) * first->base_matrices_count);
@@ -557,12 +562,12 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     }
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
-        matrix_mxm_empty(&acc_matrices[i], &first->base_matrices[i], second, accum, swap);
+        matrix_mxm_empty(&acc_matrices[i], &first->base_matrices[i], second, false, swap);
     }
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
         for (size_t j = i + 1; j < first->base_matrices_count; j++) {
-            if (acc_matrices[i].nvals < acc_matrices[j].nvals) {
+            if (acc_matrices[i].nvals > acc_matrices[j].nvals) {
                 Matrix temp = acc_matrices[i];
                 acc_matrices[i] = acc_matrices[j];
                 acc_matrices[j] = temp;
