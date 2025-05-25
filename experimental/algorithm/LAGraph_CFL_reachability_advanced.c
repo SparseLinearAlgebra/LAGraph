@@ -26,7 +26,7 @@
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
-        for (int32_t i = 0; i < nonterms_count; i++) {                                   \
+        for (size_t i = 0; i < symbols_amount; i++) {                                    \
             GrB_free(&T[i]);                                                             \
         }                                                                                \
                                                                                          \
@@ -952,7 +952,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
-    int32_t nonterms_count,
+    size_t symbols_amount,
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
     char *msg,                      // Message string for error reporting.
@@ -969,16 +969,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     size_t msg_len = 0; // For error formatting
     GrB_Index *indexes = NULL;
 
-    int32_t symbols_amount = 0;
-    for (size_t i = 0; i < rules_count; i++) {
-        symbols_amount =
-            rules[i].nonterm + 1 > symbols_amount ? rules[i].nonterm + 1 : symbols_amount;
-        symbols_amount =
-            rules[i].prod_A + 1 > symbols_amount ? rules[i].prod_A + 1 : symbols_amount;
-        symbols_amount =
-            rules[i].prod_B + 1 > symbols_amount ? rules[i].prod_B + 1 : symbols_amount;
-    }
-
     GrB_Scalar true_scalar;
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
@@ -988,8 +978,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
     LG_TRY(LAGraph_Calloc((void **)&matrices, symbols_amount, sizeof(Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&temp_matrices, symbols_amount, sizeof(Matrix), msg));
 
-    LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
-                  "The number of non-terminals must be greater than zero.");
+    LG_ASSERT_MSG(symbols_amount > 0, GrB_INVALID_VALUE,
+                  "The number of symbols must be greater than zero.");
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
                   "The number of rules must be greater than zero.");
     LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
@@ -999,15 +989,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Find null adjacency matrices
     bool found_null = false;
-    for (int32_t i = 0; i < symbols_amount; i++) {
+    for (size_t i = 0; i < symbols_amount; i++) {
         if (adj_matrices[i] != NULL)
             continue;
 
         if (!found_null) {
             ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
-            ADD_TO_MSG("%d", i);
+            ADD_TO_MSG("%ld", i);
         } else {
-            ADD_TO_MSG(", %d", i);
+            ADD_TO_MSG(", %ld", i);
         }
 
         found_null = true;
@@ -1022,7 +1012,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
     // Create nonterms matrices
-    for (int32_t i = 0; i < symbols_amount; i++) {
+    for (size_t i = 0; i < symbols_amount; i++) {
         GrB_Matrix matrix;
 
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
@@ -1059,7 +1049,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
 
         // Check that all rules are well-formed
-        if (rule.nonterm < 0 || rule.nonterm >= symbols_amount) {
+        if (rule.nonterm < 0 || (size_t)rule.nonterm >= symbols_amount) {
             ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
         }
 
@@ -1074,7 +1064,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (is_rule_term) {
             term_rules[term_rules_count++] = i;
 
-            if (rule.prod_A < -1 || rule.prod_A >= symbols_amount) {
+            if (rule.prod_A < -1 || (size_t)rule.prod_A >= symbols_amount) {
                 ADD_INDEX_TO_ERROR_RULE(term_err, i);
             }
 
@@ -1085,8 +1075,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (is_rule_bin) {
             bin_rules[bin_rules_count++] = i;
 
-            if (rule.prod_A < -1 || rule.prod_A >= symbols_amount || rule.prod_B < -1 ||
-                rule.prod_B >= symbols_amount) {
+            if (rule.prod_A < -1 || (size_t)rule.prod_A >= symbols_amount ||
+                rule.prod_B < -1 || (size_t)rule.prod_B >= symbols_amount) {
                 ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
             }
 
@@ -1211,7 +1201,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         printf("\n--- ITERATARION %ld ---\n", iteration);
 #endif
 
-        for (int32_t i = 0; i < nonterms_count; i++) {
+        for (size_t i = 0; i < symbols_amount; i++) {
             GRB_TRY(matrix_clear_empty(&temp_matrices[i]));
         }
 
@@ -1230,7 +1220,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
-        for (int32_t i = 0; i < nonterms_count; i++) {
+        for (size_t i = 0; i < symbols_amount; i++) {
             Matrix *A = &delta_matrices[i];
             Matrix *C = &matrices[i];
 
@@ -1255,13 +1245,13 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_STOP("MXM 2", &mxm2);
 
         TIMER_START();
-        for (int32_t i = 0; i < nonterms_count; i++) {
+        for (size_t i = 0; i < symbols_amount; i++) {
             matrix_dup_empty(&delta_matrices[i], &temp_matrices[i]);
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
 
         TIMER_START();
-        for (int32_t i = 0; i < nonterms_count; i++) {
+        for (size_t i = 0; i < symbols_amount; i++) {
             Matrix *A = &matrices[i];
             Matrix *C = &delta_matrices[i];
 
@@ -1305,7 +1295,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     }
 #endif
 
-    for (int32_t i = 0; i < nonterms_count; i++) {
+    for (size_t i = 0; i < symbols_amount; i++) {
         if (matrices[i].base_matrices_count == 0) {
             outputs[i] = matrices[i].base;
         } else {
