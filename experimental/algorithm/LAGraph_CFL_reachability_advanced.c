@@ -851,13 +851,20 @@ GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask) {
 }
 
 void matrix_print_lazy(Matrix *A) {
-    if (A->base_matrices_count == 0) {
-        GxB_print(A->base, 1);
+    return;
+    GxB_Print_Level pr = 1;
+
+    if (!A->is_lazy) {
+        matrix_update(A);
+        GxB_print(A->base, pr);
+        // printf("nnz: %ld\n", A->nvals);
         return;
     }
 
     if (A->base_matrices_count == 1) {
-        GxB_print(A->base_matrices[0].base, 1);
+        matrix_update(A);
+        // printf("nnz: %ld\n", A->nvals);
+        GxB_print(A->base_matrices[0].base, pr);
         return;
     }
 
@@ -869,7 +876,8 @@ void matrix_print_lazy(Matrix *A) {
     }
 
     A = &temp;
-    GxB_print(A->base, 1);
+    GxB_print(A->base, pr);
+    // printf("nnz: %ld\n", A->nvals);
     GrB_free(&_temp);
 }
 
