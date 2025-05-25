@@ -1055,16 +1055,20 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
 
+        GrB_Index nrows;
+        GrB_Matrix_nrows(&nrows, adj_matrices[i]);
+        GrB_Index ncols;
+        GrB_Matrix_ncols(&ncols, adj_matrices[i]);
+
         GrB_Matrix_dup(&delta_matrices[i].base, adj_matrices[i]);
         delta_matrices[i] = matrix_from_base(delta_matrices[i].base);
 
-        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
         matrices[i] = ((optimizations & OPT_LAZY) || (optimizations & OPT_BLOCK))
                           ? matrix_from_base_lazy(matrix)
                           : matrix_from_base(matrix);
-        // matrix_print_lazy(&matrices[i]);
 
-        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
         temp_matrices[i] = matrix_from_base(matrix);
     }
 
