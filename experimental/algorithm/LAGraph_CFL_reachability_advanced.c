@@ -409,6 +409,7 @@ void block_matrix_reduce(Matrix *matrix, Matrix *input) {
     }
 
     GxB_Matrix_build_Scalar(matrix->base, rows, cols, scalar_true, input->nvals);
+    matrix_update(matrix);
 
     free(rows);
     free(cols);
@@ -423,6 +424,7 @@ void block_matrix_repeat_into_vector(Matrix *matrix, Matrix *input,
     }
 
     GxB_Matrix_concat(matrix->base, tiles, block_count, 1, GrB_NULL);
+    matrix_update(matrix);
 }
 
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
