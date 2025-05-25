@@ -1212,9 +1212,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *B = &delta_matrices[bin_rule.prod_B];
             Matrix *C = &temp_matrices[bin_rule.nonterm];
 
-            mxm(C, A, B, true, false);
+            // printf("MXM 1 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
             // matrix_print_lazy(B);
+            // matrix_print_lazy(C);
+            mxm(C, A, B, true, false);
             // matrix_print_lazy(C);
         }
         TIMER_STOP("MXM 1", &mxm1);
@@ -1224,8 +1226,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *A = &delta_matrices[i];
             Matrix *C = &matrices[i];
 
-            wise(C, C, A, false);
+            // printf("WISE 1 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
+            // matrix_print_lazy(C);
+            wise(C, C, A, false);
             // matrix_print_lazy(C);
         }
         TIMER_STOP("WISE 1", &wise1);
@@ -1236,13 +1240,22 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *A = &matrices[bin_rule.prod_B];
             Matrix *B = &delta_matrices[bin_rule.prod_A];
             Matrix *C = &temp_matrices[bin_rule.nonterm];
-            // printf("ITER: %ld\n", i);
-            mxm(C, A, B, true, true);
+
+            // printf("MXM 2 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
             // matrix_print_lazy(B);
             // matrix_print_lazy(C);
+            mxm(C, A, B, true, true);
+            // matrix_print_lazy(C);
         }
         TIMER_STOP("MXM 2", &mxm2);
+
+            // printf("Simple rules iteration: %ld i: %ld\n", iteration, i);
+            // matrix_print_lazy(A);
+            // matrix_print_lazy(B);
+            wise(A, A, B, true);
+            // matrix_print_lazy(A);
+        }
 
         TIMER_START();
         for (size_t i = 0; i < symbols_amount; i++) {
@@ -1255,8 +1268,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
             Matrix *A = &matrices[i];
             Matrix *C = &delta_matrices[i];
 
-            rsub(C, A);
+            // printf("RSUB iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
+            // matrix_print_lazy(C);
+            rsub(C, A);
             // matrix_print_lazy(C);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
