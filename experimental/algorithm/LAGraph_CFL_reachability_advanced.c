@@ -1055,8 +1055,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         delta_matrices[i] = matrix_from_base(delta_matrices[i].base);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
-        matrices[i] = optimizations & OPT_LAZY ? matrix_from_base_lazy(matrix)
-                                               : matrix_from_base(matrix);
+        matrices[i] = ((optimizations & OPT_LAZY) || (optimizations & OPT_BLOCK))
+                          ? matrix_from_base_lazy(matrix)
+                          : matrix_from_base(matrix);
         // matrix_print_lazy(&matrices[i]);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
