@@ -492,6 +492,7 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold) {
 
     A->base_matrices = new_matrices;
     A->base_matrices_count = new_size;
+    matrix_update(A);
 
     return GrB_SUCCESS;
 }
