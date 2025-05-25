@@ -312,7 +312,7 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
     GrB_Scalar_new(&scalar_true, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(scalar_true, true);
 
-    if (matrix->format == VEC_VERT) {
+    if (matrix->block_type == VEC_VERT) {
         GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
         GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
 
@@ -330,7 +330,7 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         return;
     }
 
-    if (matrix->format == VEC_HORIZ) {
+    if (matrix->block_type == VEC_HORIZ) {
         GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
         GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
 
@@ -396,13 +396,13 @@ void block_matrix_reduce(Matrix *matrix, Matrix *input) {
     GrB_Index *cols = malloc(input->nvals * sizeof(GrB_Index));
     GrB_Matrix_extractTuples_BOOL(rows, cols, NULL, &input->nvals, input->base);
 
-    if (input->format == VEC_VERT) {
+    if (input->block_type == VEC_VERT) {
         for (size_t i = 0; i < input->nvals; i++) {
             rows[i] = rows[i] % input->ncols;
         }
     }
 
-    if (input->format == VEC_HORIZ) {
+    if (input->block_type == VEC_HORIZ) {
         for (size_t i = 0; i < input->nvals; i++) {
             cols[i] = cols[i] % input->nrows;
         }
@@ -779,7 +779,7 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
     }
 
     if (first->block_type == CELL && second->block_type == CELL) {
-        matrix_wise_lazy(output, first, second, accum);
+        return matrix_wise_lazy(output, first, second, accum);
     }
 
     // second is vector
@@ -794,10 +794,12 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
 
     // first is vector
     if (second->block_type == CELL) {
+        // LG_SET_BURBLE(true);
         Matrix temp_vector = matrix_create(first->nrows, first->ncols);
         GrB_Index block_count = first->nrows > first->ncols ? first->nrows : first->ncols;
         block_matrix_repeat_into_vector(&temp_vector, second, block_count);
 
+        block_matrix_hyper_rotate_i(&temp_vector, first->block_type);
         GrB_Info info = matrix_wise_lazy(output, first, &temp_vector, accum);
         matrix_free(&temp_vector);
         return info;
@@ -805,7 +807,7 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
 
     // both are vector
     block_matrix_hyper_rotate_i(second, first->block_type);
-    return matrix_wise_block(output, first, second, accum);
+    return matrix_wise_lazy(output, first, second, accum);
 }
 
 GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
