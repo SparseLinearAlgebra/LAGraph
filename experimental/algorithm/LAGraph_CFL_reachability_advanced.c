@@ -543,11 +543,10 @@ GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool ac
 
 GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool accum,
                          bool swap) {
-    if (first->base_matrices_count == 0) {
+    if (!first->is_lazy) {
         return matrix_mxm_empty(output, first, second, accum, swap);
     }
 
-    matrix_sort_lazy(first, true);
     matrix_combine_lazy(first, second->nvals);
 
     GrB_Matrix *accs = malloc(sizeof(GrB_Matrix) * first->base_matrices_count);
