@@ -1299,10 +1299,12 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (matrices[i].base_matrices_count == 0) {
             outputs[i] = matrices[i].base;
         } else {
+            // TODO: new method for getting acc from lazy matrix
             GrB_Matrix _acc;
             GrB_Matrix_new(&_acc, GrB_BOOL, matrices[i].nrows, matrices[i].ncols);
             Matrix acc = matrix_from_base(_acc);
 
+            matrix_sort_lazy(&matrices[i], false);
             for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {
                 matrix_wise_empty(&acc, &acc, &matrices[i].base_matrices[j], false);
                 GrB_free(&matrices[i].base_matrices[j].base);
