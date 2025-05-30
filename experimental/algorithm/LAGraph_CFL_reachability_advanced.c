@@ -382,10 +382,11 @@ void block_matrix_to_diag(Matrix *diag, Matrix *input) {
 }
 
 GrB_Info matrix_dup_empty(Matrix *output, Matrix *input);
+GrB_Info matrix_dup_block(Matrix *output, Matrix *input);
 
 void block_matrix_reduce(Matrix *matrix, Matrix *input) {
     if (input->block_type == CELL) {
-        matrix_dup_empty(matrix, input);
+        matrix_dup_block(matrix, input);
     }
 
     GrB_Scalar scalar_true;
@@ -463,6 +464,15 @@ GrB_Info matrix_dup_empty(Matrix *output, Matrix *input) {
     }
 
     return matrix_dup_format(output, input);
+}
+
+GrB_Info matrix_dup_block(Matrix *output, Matrix *input) {
+    if (output->block_type == CELL && input->block_type == CELL) {
+        return matrix_dup_empty(output, input);
+    }
+
+    block_matrix_hyper_rotate_i(input, output->block_type);
+    return matrix_dup_empty(output, input);
 }
 
 GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool accum);
@@ -598,7 +608,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         return matrix_wise_empty(output, output, &acc_matrix, false);
     }
 
-    GrB_Info result = matrix_dup_empty(output, &acc_matrix);
+    GrB_Info result = matrix_dup_block(output, &acc_matrix);
     GrB_free(&acc_matrix.base);
 
     return result;
@@ -1331,7 +1341,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (size_t i = 0; i < symbols_amount; i++) {
-            matrix_dup_empty(&delta_matrices[i], &temp_matrices[i]);
+            matrix_dup_block(&delta_matrices[i], &temp_matrices[i]);
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
         // print_graph_info(matrices, symbols_amount);
