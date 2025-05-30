@@ -302,6 +302,15 @@ GrB_Info matrix_clear_empty(Matrix *A) {
 }
 
 void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
+    if (matrix->is_lazy) {
+        for (size_t i = 0; i < matrix->base_matrices_count; i++) {
+            block_matrix_hyper_rotate_i(&matrix->base_matrices[i], format);
+        }
+
+        matrix_update(matrix);
+        return;
+    }
+
     if (matrix->block_type == CELL) {
         return;
     }
@@ -321,11 +330,15 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
 
         for (size_t i = 0; i < matrix->nvals; i++) {
-            ncols[i] = ncols[i] + ncols[i] / matrix->ncols * matrix->ncols;
+            ncols[i] = ncols[i] + nrows[i] / matrix->ncols * matrix->ncols;
             nrows[i] = nrows[i] % matrix->ncols;
         }
 
-        GxB_Matrix_build_Scalar(matrix->base, nrows, ncols, scalar_true, matrix->nvals);
+        GrB_Matrix new;
+        TRY(GrB_Matrix_new(&new, GrB_BOOL, matrix->ncols, matrix->nrows));
+        TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
+        matrix_free(matrix);
+        *matrix = matrix->is_lazy ? matrix_from_base_lazy(new) : matrix_from_base(new);
         free(nrows);
         free(ncols);
         GrB_free(&scalar_true);
@@ -339,11 +352,15 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
 
         for (size_t i = 0; i < matrix->nvals; i++) {
-            nrows[i] = nrows[i] + nrows[i] / matrix->nrows * matrix->nrows;
-            ncols[i] = ncols[i] % matrix->ncols;
+            nrows[i] = nrows[i] + ncols[i] / matrix->nrows * matrix->nrows;
+            ncols[i] = ncols[i] % matrix->nrows;
         }
 
-        GxB_Matrix_build_Scalar(matrix->base, nrows, ncols, scalar_true, matrix->nvals);
+        GrB_Matrix new;
+        TRY(GrB_Matrix_new(&new, GrB_BOOL, matrix->ncols, matrix->nrows));
+        TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
+        matrix_free(matrix);
+        *matrix = matrix->is_lazy ? matrix_from_base_lazy(new) : matrix_from_base(new);
         free(nrows);
         free(ncols);
         GrB_free(&scalar_true);
