@@ -174,6 +174,7 @@ void matrix_update(Matrix *matrix) {
 
         matrix->nvals = new_nnz;
     }
+
     if (!matrix->is_lazy) {
         TRY(GrB_Matrix_nrows(&matrix->nrows, matrix->base));
         TRY(GrB_Matrix_ncols(&matrix->ncols, matrix->base));
@@ -182,14 +183,10 @@ void matrix_update(Matrix *matrix) {
         TRY(GrB_Matrix_ncols(&matrix->ncols, matrix->base_matrices[0].base));
     }
 
-    if (matrix->nrows > matrix->ncols) {
-        matrix->block_type = VEC_VERT;
-    }
-
-    if (matrix->ncols > matrix->nrows) {
-        matrix->block_type = VEC_HORIZ;
-    }
-    // GrB_get(matrix->base, &matrix->format, GrB_STORAGE_ORIENTATION_HINT);
+    if (matrix->nrows == matrix->ncols)
+        matrix->block_type = CELL;
+    else
+        matrix->block_type = matrix->nrows > matrix->ncols ? VEC_VERT : VEC_HORIZ;
 }
 
 Matrix matrix_from_base(GrB_Matrix matrix) {
