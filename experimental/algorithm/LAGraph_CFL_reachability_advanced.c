@@ -618,6 +618,8 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     return result;
 }
 
+GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool accum);
+
 GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool accum,
                           bool swap) {
     if (first->block_type == CELL && second->block_type == CELL) {
@@ -628,7 +630,11 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
         block_matrix_hyper_rotate_i(second, swap ? VEC_VERT : VEC_HORIZ);
         block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
 
-        matrix_mxm_lazy(output, first, second, accum, swap);
+        Matrix temp = matrix_create(swap ? second->nrows : first->nrows,
+                                    swap ? first->ncols : second->ncols);
+        matrix_mxm_lazy(&temp, first, second, accum, swap);
+        matrix_wise_block(output, output, &temp, false);
+        matrix_free(&temp);
 
         return GrB_SUCCESS;
     }
@@ -637,7 +643,11 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
         block_matrix_hyper_rotate_i(first, swap ? VEC_HORIZ : VEC_VERT);
         block_matrix_hyper_rotate_i(output, swap ? VEC_HORIZ : VEC_VERT);
 
-        matrix_mxm_lazy(output, first, second, accum, swap);
+        Matrix temp = matrix_create(swap ? second->nrows : first->nrows,
+                                    swap ? first->ncols : first->ncols);
+        matrix_mxm_lazy(&temp, first, second, accum, swap);
+        matrix_wise_block(output, output, &temp, false);
+        matrix_free(&temp);
 
         return GrB_SUCCESS;
     }
@@ -647,11 +657,14 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
     GrB_Matrix_new(&_diag, GrB_BOOL, size, size);
     Matrix diag = matrix_from_base(_diag);
     block_matrix_to_diag(&diag, second);
+    matrix_update(&diag);
 
     block_matrix_hyper_rotate_i(first, swap ? VEC_VERT : VEC_HORIZ);
     block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
 
-    return matrix_mxm_lazy(output, first, &diag, accum, swap);
+    Matrix temp = matrix_create(first->nrows, diag.ncols);
+    matrix_mxm_lazy(&temp, first, &diag, false, swap);
+    return matrix_wise_block(output, output, &temp, false);
 }
 
 GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) {
