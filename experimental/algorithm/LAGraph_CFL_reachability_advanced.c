@@ -212,12 +212,14 @@ Matrix matrix_from_base(GrB_Matrix matrix) {
 
 Matrix matrix_from_base_lazy(GrB_Matrix matrix) {
     Matrix result = matrix_from_base(matrix);
-    result.is_lazy = true;
 
-    result.base_matrices_count = 1;
-    result.base_matrices[0] = matrix_from_base(result.base);
+    Matrix lazy_result = matrix_from_base(matrix);
+    lazy_result.is_lazy = true;
+    lazy_result.base_matrices[0] = result;
+    lazy_result.base_matrices_count = 1;
+    matrix_update(&lazy_result);
 
-    return result;
+    return lazy_result;
 }
 
 Matrix matrix_create(GrB_Index nrows, GrB_Index ncols) {
