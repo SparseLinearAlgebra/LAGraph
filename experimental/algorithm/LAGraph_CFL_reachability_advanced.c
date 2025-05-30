@@ -431,11 +431,15 @@ void block_matrix_repeat_into_vector(Matrix *matrix, Matrix *input,
 }
 
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
-    GrB_Info result =
-        GrB_Matrix_assign(output->base, GrB_NULL, GrB_NULL, input->base, GrB_ALL,
-                          input->nrows, GrB_ALL, input->ncols, GrB_NULL);
+    if (output == input) {
+        return GrB_SUCCESS;
+    }
 
+    GrB_Info result = GrB_Matrix_apply(output->base, GrB_NULL, GrB_NULL,
+                                       GrB_IDENTITY_BOOL, input->base, GrB_NULL);
+    TRY(result);
     matrix_update(output);
+
     return result;
 }
 
