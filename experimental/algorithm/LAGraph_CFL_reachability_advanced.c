@@ -579,7 +579,8 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     GrB_Matrix *accs = malloc(sizeof(GrB_Matrix) * first->base_matrices_count);
     Matrix *acc_matrices = malloc(sizeof(Matrix) * first->base_matrices_count);
     for (size_t i = 0; i < first->base_matrices_count; i++) {
-        GrB_Matrix_new(&accs[i], GrB_BOOL, output->nrows, output->ncols);
+        GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? second->nrows : first->nrows,
+                       swap ? first->ncols : second->ncols);
         acc_matrices[i] = matrix_from_base(accs[i]);
     }
 
@@ -598,7 +599,8 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     }
 
     GrB_Matrix acc;
-    GrB_Matrix_new(&acc, GrB_BOOL, first->nrows, first->ncols);
+    GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
+                   swap ? first->ncols : second->ncols);
     Matrix acc_matrix = matrix_from_base(acc);
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
