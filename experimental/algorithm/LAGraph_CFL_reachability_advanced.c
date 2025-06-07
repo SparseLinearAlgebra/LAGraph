@@ -232,17 +232,17 @@ void matrix_free(Matrix *matrix) {
     TRY(GrB_free(&matrix->base));
 }
 
-void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
+GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     // Matrix contain both formats so just switch base matrix
     if (matrix->is_both) {
         matrix->base = format == GrB_ROWMAJOR ? matrix->base_row : matrix->base_col;
         matrix->format = format;
-        return;
+        return GrB_SUCCESS;
     }
 
     // No changes required
     if (matrix->format == format) {
-        return;
+        return GrB_SUCCESS;
     }
 
     // Matrix contain just one matrix and format is not same
@@ -264,7 +264,7 @@ void matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     matrix->base = format == GrB_ROWMAJOR ? matrix->base_row : matrix->base_col;
     format == GrB_ROWMAJOR ? TO_ROW(matrix->base) : TO_COL(matrix->base);
     matrix->format = format;
-    return;
+    return GrB_SUCCESS;
 }
 
 GrB_Info matrix_clear(Matrix *A) {
@@ -298,33 +298,35 @@ GrB_Info matrix_clear_empty(Matrix *A) {
     return matrix_clear_format(A);
 }
 
-void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
+GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
     if (matrix->is_lazy) {
         for (size_t i = 0; i < matrix->base_matrices_count; i++) {
-            block_matrix_hyper_rotate_i(&matrix->base_matrices[i], format);
+            TRY(block_matrix_hyper_rotate_i(&matrix->base_matrices[i], format));
         }
 
         matrix_update(matrix);
-        return;
+        return GrB_SUCCESS;
     }
 
     if (matrix->block_type == CELL) {
-        return;
+        return GrB_SUCCESS;
     }
 
     if (matrix->block_type == format) {
-        return;
+        return GrB_SUCCESS;
     }
 
     GrB_Scalar scalar_true;
-    GrB_Scalar_new(&scalar_true, GrB_BOOL);
-    GrB_Scalar_setElement_BOOL(scalar_true, true);
+    TRY(GrB_Scalar_new(&scalar_true, GrB_BOOL));
+    TRY(GrB_Scalar_setElement_BOOL(scalar_true, true));
 
     if (matrix->block_type == VEC_VERT) {
+        // fix: change to lagraph malloc
         GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
         GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
 
-        GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
+        TRY(GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals,
+                                          matrix->base));
 
         for (size_t i = 0; i < matrix->nvals; i++) {
             ncols[i] = ncols[i] + nrows[i] / matrix->ncols * matrix->ncols;
@@ -339,14 +341,15 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         free(nrows);
         free(ncols);
         GrB_free(&scalar_true);
-        return;
+        return GrB_SUCCESS;
     }
 
     if (matrix->block_type == VEC_HORIZ) {
         GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
         GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
 
-        GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
+        TRY(GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals,
+                                          matrix->base));
 
         for (size_t i = 0; i < matrix->nvals; i++) {
             nrows[i] = nrows[i] + ncols[i] / matrix->nrows * matrix->nrows;
@@ -361,7 +364,7 @@ void block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         free(nrows);
         free(ncols);
         GrB_free(&scalar_true);
-        return;
+        return GrB_SUCCESS;
     }
 }
 
@@ -517,16 +520,17 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold) {
     Matrix *new_matrices = malloc(sizeof(Matrix) * 50);
     size_t new_size = 0;
 
-    matrix_sort_lazy(A, false);
+    TRY(matrix_sort_lazy(A, false));
 
     for (size_t i = 0; i < A->base_matrices_count; i++) {
-        if (A->base_matrices[i].nvals <= threshold && new_size > 0) {
-            matrix_wise_empty(&new_matrices[new_size - 1], &new_matrices[new_size - 1],
-                              &A->base_matrices[i], false);
-            GrB_free(&A->base_matrices[i].base);
-        } else {
+        if (new_size == 0 || A->base_matrices[i].nvals > threshold) {
             new_matrices[new_size++] = A->base_matrices[i];
+            continue;
         }
+
+        TRY(matrix_wise_empty(&new_matrices[new_size - 1], &new_matrices[new_size - 1],
+                              &A->base_matrices[i], false));
+        GrB_free(&A->base_matrices[i].base);
     }
 
     A->base_matrices = new_matrices;
@@ -867,8 +871,8 @@ GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
 
 GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask) {
     Matrix *larger_matrix = output->nvals > mask->nvals ? output : mask;
-    matrix_to_format(output, larger_matrix->format, false);
-    matrix_to_format(mask, larger_matrix->format, false);
+    TRY(matrix_to_format(output, larger_matrix->format, false));
+    TRY(matrix_to_format(mask, larger_matrix->format, false));
 
     if (!output->is_both) {
         return matrix_rsub(output, mask);
@@ -900,11 +904,11 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
         return matrix_rsub_empty(output, mask);
     }
 
-    matrix_combine_lazy(mask, output->nvals);
-    matrix_sort_lazy(mask, true);
+    TRY(matrix_combine_lazy(mask, output->nvals));
+    TRY(matrix_sort_lazy(mask, true));
 
     for (size_t i = 0; i < mask->base_matrices_count; i++) {
-        matrix_rsub_empty(output, &mask->base_matrices[i]);
+        TRY(matrix_rsub_empty(output, &mask->base_matrices[i]));
     }
 
     return GrB_SUCCESS;
@@ -921,7 +925,7 @@ GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask) {
         return matrix_rsub_lazy(output, mask);
     }
 
-    block_matrix_hyper_rotate_i(output, mask->block_type);
+    TRY(block_matrix_hyper_rotate_i(output, mask->block_type));
     return matrix_rsub_lazy(output, mask);
 }
 
@@ -1391,7 +1395,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             // printf("RSUB iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
             // matrix_print_lazy(C);
-            rsub(C, A);
+            TRY(rsub(C, A));
             // matrix_print_lazy(C);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
