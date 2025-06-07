@@ -911,7 +911,7 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask) {
 }
 
 GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask) {
-    if ((output->block_type == CELL && output->block_type != CELL) ||
+    if ((output->block_type == CELL && mask->block_type != CELL) ||
         (output->block_type != CELL && mask->block_type == CELL)) {
         fprintf(stderr, "Don't support rsub operation between cell and vector");
         exit(-1);
