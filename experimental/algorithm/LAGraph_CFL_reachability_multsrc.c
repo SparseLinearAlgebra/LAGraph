@@ -3,7 +3,7 @@
 // Matrix-Based Algorithm
 //------------------------------------------------------------------------------
 //
-// LAGraph, (c) 2019-2024 by The LAGraph Contributors, All Rights Reserved.
+// LAGraph, (c) 2019-2025 by The LAGraph Contributors, All Rights Reserved.
 // SPDX-License-Identifier: BSD-2-Clause
 
 // Contributed by Ilhom Kombaev, Vlasenco Daniel, Semyon Grigoriev, St. Petersburg State University.
