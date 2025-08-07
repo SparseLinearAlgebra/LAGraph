@@ -24,8 +24,11 @@
         LAGraph_Free((void **) &ones_vec, msg);                                          \
         LAGraph_Free((void **) &T, msg);                                                 \
         LAGraph_Free((void **) &TSrc, msg);                                              \
-        LAGraph_Free((void **) &MSrc, msg);                                                 \
+        LAGraph_Free((void **) &MSrc, msg);                                              \
         LAGraph_Free((void **) &identity_matrix, msg);                                   \
+        LAGraph_Free ((void **) &M, msg);                                                \
+        LAGraph_Free ((void **) &A, msg);                                                \
+        LAGraph_Free ((void **) &a, msg);                                                \
         GrB_free(&true_scalar);                                                          \
     }
 
@@ -137,6 +140,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     int32_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
+    // int8_t opt_mask,                // Mask to set optimizations
     char *msg                       // Message string for error reporting.
 )
 {
@@ -144,6 +148,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     GrB_Matrix *T;
     GrB_Matrix *TSrc;
     GrB_Matrix MSrc;
+    GrB_Matrix M;
+    GrB_Matrix A;
+    GrB_Vector a;
     GrB_Index n; // number of vertices in the graph
     GrB_Matrix identity_matrix = NULL;
     GrB_Index *nnzs_T = NULL;
@@ -221,11 +228,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     t_src_empty_flags[0] = false;
 
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
-    
-    // #ifdef DEBUG_CFL_REACHABILITY
-    // printf("MSrc:\n");
-    // PRINT_MATRIX(MSrc);
-    // #endif
+
+    GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
+    GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
+    GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
@@ -349,97 +355,25 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     bool changed = true;
     while (changed) {
         changed = false;
+
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
-            GrB_Matrix M;
-
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("Rule: ");
-            // PRINT_RULE(bin_rule)
-            // #endif
-
-            GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
-
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("Before M = TSrc^A * T^B:\n");
-            // printf("TSrc^A:\n");
-            // PRINT_MATRIX(TSrc[bin_rule.nonterm]);
-            // printf("T^B:\n");
-            // PRINT_MATRIX(T[bin_rule.prod_A]);
-            // #endif
 
             GRB_TRY(GrB_mxm(M, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
                         TSrc[bin_rule.nonterm], T[bin_rule.prod_A], GrB_NULL));
-
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("After M = TSrc^A * T^B:\n");
-            // printf("M:\n");
-            // PRINT_MATRIX(M);
-            // printf("Before T^A = T^A + M * T^C:\n");
-            // printf("T^A:\n");
-            // PRINT_MATRIX(T[bin_rule.nonterm]);
-            // printf("T^C:\n");
-            // PRINT_MATRIX(T[bin_rule.prod_B]);
-            // #endif
 
             GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : GxB_ANY_BOOL;
             GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op, GxB_ANY_PAIR_BOOL,
                         M, T[bin_rule.prod_B], GrB_NULL))
 
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("After T^A = T^A + M * T^C:\n");
-            // printf("T^A:\n");
-            // PRINT_MATRIX(T[bin_rule.nonterm]);
-            // #endif
-
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("Before TSrc^B = TSrc^B + TSrc^A:\n");
-            // printf("TSrc^A:\n");
-            // PRINT_MATRIX(TSrc[bin_rule.nonterm]);
-            // printf("TSrc^B:\n");
-            // PRINT_MATRIX(TSrc[bin_rule.prod_A]);
-            // #endif
-
             GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_A], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                         TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], GrB_NULL));
 
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("After TSrc^B = TSrc^B + TSrc^A:\n");
-            // printf("TSrc^B:\n");
-            // PRINT_MATRIX(TSrc[bin_rule.prod_A]);
-            // #endif
-
             // Update source vertices matrix to find appropriate paths only
-            GrB_Matrix A;
-            GrB_Vector a;
-            GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
-            GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
-
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("Before A = dest(M)\n");
-            // printf("M:\n");
-            // PRINT_MATRIX(M);
-            // #endif
-
             // M[i, j] == 1 => A[j, j] == 1
             GRB_TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M, GrB_NULL));
             GRB_TRY(GrB_Matrix_diag(&A, a, 0));
 
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("After A = dest(M)\n");
-            // printf("a:\n");
-            // PRINT_VECTOR(a);
-            // printf("A:\n");
-            // PRINT_MATRIX(A);
-            // #endif
-
-            // #ifdef DEBUG_CFL_REACHABILITY
-            // printf("Before TSrc^C = TSrc^c + A\n");
-            // printf("TSrc^C:\n");
-            // PRINT_MATRIX(TSrc[bin_rule.prod_B])
-            // printf("A:\n");
-            // PRINT_MATRIX(A)
-            // #endif
 
             GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_B], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                 TSrc[bin_rule.prod_B], A, GrB_NULL));
@@ -475,10 +409,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             nnzs_T[bin_rule.nonterm] = nnz_T;
             nnzs_TSrc_B[bin_rule.prod_A] = nnz_TSrc_B;
             nnzs_TSrc_C[bin_rule.prod_B] = nnz_TSrc_C;
-
-            LAGraph_Free ((void **) &M, msg);
-            LAGraph_Free ((void **) &A, msg);
-            LAGraph_Free ((void **) &a, msg);
         }
     }
 

@@ -24,8 +24,11 @@
         LAGraph_Free((void **) &ones_vec, msg);                                          \
         LAGraph_Free((void **) &T, msg);                                                 \
         LAGraph_Free((void **) &TSrc, msg);                                              \
-        LAGraph_Free((void **) &MSrc, msg);                                                 \
+        LAGraph_Free((void **) &MSrc, msg);                                              \
         LAGraph_Free((void **) &identity_matrix, msg);                                   \
+        LAGraph_Free ((void **) &M, msg);                                                \
+        LAGraph_Free ((void **) &A, msg);                                                \
+        LAGraph_Free ((void **) &a, msg);                                                \
         GrB_free(&true_scalar);                                                          \
     }
 
@@ -144,6 +147,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     GrB_Matrix *T;
     GrB_Matrix *TSrc;
     GrB_Matrix MSrc;
+    GrB_Matrix M;
+    GrB_Matrix A;
+    GrB_Vector a;
     GrB_Index n; // number of vertices in the graph
     GrB_Matrix identity_matrix = NULL;
     GrB_Index *nnzs_T = NULL;
@@ -221,7 +227,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     t_src_empty_flags[0] = false;
 
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
-    
+    GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
+    GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
+    GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
+
     // #ifdef DEBUG_CFL_REACHABILITY
     // printf("MSrc:\n");
     // PRINT_MATRIX(MSrc);
@@ -351,14 +360,11 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
-            GrB_Matrix M;
 
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("Rule: ");
             // PRINT_RULE(bin_rule)
             // #endif
-
-            GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
 
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("Before M = TSrc^A * T^B:\n");
@@ -410,10 +416,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             // #endif
 
             // Update source vertices matrix to find appropriate paths only
-            GrB_Matrix A;
-            GrB_Vector a;
-            GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
-            GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("Before A = dest(M)\n");
@@ -475,10 +477,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             nnzs_T[bin_rule.nonterm] = nnz_T;
             nnzs_TSrc_B[bin_rule.prod_A] = nnz_TSrc_B;
             nnzs_TSrc_C[bin_rule.prod_B] = nnz_TSrc_C;
-
-            LAGraph_Free ((void **) &M, msg);
-            LAGraph_Free ((void **) &A, msg);
-            LAGraph_Free ((void **) &a, msg);
         }
     }
 
