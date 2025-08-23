@@ -18,19 +18,11 @@
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **) &nnzs_T, msg);                                            \
-        LAGraph_Free((void **) &nnzs_TSrc_B, msg);                                       \
-        LAGraph_Free((void **) &nnzs_TSrc_C, msg);                                       \
-        LAGraph_Free((void **) &ones_vec, msg);                                          \
-        LAGraph_Free((void **) &T, msg);                                                 \
-        LAGraph_Free((void **) &TSrc, msg);                                              \
-        LAGraph_Free((void **) &MSrc, msg);                                              \
-        LAGraph_Free((void **) &identity_matrix, msg);                                   \
-        LAGraph_Free ((void **) &M, msg);                                                \
-        LAGraph_Free ((void **) &A, msg);                                                \
-        LAGraph_Free ((void **) &a, msg);                                                \
-        GrB_free(&true_scalar);                                                          \
+                                                               \
     }
+
+    //     LAGraph_Free((void **) &dT, msg);                                                \
+        // LAGraph_Free((void **) &Ttmp, msg);                                              \
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
@@ -146,6 +138,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 {
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
+    GrB_Matrix *dT;
+    GrB_Matrix *Ttmp;
     GrB_Matrix *TSrc;
     GrB_Matrix MSrc;
     GrB_Matrix M;
@@ -205,6 +199,16 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     LG_TRY(LAGraph_Calloc((void **) &T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **) &TSrc, nonterms_count, sizeof(GrB_Matrix), msg));
 
+    if (opt_mask | OPT_INCREMENTAL) {
+        LG_TRY(LAGraph_Calloc((void **) &dT, nonterms_count, sizeof(GrB_Matrix), msg));
+        LG_TRY(LAGraph_Calloc((void **) &Ttmp, nonterms_count, sizeof(GrB_Matrix), msg));
+
+        for (int32_t i = 0; i < nonterms_count; i++) {
+            GRB_TRY(GrB_Matrix_new(&Ttmp[i], GrB_BOOL, n, n));
+            GRB_TRY(GrB_Matrix_dup(&dT[i], adj_matrices[i]));
+        }
+    }
+    
     GRB_TRY(GrB_Vector_new(&ones_vec, GrB_BOOL, n));
     GRB_TRY(GrB_Vector_assign_BOOL(ones_vec, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
     GRB_TRY(GrB_Matrix_diag(&identity_matrix, ones_vec, 0));
@@ -228,7 +232,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     t_src_empty_flags[0] = false;
 
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
-
     GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
     GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
     GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
@@ -321,8 +324,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
 
         GxB_eWiseUnion(
-            T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
-            T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
+            dT[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
+            dT[term_rule.nonterm], true_scalar, dT[term_rule.prod_A], true_scalar, GrB_NULL
         );
 
         t_empty_flags[term_rule.nonterm] = false;
@@ -338,8 +341,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
         GxB_eWiseUnion (
-            T[eps_rule.nonterm],GrB_NULL,GxB_PAIR_BOOL,GxB_PAIR_BOOL,
-            T[eps_rule.nonterm],true_scalar,identity_matrix,true_scalar,GrB_NULL
+            dT[eps_rule.nonterm],GrB_NULL,GxB_PAIR_BOOL,GxB_PAIR_BOOL,
+            dT[eps_rule.nonterm],true_scalar,identity_matrix,true_scalar,GrB_NULL
         );
         
         t_empty_flags[eps_rule.nonterm] = false;
@@ -355,6 +358,75 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     bool changed = true;
     while (changed) {
         changed = false;
+
+        if (opt_mask | OPT_INCREMENTAL) {
+            for (size_t i = 0; i < bin_rules_count; i++) {
+                LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+                GRB_TRY(GrB_Matrix_clear(Ttmp[bin_rule.nonterm]));
+            }
+        }
+
+        if (opt_mask | OPT_INCREMENTAL) {
+            for (size_t i = 0; i < bin_rules_count; i++) {
+                LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+                GRB_TRY(GrB_mxm(Ttmp[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
+                        T[bin_rule.prod_A], dT[bin_rule.prod_B], GrB_NULL));
+            }
+        }
+
+        if (opt_mask | OPT_INCREMENTAL) {
+            for (size_t i = 0; i < bin_rules_count; i++) {
+                LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+                GRB_TRY(GrB_eWiseAdd(T[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
+                        T[bin_rule.nonterm], dT[bin_rule.nonterm], GrB_NULL));
+            }
+        }
+
+        if (opt_mask | OPT_INCREMENTAL) {
+            for (size_t i = 0; i < bin_rules_count; i++) {
+                LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+
+                // but homka122: T[bin_rule.prod_B] * dT[bin_rule.prod_A] (swapped?)
+                GRB_TRY(GrB_mxm(Ttmp[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
+                        dT[bin_rule.prod_A], T[bin_rule.prod_B], GrB_NULL));
+            }
+        }
+
+        // ???
+        // if (opt_mask | OPT_INCREMENTAL) {
+        //     for (size_t i = 0; i < term_rules_count; i++) {
+        //         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+        //         GRB_TRY(GrB_eWiseAdd(Ttmp[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
+        //                 T[term_rule.nonterm], dT[term_rule.prod_A], GrB_NULL));
+        //     }
+        // }
+
+        if (opt_mask | OPT_INCREMENTAL) {
+            for (size_t i = 0; i < bin_rules_count; i++) {
+                LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+
+                // but homka122: T[bin_rule.prod_B] * dT[bin_rule.prod_A] (swapped?)
+                GRB_TRY(GrB_Matrix_dup(&dT[bin_rule.nonterm], Ttmp[bin_rule.nonterm]));
+            }
+        }
+
+        // if (opt_mask | OPT_INCREMENTAL) {
+        //     for (size_t i = 0; i < bin_rules_count; i++) {
+        //         LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+        // //         LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+        // //         GRB_TRY(GrB_Matrix_dup(&dT[bin_rule.nonterm], Ttmp[bin_rule.nonterm]));
+        //         GrB_Matrix_assign(dT[bin_rule.nonterm], GrB_NULL, GrB_NULL, Ttmp[bin_rule.nonterm],
+        //         GrB_ALL, n, GrB_ALL, n, GrB_NULL);
+        //     }
+        // }
+
+        if (opt_mask | OPT_INCREMENTAL) {
+            for (size_t i = 0; i < bin_rules_count; i++) {
+                LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+                GRB_TRY(GrB_eWiseAdd(dT[bin_rule.nonterm], GrB_NULL, GrB_NULL, GrB_MINUS_BOOL,
+                        dT[bin_rule.nonterm], T[bin_rule.nonterm], GrB_NULL));
+            }
+        }
 
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
