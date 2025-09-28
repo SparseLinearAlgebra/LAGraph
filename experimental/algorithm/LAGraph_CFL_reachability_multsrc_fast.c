@@ -146,7 +146,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
     GrB_Matrix *dT;
-    GrB_Matrix *TOld;
     GrB_Matrix *TSrc;
     GrB_Matrix MSrc;
     GrB_Matrix M;
@@ -209,7 +208,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
     LG_TRY(LAGraph_Calloc((void **) &T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **) &dT, nonterms_count, sizeof(GrB_Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **) &TOld, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **) &TSrc, nonterms_count, sizeof(GrB_Matrix), msg));
 
     GRB_TRY(GrB_Vector_new(&ones_vec, GrB_BOOL, n));
@@ -224,7 +222,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     for (int32_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
         GRB_TRY(GrB_Matrix_new(&dT[i], GrB_BOOL, n, n));
-        GRB_TRY(GrB_Matrix_new(&TOld[i], GrB_BOOL, n, n));
         GRB_TRY(GrB_Matrix_new(&TSrc[i], GrB_BOOL, n, n));
         t_empty_flags[i] = true;
         t_src_empty_flags[i] = true;
@@ -393,7 +390,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // #endif
 
             GRB_TRY(GrB_mxm(M1, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
-                        TSrc[bin_rule.nonterm], TOld[bin_rule.prod_A], GrB_NULL));
+                        TSrc[bin_rule.nonterm], T[bin_rule.prod_A], GrB_NULL));
+
+            GRB_TRY(GrB_eWiseAdd(T[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
+                        T[bin_rule.nonterm], dT[bin_rule.nonterm], GrB_NULL));
 
             GRB_TRY(GrB_mxm(M2, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
                         TSrc[bin_rule.nonterm], dT[bin_rule.prod_A], GrB_NULL));
@@ -428,12 +428,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
             GRB_TRY(GrB_eWiseAdd(dT[bin_rule.nonterm], GrB_NULL, GrB_NULL, GrB_MINUS_BOOL,
                         dT[bin_rule.nonterm], T[bin_rule.nonterm], GrB_NULL));
-
-            GRB_TRY(GrB_Matrix_dup(&TOld[bin_rule.nonterm], T[bin_rule.nonterm]));
-
-            GRB_TRY(GrB_eWiseAdd(T[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
-                        T[bin_rule.nonterm], dT[bin_rule.nonterm], GrB_NULL));
-
 
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("After T^A = T^A + M * T^C:\n");
