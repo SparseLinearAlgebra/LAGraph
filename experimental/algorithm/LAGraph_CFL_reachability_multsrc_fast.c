@@ -26,7 +26,6 @@
         LAGraph_Free((void **) &TSrc, msg);                                              \
         LAGraph_Free((void **) &MSrc, msg);                                              \
         LAGraph_Free((void **) &identity_matrix, msg);                                   \
-        LAGraph_Free ((void **) &M, msg);                                                \
         LAGraph_Free ((void **) &A, msg);                                                \
         LAGraph_Free ((void **) &a, msg);                                                \
         GrB_free(&true_scalar);                                                          \
@@ -148,7 +147,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     GrB_Matrix *dT;
     GrB_Matrix *TSrc;
     GrB_Matrix MSrc;
-    GrB_Matrix M;
     GrB_Matrix M1;
     GrB_Matrix M2;
     GrB_Matrix Temp1;
@@ -236,7 +234,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
     GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
     GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
-    GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
     GRB_TRY(GrB_Matrix_new(&M1, GrB_BOOL, n, n));
     GRB_TRY(GrB_Matrix_new(&M2, GrB_BOOL, n, n));
     GRB_TRY(GrB_Matrix_new(&Temp1, GrB_BOOL, n, n));
@@ -419,9 +416,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             GRB_TRY(GrB_mxm(Temp2, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
                         M2, T[bin_rule.prod_B], GrB_NULL));
 
-            GRB_TRY(GrB_eWiseAdd(M, GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
-                        M1, M2, GrB_NULL));
-
 
             GRB_TRY(GrB_eWiseAdd(dT[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                         Temp1, Temp2, GrB_NULL));
@@ -443,9 +437,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // PRINT_MATRIX(TSrc[bin_rule.prod_A]);
             // #endif
 
-            GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_A], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
-                        TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], GrB_NULL));
-
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("After TSrc^B = TSrc^B + TSrc^A:\n");
             // printf("TSrc^B:\n");
@@ -461,7 +452,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // #endif
 
             // M[i, j] == 1 => A[j, j] == 1
-            GRB_TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M, GrB_NULL));
+            GRB_TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M1, GrB_NULL));
             GRB_TRY(GrB_Matrix_diag(&A, a, 0));
 
             // #ifdef DEBUG_CFL_REACHABILITY
@@ -479,6 +470,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // printf("A:\n");
             // PRINT_MATRIX(A)
             // #endif
+
+            GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_A], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
+                        TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], GrB_NULL));
 
             GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_B], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                 TSrc[bin_rule.prod_B], A, GrB_NULL));
