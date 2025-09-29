@@ -1156,7 +1156,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     int32_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    char *msg,                      // Message string for error reporting.
+    int8_t opt_mask                 // Optimizations mask
 );
 
 //------------------------------------------------------------------------------

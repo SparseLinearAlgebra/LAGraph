@@ -107,6 +107,8 @@
     }                                                                                   \
 }
 
+#define OPT_TRIVIAL 1
+
 // LAGraph_CFL_reachability_multsrc: Optimized Multiple-Source Context-Free
 // Language Reachability Matrix-Based Algorithm
 //
@@ -139,7 +141,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     int32_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    char *msg,                      // Message string for error reporting.
+    int8_t opt_mask                 // Optimizations mask
 )
 {
     // Declare workspace and clear the msg string, if not NULL
@@ -171,8 +174,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     if (!nonterms_count || !rules_count)
         return GrB_INVALID_VALUE;
 
-    bool t_empty_flags[nonterms_count]; // t_empty_flags[i] == true <=> T[i] is empty
-    bool t_src_empty_flags[nonterms_count]; // t_src_empty_flags[i] == true <=> TSrc[i] is empty
+    bool t_is_empty[nonterms_count]; // t_is_empty[i] == true <=> T[i] is empty
+    bool t_src_is_empty[nonterms_count]; // t_src_is_empty[i] == true <=> TSrc[i] is empty
 
     if (!output || !rules || !adj_matrices || !src)
         return GrB_NULL_POINTER;
@@ -221,15 +224,15 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
         GRB_TRY(GrB_Matrix_new(&dT[i], GrB_BOOL, n, n));
         GRB_TRY(GrB_Matrix_new(&TSrc[i], GrB_BOOL, n, n));
-        t_empty_flags[i] = true;
-        t_src_empty_flags[i] = true;
+        t_is_empty[i] = true;
+        t_src_is_empty[i] = true;
     }
 
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0], true, src[i], src[i]);
     }
 
-    t_src_empty_flags[0] = false;
+    t_src_is_empty[0] = false;
 
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
     GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
@@ -336,7 +339,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
         );
 
-        t_empty_flags[term_rule.nonterm] = false;
+        t_is_empty[term_rule.nonterm] = false;
 
         // #ifdef DEBUG_CFL_REACHABILITY
         // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
@@ -353,7 +356,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             T[eps_rule.nonterm],true_scalar,identity_matrix,true_scalar,GrB_NULL
         );
         
-        t_empty_flags[eps_rule.nonterm] = false;
+        t_is_empty[eps_rule.nonterm] = false;
 
         // #ifdef DEBUG_CFL_REACHABILITY
         // GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
@@ -372,7 +375,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         changed = false;
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
-
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("Rule: ");
             // PRINT_RULE(bin_rule)
@@ -406,7 +408,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // PRINT_MATRIX(T[bin_rule.prod_B]);
             // #endif
 
-            // GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : GxB_ANY_BOOL;
+            // GrB_BinaryOp acc_op = t_is_empty[bin_rule.nonterm] ? GrB_NULL : GxB_ANY_BOOL;
             // GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op, GxB_ANY_PAIR_BOOL,
             //             M, T[bin_rule.prod_B], GrB_NULL));
 
@@ -415,7 +417,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
             GRB_TRY(GrB_mxm(Temp2, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
                         M2, T[bin_rule.prod_B], GrB_NULL));
-
 
             GRB_TRY(GrB_eWiseAdd(dT[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                         Temp1, Temp2, GrB_NULL));
@@ -497,9 +498,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_B, TSrc[bin_rule.prod_A]));
             GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_C, TSrc[bin_rule.prod_B]));
             
-            if (nnz_T != 0) t_empty_flags[bin_rule.nonterm] = false;
-            if (nnz_TSrc_B != 0) t_src_empty_flags[bin_rule.prod_A] = false;
-            if (nnz_TSrc_C != 0) t_src_empty_flags[bin_rule.prod_B] = false;
+            if (nnz_T != 0) t_is_empty[bin_rule.nonterm] = false;
+            if (nnz_TSrc_B != 0) t_src_is_empty[bin_rule.prod_A] = false;
+            if (nnz_TSrc_C != 0) t_src_is_empty[bin_rule.prod_B] = false;
 
             changed = changed || (nnzs_T[bin_rule.nonterm] != nnz_T);
             changed = changed || (nnzs_TSrc_B[bin_rule.prod_A] != nnz_TSrc_B);
