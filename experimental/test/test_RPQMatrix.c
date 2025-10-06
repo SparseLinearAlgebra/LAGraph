@@ -104,6 +104,8 @@ void test_RPQMatrix_CONCAT(void)
     check_result_matrix(concat.res_mat, expected) ;
     TEST_CHECK(result_nnz == 6) ;
 
+    GrB_Matrix_free(&A) ;
+    GrB_Matrix_free(&B) ;
     LAGraph_Finalize(msg) ;
 }
 
@@ -130,6 +132,8 @@ void test_RPQMatrix_LOR(void)
     check_result_matrix(lor.res_mat, expected) ;
     TEST_CHECK(result_nnz == 13) ;
 
+    GrB_Matrix_free(&A) ;
+    GrB_Matrix_free(&B) ;
     LAGraph_Finalize(msg) ;
 }
 
@@ -152,6 +156,7 @@ void test_RPQMatrix_KLEENE(void)
     check_result_matrix(kleene.res_mat, expected) ;
     TEST_CHECK(result_nnz == 16) ;
 
+    GrB_Matrix_free(&A) ;
     LAGraph_Finalize(msg) ;
 }
 
@@ -196,6 +201,8 @@ void test_RPQMatrix_KLEENE_L(void)
     check_result_matrix(kleeneL.res_mat, expected) ;
     TEST_CHECK(result_nnz == expected_nnz) ;
 
+    GrB_Matrix_free(&A) ;
+    GrB_Matrix_free(&B) ;
     LAGraph_Finalize(msg) ;
 }
 
@@ -226,6 +233,7 @@ void test_RPQMatrix_KLEENE_R(void)
     check_result_matrix(concat.res_mat, expected) ;
     TEST_CHECK(result_nnz == 13) ;
     GrB_Info expected_nnz = result_nnz ;
+
     RPQMatrixPlan planA2 = {.op = RPQ_MATRIX_OP_LABEL, .mat = A} ;
     RPQMatrixPlan planB2 = {.op = RPQ_MATRIX_OP_LABEL, .mat = B} ;
     RPQMatrixPlan kleeneR = {
@@ -239,6 +247,8 @@ void test_RPQMatrix_KLEENE_R(void)
     check_result_matrix(kleeneR.res_mat, expected) ;
     TEST_CHECK(result_nnz == expected_nnz) ;
 
+    GrB_Matrix_free(&A) ;
+    GrB_Matrix_free(&B) ;
     LAGraph_Finalize(msg) ;
 }
 
@@ -274,6 +284,10 @@ void test_RPQMatrix_Complex(void)
                            "(8, 3) (8, 6)" ;
     check_result_matrix(concat.res_mat, expected) ;
     TEST_CHECK(result_nnz == 48) ;
+
+    GrB_Matrix_free(&A);
+    GrB_Matrix_free(&B);
+    GrB_Matrix_free(&C);
     LAGraph_Finalize(msg) ;
 }
 
@@ -413,7 +427,7 @@ void test_RPQMatrix_Left_Child_Kleene(void)
     GrB_Index result_nnz ;
 
     GrB_Info info = LAGraph_RPQMatrix(&result_nnz, &kleene, msg) ;
-    TEST_CHECK(info == GrB_NULL_POINTER) ;
+    TEST_CHECK(info == GrB_INVALID_VALUE) ;
     TEST_MSG("Expected GrB_NULL_POINTER for KLEENE with only left child") ;
 
     GrB_Matrix_free(&A) ;
