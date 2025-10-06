@@ -184,6 +184,9 @@ static GrB_Info LAGraph_RPQMatrixLor(RPQMatrixPlan *plan, char *msg)
     OK(LAGraph_RPQMatrix_solver(lhs, msg)) ;
     OK(LAGraph_RPQMatrix_solver(rhs, msg)) ;
 
+    LG_ASSERT(rhs->mat != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(lhs->mat != NULL, GrB_NULL_POINTER) ;
+
     GrB_Matrix lhs_mat = lhs->res_mat ;
     GrB_Matrix rhs_mat = rhs->res_mat ;
 
