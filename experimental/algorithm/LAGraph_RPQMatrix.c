@@ -471,8 +471,8 @@ GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg)
 
 GrB_Info LAGraph_RPQMatrix_initialize(void)
 {
-    sr = GrB_LOR_LAND_SEMIRING_BOOL ;
-    op = GxB_LOR_BOOL_MONOID ;
+    sr = GxB_ANY_PAIR_BOOL ;
+    op = GxB_ANY_BOOL_MONOID ;
     return GrB_SUCCESS;
 }
 
