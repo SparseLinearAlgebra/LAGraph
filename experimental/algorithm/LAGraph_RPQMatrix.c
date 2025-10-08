@@ -167,6 +167,35 @@ GrB_Info LAGraph_RPQMatrix_check(RPQMatrixPlan *plan, GrB_Index *dimension, char
 static GrB_Semiring sr ;
 static GrB_Monoid op ;
 
+GrB_Info LAGraph_RPQMatrix_label(GrB_Matrix *mat, GrB_Index x, GrB_Index i, GrB_Index j)
+{
+    OK(GrB_Matrix_new(mat, GrB_BOOL, i, j)) ;
+    OK(GrB_Matrix_setElement(*mat, true, x, x)) ;
+    return (GrB_SUCCESS) ;
+}
+GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan)
+{
+    if (plan == NULL)
+    {
+        return GrB_SUCCESS ;
+    }
+    if (plan->mat != NULL)
+    {
+        OK(GrB_Matrix_free(&(plan->mat))) ;
+    }
+    if (plan->res_mat != NULL)
+    {
+        OK(GrB_Matrix_free(&(plan->res_mat))) ;
+    }
+    GrB_Info lstatus = LAGraph_DestroyRpqMatrixPlan(plan->lhs) ;
+    GrB_Info rstatus = LAGraph_DestroyRpqMatrixPlan(plan->rhs) ;
+    if (rstatus || lstatus)
+    {
+        return GrB_INVALID_VALUE ;
+    }
+    return GrB_SUCCESS ;
+} ;
+
 GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg) ;
 
 static GrB_Info LAGraph_RPQMatrixLor(RPQMatrixPlan *plan, char *msg)
@@ -253,8 +282,8 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
     // Creating identity matrix.
     GrB_Index n ;
     GRB_TRY(GrB_Matrix_nrows(&n, B)) ;
-    GrB_Matrix I ;
-    GRB_TRY(GrB_Matrix_new(&I, GrB_BOOL, n, n)) ;
+    // GrB_Matrix I ;
+    // GRB_TRY(GrB_Matrix_new(&I, GrB_BOOL, n, n)) ;
 
     GrB_Vector v ;
     GRB_TRY(GrB_Vector_new(&v, GrB_BOOL, n)) ;
@@ -286,7 +315,7 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
     }
     plan->res_mat = S ;
 
-    GRB_TRY(GrB_Matrix_free(&I)) ;
+    // GRB_TRY(GrB_Matrix_free(&I)) ;
     return (GrB_SUCCESS) ;
 }
 

@@ -962,6 +962,18 @@ GrB_Info LAGraph_RPQMatrix(
     char *msg            // LAGraph output message
 ) ;
 
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_label
+(
+    GrB_Matrix *mat, 
+    GrB_Index x,
+    GrB_Index i, 
+    GrB_Index j
+) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan) ;
+
 //****************************************************************************
 LAGRAPHX_PUBLIC
 int LAGraph_VertexCentrality_Triangle       // vertex triangle-centrality
