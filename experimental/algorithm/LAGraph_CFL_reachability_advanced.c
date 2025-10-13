@@ -20,14 +20,14 @@
         LAGraph_Free((void **)&nnzs, msg);                                               \
         GrB_free(&true_scalar);                                                          \
         GrB_free(&identity_matrix);                                                      \
-        LAGraph_Free((void **)&T, msg);                                                  \
         LAGraph_Free((void **)&indexes, msg);                                            \
     }
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
         for (size_t i = 0; i < symbols_amount; i++) {                                    \
-            GrB_free(&T[i]);                                                             \
+            /* TODO: delete it and free actual matrices */                               \
+            /* GrB_free(&T[i]); */                                                       \
         }                                                                                \
                                                                                          \
         LG_FREE_WORK;                                                                    \
@@ -1072,7 +1072,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
 
-    LG_TRY(LAGraph_Calloc((void **)&T, symbols_amount, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&delta_matrices, symbols_amount, sizeof(Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&matrices, symbols_amount, sizeof(Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&temp_matrices, symbols_amount, sizeof(Matrix), msg));
@@ -1113,8 +1112,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // Create nonterms matrices
     for (size_t i = 0; i < symbols_amount; i++) {
         GrB_Matrix matrix;
-
-        GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
 
         GrB_Index nrows;
         GrB_Matrix_nrows(&nrows, adj_matrices[i]);
@@ -1259,7 +1256,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GRB_TRY(wise(nonterm_matrix, nonterm_matrix, term_matrix, true));
 
 #ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
+        // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
         printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
 #endif
     }
@@ -1280,7 +1277,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         wise(nonterm_matrix, nonterm_matrix, &iden, true);
 
 #ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
+        // GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
         printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n", eps_rule.nonterm, iso_flag);
 #endif
     }
@@ -1418,7 +1415,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         }
 
 #ifdef DEBUG_CFL_REACHBILITY
-        GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
+        // GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
         printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
                "I: %ld (ISO: %d)\n",
                bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i, iso_flag);
@@ -1433,7 +1430,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #ifdef DEBUG_CFL_REACHBILITY
     for (int32_t i = 0; i < nonterms_count; i++) {
         printf("MATRIX WITH INDEX %d:\n", i);
-        GxB_print(T[i], GxB_SUMMARY);
+        // GxB_print(T[i], GxB_SUMMARY);
     }
 #endif
 
