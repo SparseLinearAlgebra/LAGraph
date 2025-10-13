@@ -1228,19 +1228,23 @@ GrB_Info LAGraph_CFL_reachability_adv(
         mxm = matrix_mxm_lazy;
         wise = matrix_wise_lazy;
         rsub = matrix_rsub_lazy;
-    } else if (optimizations & OPT_EMPTY) {
+    } 
+    if (optimizations & OPT_EMPTY) {
         mxm = matrix_mxm_empty;
         wise = matrix_wise_empty;
         rsub = matrix_rsub_empty;
-    } else if (optimizations & OPT_FORMAT) {
+    } 
+    if (optimizations & OPT_FORMAT) {
         mxm = matrix_mxm_format;
         wise = matrix_wise_format;
         rsub = matrix_rsub_format;
-    } else if (optimizations & OPT_BLOCK) {
+    } 
+    if (optimizations & OPT_BLOCK) {
         mxm = matrix_mxm_block;
         wise = matrix_wise_block;
         rsub = matrix_rsub_block;
-    } else {
+    } 
+    if (optimizations == 0x0) {
         mxm = matrix_mxm;
         wise = matrix_wise;
         rsub = matrix_rsub;
