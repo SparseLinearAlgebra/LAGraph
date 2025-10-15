@@ -1151,6 +1151,15 @@ CFL_Matrix CFL_matrix_from_base_lazy(GrB_Matrix matrix);
 CFL_Matrix CFL_matrix_create(GrB_Index nrows, GrB_Index ncols);
 void CFL_matrix_free(CFL_Matrix *matrix);
 
+GrB_Info CFL_mxm(CFL_Matrix *output, CFL_Matrix *first, CFL_Matrix *second, bool accum,
+                 bool swap, int8_t optimizations);
+GrB_Info CFL_wise(CFL_Matrix *output, CFL_Matrix *first, CFL_Matrix *second, bool accum,
+                  int8_t optimizations);
+GrB_Info CFL_rsub(CFL_Matrix *output, CFL_Matrix *mask, int8_t optimizations);
+GrB_Info CFL_dup(CFL_Matrix *output, CFL_Matrix *input, int8_t optimizations);
+GrB_Matrix CFL_matrix_lazy_to_base(CFL_Matrix *matrix, int8_t optimizations);
+GrB_Info CFL_clear(CFL_Matrix *A, int8_t optimizations);
+
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
 //------------------------------------------------------------------------------
