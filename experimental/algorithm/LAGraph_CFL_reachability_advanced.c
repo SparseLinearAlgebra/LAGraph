@@ -144,93 +144,8 @@
         }                                                                                \
     }
 
-enum Matrix_block { CELL, VEC_HORIZ, VEC_VERT };
-
-typedef struct Matrix {
-    GrB_Matrix base;
-    GrB_Matrix base_row;
-    GrB_Matrix base_col;
-    struct Matrix *base_matrices;
-    size_t base_matrices_count;
-    GrB_Index nvals;
-    GrB_Index nrows;
-    GrB_Index ncols;
-    int32_t format;
-    enum Matrix_block block_type;
-    bool is_both;
-    bool is_lazy;
-} Matrix;
-
-void matrix_update(Matrix *matrix) {
-    if (!matrix->is_lazy) {
-        TRY(GrB_Matrix_nvals(&matrix->nvals, matrix->base));
-    } else {
-        size_t new_nnz = 0;
-        for (size_t i = 0; i < matrix->base_matrices_count; i++) {
-            TRY(GrB_Matrix_nvals(&matrix->base_matrices[i].nvals,
-                                 matrix->base_matrices[i].base));
-            new_nnz += matrix->base_matrices[i].nvals;
-        }
-
-        matrix->nvals = new_nnz;
-    }
-
-    if (!matrix->is_lazy) {
-        TRY(GrB_Matrix_nrows(&matrix->nrows, matrix->base));
-        TRY(GrB_Matrix_ncols(&matrix->ncols, matrix->base));
-    } else {
-        TRY(GrB_Matrix_nrows(&matrix->nrows, matrix->base_matrices[0].base));
-        TRY(GrB_Matrix_ncols(&matrix->ncols, matrix->base_matrices[0].base));
-    }
-
-    if (matrix->nrows == matrix->ncols)
-        matrix->block_type = CELL;
-    else
-        matrix->block_type = matrix->nrows > matrix->ncols ? VEC_VERT : VEC_HORIZ;
-}
-
-Matrix matrix_from_base(GrB_Matrix matrix) {
-    Matrix result;
-    result.base = matrix;
-    result.base_row = matrix;
-    result.base_col = NULL;
-    result.base_matrices = malloc(sizeof(Matrix) * 40);
-    result.base_matrices_count = 0;
-    result.nvals = 0;
-    result.nrows = 0;
-    result.ncols = 0;
-    result.block_type = CELL;
-    result.format = GrB_ROWMAJOR;
-    result.is_both = false;
-    result.is_lazy = false;
-    matrix_update(&result);
-    return result;
-}
-
-Matrix matrix_from_base_lazy(GrB_Matrix matrix) {
-    Matrix result = matrix_from_base(matrix);
-
-    Matrix lazy_result = matrix_from_base(matrix);
-    lazy_result.is_lazy = true;
-    lazy_result.base_matrices[0] = result;
-    lazy_result.base_matrices_count = 1;
-    matrix_update(&lazy_result);
-
-    return lazy_result;
-}
-
-Matrix matrix_create(GrB_Index nrows, GrB_Index ncols) {
-    GrB_Matrix _result;
-    TRY(GrB_Matrix_new(&_result, GrB_BOOL, nrows, ncols));
-    Matrix result = matrix_from_base(_result);
-
-    return result;
-}
-
-void matrix_free(Matrix *matrix) {
-    free(matrix->base_matrices);
-    TRY(GrB_free(&matrix->base));
-}
+typedef CFL_Matrix Matrix;
+typedef enum CFL_Matrix_block Matrix_block;
 
 GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     // Matrix contain both formats so just switch base matrix
@@ -270,7 +185,7 @@ GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
 GrB_Info matrix_clear(Matrix *A) {
     GrB_Info result = GrB_Matrix_clear(A->base);
     TRY(result);
-    matrix_update(A);
+    CFL_matrix_update(A);
     return result;
 }
 
@@ -298,13 +213,13 @@ GrB_Info matrix_clear_empty(Matrix *A) {
     return matrix_clear_format(A);
 }
 
-GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
+GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block format) {
     if (matrix->is_lazy) {
         for (size_t i = 0; i < matrix->base_matrices_count; i++) {
             TRY(block_matrix_hyper_rotate_i(&matrix->base_matrices[i], format));
         }
 
-        matrix_update(matrix);
+        CFL_matrix_update(matrix);
         return GrB_SUCCESS;
     }
 
@@ -336,8 +251,9 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         GrB_Matrix new;
         TRY(GrB_Matrix_new(&new, GrB_BOOL, matrix->ncols, matrix->nrows));
         TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
-        matrix_free(matrix);
-        *matrix = matrix->is_lazy ? matrix_from_base_lazy(new) : matrix_from_base(new);
+        CFL_matrix_free(matrix);
+        *matrix =
+            matrix->is_lazy ? CFL_matrix_from_base_lazy(new) : CFL_matrix_from_base(new);
         free(nrows);
         free(ncols);
         GrB_free(&scalar_true);
@@ -359,8 +275,9 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum Matrix_block format) {
         GrB_Matrix new;
         TRY(GrB_Matrix_new(&new, GrB_BOOL, matrix->ncols, matrix->nrows));
         TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
-        matrix_free(matrix);
-        *matrix = matrix->is_lazy ? matrix_from_base_lazy(new) : matrix_from_base(new);
+        CFL_matrix_free(matrix);
+        *matrix =
+            matrix->is_lazy ? CFL_matrix_from_base_lazy(new) : CFL_matrix_from_base(new);
         free(nrows);
         free(ncols);
         GrB_free(&scalar_true);
@@ -429,7 +346,7 @@ void block_matrix_reduce(Matrix *matrix, Matrix *input) {
     }
 
     GxB_Matrix_build_Scalar(matrix->base, rows, cols, scalar_true, input->nvals);
-    matrix_update(matrix);
+    CFL_matrix_update(matrix);
 
     free(rows);
     free(cols);
@@ -444,7 +361,7 @@ void block_matrix_repeat_into_vector(Matrix *matrix, Matrix *input,
     }
 
     GxB_Matrix_concat(matrix->base, tiles, block_count, 1, GrB_NULL);
-    matrix_update(matrix);
+    CFL_matrix_update(matrix);
 }
 
 GrB_Info matrix_dup(Matrix *output, Matrix *input) {
@@ -455,7 +372,7 @@ GrB_Info matrix_dup(Matrix *output, Matrix *input) {
     GrB_Info result = GrB_Matrix_apply(output->base, GrB_NULL, GrB_NULL,
                                        GrB_IDENTITY_BOOL, input->base, GrB_NULL);
     TRY(result);
-    matrix_update(output);
+    CFL_matrix_update(output);
 
     return result;
 }
@@ -535,7 +452,7 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold) {
 
     A->base_matrices = new_matrices;
     A->base_matrices_count = new_size;
-    matrix_update(A);
+    CFL_matrix_update(A);
 
     return GrB_SUCCESS;
 }
@@ -548,7 +465,7 @@ GrB_Info matrix_mxm(Matrix *output, Matrix *first, Matrix *second, bool accum,
     GrB_Info result = GrB_mxm(output->base, GrB_NULL, accum ? GxB_ANY_BOOL : GrB_NULL,
                               GxB_ANY_PAIR_BOOL, left->base, right->base, GrB_NULL);
     IS_ISO(output->base, "MXM output");
-    matrix_update(output);
+    CFL_matrix_update(output);
     return result;
 }
 
@@ -603,7 +520,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     for (size_t i = 0; i < first->base_matrices_count; i++) {
         GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? second->nrows : first->nrows,
                        swap ? first->ncols : second->ncols);
-        acc_matrices[i] = matrix_from_base(accs[i]);
+        acc_matrices[i] = CFL_matrix_from_base(accs[i]);
     }
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
@@ -623,7 +540,7 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     GrB_Matrix acc;
     GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
                    swap ? first->ncols : second->ncols);
-    Matrix acc_matrix = matrix_from_base(acc);
+    Matrix acc_matrix = CFL_matrix_from_base(acc);
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
         matrix_wise_empty(&acc_matrix, &acc_matrix, &acc_matrices[i], false);
@@ -652,11 +569,11 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
         block_matrix_hyper_rotate_i(second, swap ? VEC_VERT : VEC_HORIZ);
         block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
 
-        Matrix temp = matrix_create(swap ? second->nrows : first->nrows,
-                                    swap ? first->ncols : second->ncols);
+        Matrix temp = CFL_matrix_create(swap ? second->nrows : first->nrows,
+                                        swap ? first->ncols : second->ncols);
         matrix_mxm_lazy(&temp, first, second, accum, swap);
         matrix_wise_block(output, output, &temp, false);
-        matrix_free(&temp);
+        CFL_matrix_free(&temp);
 
         return GrB_SUCCESS;
     }
@@ -665,11 +582,11 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
         block_matrix_hyper_rotate_i(first, swap ? VEC_HORIZ : VEC_VERT);
         block_matrix_hyper_rotate_i(output, swap ? VEC_HORIZ : VEC_VERT);
 
-        Matrix temp = matrix_create(swap ? second->nrows : first->nrows,
-                                    swap ? first->ncols : first->ncols);
+        Matrix temp = CFL_matrix_create(swap ? second->nrows : first->nrows,
+                                        swap ? first->ncols : first->ncols);
         matrix_mxm_lazy(&temp, first, second, accum, swap);
         matrix_wise_block(output, output, &temp, false);
-        matrix_free(&temp);
+        CFL_matrix_free(&temp);
 
         return GrB_SUCCESS;
     }
@@ -677,14 +594,14 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
     GrB_Index size = first->nrows > first->ncols ? first->nrows : first->ncols;
     GrB_Matrix _diag;
     GrB_Matrix_new(&_diag, GrB_BOOL, size, size);
-    Matrix diag = matrix_from_base(_diag);
+    Matrix diag = CFL_matrix_from_base(_diag);
     block_matrix_to_diag(&diag, second);
-    matrix_update(&diag);
+    CFL_matrix_update(&diag);
 
     block_matrix_hyper_rotate_i(first, swap ? VEC_VERT : VEC_HORIZ);
     block_matrix_hyper_rotate_i(output, swap ? VEC_VERT : VEC_HORIZ);
 
-    Matrix temp = matrix_create(first->nrows, diag.ncols);
+    Matrix temp = CFL_matrix_create(first->nrows, diag.ncols);
     matrix_mxm_lazy(&temp, first, &diag, false, swap);
     return matrix_wise_block(output, output, &temp, false);
 }
@@ -697,7 +614,7 @@ GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) 
     GrB_Info result = GrB_eWiseAdd(output->base, GrB_NULL, accum_op, GxB_ANY_BOOL,
                                    first->base, second->base, GrB_NULL);
 
-    matrix_update(output);
+    CFL_matrix_update(output);
     return result;
 }
 
@@ -783,7 +700,7 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
 
     GrB_Matrix _other;
     GrB_Matrix_new(&_other, GrB_BOOL, output->nrows, output->ncols);
-    Matrix other = matrix_from_base(_other);
+    Matrix other = CFL_matrix_from_base(_other);
     matrix_dup_empty(&other, second);
 
     size_t other_nvals = other.nvals >= 10 ? other.nvals : 10;
@@ -835,24 +752,24 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
 
     // second is vector
     if (first->block_type == CELL) {
-        Matrix temp_reduced = matrix_create(first->nrows, first->ncols);
+        Matrix temp_reduced = CFL_matrix_create(first->nrows, first->ncols);
         block_matrix_reduce(&temp_reduced, second);
 
         GrB_Info info = matrix_wise_lazy(output, first, &temp_reduced, accum);
-        matrix_free(&temp_reduced);
+        CFL_matrix_free(&temp_reduced);
         return info;
     }
 
     // first is vector
     if (second->block_type == CELL) {
         // LG_SET_BURBLE(true);
-        Matrix temp_vector = matrix_create(first->nrows, first->ncols);
+        Matrix temp_vector = CFL_matrix_create(first->nrows, first->ncols);
         GrB_Index block_count = first->nrows > first->ncols ? first->nrows : first->ncols;
         block_matrix_repeat_into_vector(&temp_vector, second, block_count);
 
         block_matrix_hyper_rotate_i(&temp_vector, first->block_type);
         GrB_Info info = matrix_wise_lazy(output, first, &temp_vector, accum);
-        matrix_free(&temp_vector);
+        CFL_matrix_free(&temp_vector);
         return info;
     }
 
@@ -865,7 +782,7 @@ GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
     GrB_Info result = GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL,
                                    output->base, output->base, GrB_DESC_RSC);
 
-    matrix_update(output);
+    CFL_matrix_update(output);
     return result;
 }
 
@@ -934,14 +851,14 @@ void matrix_print_lazy(Matrix *A) {
     GxB_Print_Level pr = 1;
 
     if (!A->is_lazy) {
-        matrix_update(A);
+        CFL_matrix_update(A);
         GxB_print(A->base, pr);
         // printf("nnz: %ld\n", A->nvals);
         return;
     }
 
     if (A->base_matrices_count == 1) {
-        matrix_update(A);
+        CFL_matrix_update(A);
         // printf("nnz: %ld\n", A->nvals);
         GxB_print(A->base_matrices[0].base, pr);
         return;
@@ -949,7 +866,7 @@ void matrix_print_lazy(Matrix *A) {
 
     GrB_Matrix _temp;
     GrB_Matrix_new(&_temp, GrB_BOOL, A->nrows, A->ncols);
-    Matrix temp = matrix_from_base(_temp);
+    Matrix temp = CFL_matrix_from_base(_temp);
     for (size_t i = 0; i < A->base_matrices_count; i++) {
         matrix_wise_empty(&temp, &temp, &A->base_matrices[i], false);
     }
@@ -965,7 +882,7 @@ void print_graph_info(Matrix *matrices, size_t count) {
 
     for (size_t i = 0; i < count; i++) {
         Matrix *A = &matrices[i];
-        matrix_update(A);
+        CFL_matrix_update(A);
         nnz += A->nvals;
     }
 
@@ -1058,7 +975,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     int8_t optimizations            // Optimizations flags
 ) {
     // Declare workspace and clear the msg string, if not NULL
-    GrB_Matrix *T;
     Matrix *delta_matrices;
     Matrix *matrices;
     Matrix *temp_matrices;
@@ -1119,15 +1035,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GrB_Matrix_ncols(&ncols, adj_matrices[i]);
 
         GrB_Matrix_dup(&delta_matrices[i].base, adj_matrices[i]);
-        delta_matrices[i] = matrix_from_base(delta_matrices[i].base);
+        delta_matrices[i] = CFL_matrix_from_base(delta_matrices[i].base);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
         matrices[i] = ((optimizations & OPT_LAZY) || (optimizations & OPT_BLOCK))
-                          ? matrix_from_base_lazy(matrix)
-                          : matrix_from_base(matrix);
+                          ? CFL_matrix_from_base_lazy(matrix)
+                          : CFL_matrix_from_base(matrix);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
-        temp_matrices[i] = matrix_from_base(matrix);
+        temp_matrices[i] = CFL_matrix_from_base(matrix);
     }
 
     // Arrays for processing rules
@@ -1266,7 +1182,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
     GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
     GRB_TRY(GrB_free(&v_diag));
-    Matrix iden = matrix_from_base(identity_matrix);
+    Matrix iden = CFL_matrix_from_base(identity_matrix);
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
@@ -1406,7 +1322,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         size_t new_nnz = 0;
         for (size_t i = 0; i < symbols_amount; i++) {
-            matrix_update(&delta_matrices[i]);
+            CFL_matrix_update(&delta_matrices[i]);
             new_nnz += delta_matrices[i].nvals;
         }
 
@@ -1441,7 +1357,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             // TODO: new method for getting acc from lazy matrix
             GrB_Matrix _acc;
             GrB_Matrix_new(&_acc, GrB_BOOL, matrices[i].nrows, matrices[i].ncols);
-            Matrix acc = matrix_from_base(_acc);
+            Matrix acc = CFL_matrix_from_base(_acc);
 
             matrix_sort_lazy(&matrices[i], false);
             for (size_t j = 0; j < matrices[i].base_matrices_count; j++) {

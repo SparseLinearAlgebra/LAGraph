@@ -1105,7 +1105,6 @@ GrB_Info LAGraph_CFL_reachability_adv
                          // outputs[k]: (i, j) = true if and only if there is a path
                          // from node i to node j whose edge labels form a word
                          // derivable from the non-terminal 'k' of the specified CFG.
-
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -1115,13 +1114,42 @@ GrB_Info LAGraph_CFL_reachability_adv
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
-
-    int32_t terms_count,    // The total number of terminal symbols in the CFG.
-    int32_t nonterms_count, // The total number of non-terminal symbols in the CFG.
+    size_t symbols_amount,
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     size_t rules_count,             // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    char *msg,                      // Message string for error reporting.
+    int8_t optimizations            // Optimizations flags
 );
+
+
+enum CFL_Matrix_block { CELL, VEC_HORIZ, VEC_VERT };
+
+// Struct for matrix for CFL algorithms with optimizations
+typedef struct CFL_Matrix {
+    GrB_Matrix base; // Base GrB_Matrix from we create CFL_Matrix
+    int8_t optimizations; // Optimizations flags
+    // Fields of base matrix
+    GrB_Index nvals;
+    GrB_Index nrows;
+    GrB_Index ncols;
+    // Fields of format optimization
+    GrB_Matrix base_row;
+    GrB_Matrix base_col;
+    int32_t format;
+    bool is_both;
+    // Fields of lazy addition optimization
+    struct CFL_Matrix *base_matrices;
+    size_t base_matrices_count;
+    bool is_lazy;
+    // Fields of block optimization
+    enum CFL_Matrix_block block_type;
+} CFL_Matrix;
+
+void CFL_matrix_update(CFL_Matrix *matrix);
+CFL_Matrix CFL_matrix_from_base(GrB_Matrix matrix);
+CFL_Matrix CFL_matrix_from_base_lazy(GrB_Matrix matrix);
+CFL_Matrix CFL_matrix_create(GrB_Index nrows, GrB_Index ncols);
+void CFL_matrix_free(CFL_Matrix *matrix);
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
