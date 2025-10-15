@@ -17,10 +17,7 @@
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)&nnzs, msg);                                               \
-        GrB_free(&true_scalar);                                                          \
         GrB_free(&identity_matrix);                                                      \
-        LAGraph_Free((void **)&indexes, msg);                                            \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -126,12 +123,6 @@
 #define OPT_LAZY (1 << 2)
 #define OPT_BLOCK (1 << 3)
 
-#define SKIP_IF_NULL(matrix)                                                             \
-    GrB_Matrix_nvals(&new_nnz, matrix);                                                  \
-    if (new_nnz == 0) {                                                                  \
-        continue;                                                                        \
-    }
-
 #define TRY(GrB_method)                                                                  \
     {                                                                                    \
         GrB_Info LG_GrB_Info = GrB_method;                                               \
@@ -140,29 +131,6 @@
             exit(LG_GrB_Info);                                                           \
         }                                                                                \
     }
-
-typedef CFL_Matrix Matrix;
-typedef enum CFL_Matrix_block Matrix_block;
-
-#define IS_NONTERM(index)                                                                \
-    {                                                                                    \
-        for (size_t m = 0; m < rules_count; m++) {                                       \
-            if (rules[m].nonterm == index)                                               \
-                return true;                                                             \
-        }                                                                                \
-                                                                                         \
-        return false;                                                                    \
-    }
-
-bool is_nonterm(int index, const LAGraph_rule_WCNF *rules, size_t rules_count) {
-    for (size_t i = 0; i < rules_count; i++) {
-        if (rules[i].nonterm == index) {
-            return true;
-        }
-    }
-
-    return false;
-}
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
@@ -230,22 +198,17 @@ GrB_Info LAGraph_CFL_reachability_adv(
     int8_t optimizations            // Optimizations flags
 ) {
     // Declare workspace and clear the msg string, if not NULL
-    Matrix *delta_matrices;
-    Matrix *matrices;
-    Matrix *temp_matrices;
+    CFL_Matrix *delta_matrices, *matrices, *temp_matrices;
+    CFL_Matrix iden;
     GrB_Matrix identity_matrix = NULL;
-    uint64_t *nnzs = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
-    GrB_Index *indexes = NULL;
 
-    GrB_Scalar true_scalar;
-    GrB_Scalar_new(&true_scalar, GrB_BOOL);
-    GrB_Scalar_setElement_BOOL(true_scalar, true);
-
-    LG_TRY(LAGraph_Calloc((void **)&delta_matrices, symbols_amount, sizeof(Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **)&matrices, symbols_amount, sizeof(Matrix), msg));
-    LG_TRY(LAGraph_Calloc((void **)&temp_matrices, symbols_amount, sizeof(Matrix), msg));
+    LG_TRY(LAGraph_Calloc((void **)&delta_matrices, symbols_amount, sizeof(CFL_Matrix),
+                          msg));
+    LG_TRY(LAGraph_Calloc((void **)&matrices, symbols_amount, sizeof(CFL_Matrix), msg));
+    LG_TRY(
+        LAGraph_Calloc((void **)&temp_matrices, symbols_amount, sizeof(CFL_Matrix), msg));
 
     LG_ASSERT_MSG(symbols_amount > 0, GrB_INVALID_VALUE,
                   "The number of symbols must be greater than zero.");
@@ -289,8 +252,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GrB_Index ncols;
         GrB_Matrix_ncols(&ncols, adj_matrices[i]);
 
-        GrB_Matrix_dup(&delta_matrices[i].base, adj_matrices[i]);
-        delta_matrices[i] = CFL_matrix_from_base(delta_matrices[i].base);
+        delta_matrices[i] = CFL_matrix_from_base(adj_matrices[i]);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
         matrices[i] = ((optimizations & OPT_LAZY) || (optimizations & OPT_BLOCK))
@@ -385,8 +347,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
-        Matrix *nonterm_matrix = &delta_matrices[term_rule.nonterm];
-        Matrix *term_matrix = &delta_matrices[term_rule.prod_A];
+        CFL_Matrix *nonterm_matrix = &delta_matrices[term_rule.nonterm];
+        CFL_Matrix *term_matrix = &delta_matrices[term_rule.prod_A];
 
         GRB_TRY(
             CFL_wise(nonterm_matrix, nonterm_matrix, term_matrix, true, optimizations));
@@ -402,13 +364,13 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
     GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
     GRB_TRY(GrB_free(&v_diag));
-    Matrix iden = CFL_matrix_from_base(identity_matrix);
+    iden = CFL_matrix_from_base(identity_matrix);
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
 
-        Matrix *nonterm_matrix = &delta_matrices[eps_rule.nonterm];
+        CFL_Matrix *nonterm_matrix = &delta_matrices[eps_rule.nonterm];
 
         CFL_wise(nonterm_matrix, nonterm_matrix, &iden, true, optimizations);
 
@@ -419,8 +381,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     }
 
     // Rule [Variable -> Variable1 Variable2]
-    LG_TRY(LAGraph_Calloc((void **)&nnzs, symbols_amount, sizeof(uint64_t), msg));
-
     double start_time, end_time;
     bool changed = true;
     size_t iteration = 0;
@@ -447,9 +407,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START();
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
-            Matrix *A = &matrices[bin_rule.prod_A];
-            Matrix *B = &delta_matrices[bin_rule.prod_B];
-            Matrix *C = &temp_matrices[bin_rule.nonterm];
+            CFL_Matrix *A = &matrices[bin_rule.prod_A];
+            CFL_Matrix *B = &delta_matrices[bin_rule.prod_B];
+            CFL_Matrix *C = &temp_matrices[bin_rule.nonterm];
 
             // printf("MXM 1 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
@@ -465,8 +425,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START()
         for (size_t i = 0; i < symbols_amount; i++) {
-            Matrix *A = &delta_matrices[i];
-            Matrix *C = &matrices[i];
+            CFL_Matrix *A = &delta_matrices[i];
+            CFL_Matrix *C = &matrices[i];
 
             // printf("WISE 1 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
@@ -482,9 +442,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START()
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
-            Matrix *A = &matrices[bin_rule.prod_B];
-            Matrix *B = &delta_matrices[bin_rule.prod_A];
-            Matrix *C = &temp_matrices[bin_rule.nonterm];
+            CFL_Matrix *A = &matrices[bin_rule.prod_B];
+            CFL_Matrix *B = &delta_matrices[bin_rule.prod_A];
+            CFL_Matrix *C = &temp_matrices[bin_rule.nonterm];
 
             // printf("MXM 2 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
@@ -501,8 +461,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         // Rule [Variable -> term]
         for (size_t i = 0; i < term_rules_count; i++) {
             LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
-            Matrix *A = &temp_matrices[term_rule.nonterm];
-            Matrix *B = &delta_matrices[term_rule.prod_A];
+            CFL_Matrix *A = &temp_matrices[term_rule.nonterm];
+            CFL_Matrix *B = &delta_matrices[term_rule.prod_A];
 
             // printf("Simple rules iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
@@ -526,8 +486,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (size_t i = 0; i < symbols_amount; i++) {
-            Matrix *A = &matrices[i];
-            Matrix *C = &delta_matrices[i];
+            CFL_Matrix *A = &matrices[i];
+            CFL_Matrix *C = &delta_matrices[i];
 
             // printf("RSUB iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A);
