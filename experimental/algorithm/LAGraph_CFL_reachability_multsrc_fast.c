@@ -236,7 +236,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         GrB_Matrix matrix;
 
         // dT[i] = CFL_matrix_from_base(adj_matrices[i]);
-        dT[i] = CFL_matrix_create(n, n);
+        // dT[i] = CFL_matrix_create(n, n);
 
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         T[i] = ((opt_mask & OPT_LAZY) || (opt_mask & OPT_BLOCK))
@@ -252,8 +252,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
     t_src_is_empty[0] = false;
 
+    // Need to do from_base to correctly initialize fields
     GRB_TRY(GrB_Matrix_dup(&MSrc.base, TSrc[0].base));
     MSrc = CFL_matrix_from_base(MSrc.base);
+
     GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
     M1 = CFL_matrix_create(n, n);
@@ -392,9 +394,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         // #endif
     }
 
-    // needed?
+    // maybe can do everything for dT from the start
     for (int32_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_dup(&dT[i].base, T[i].base));
+        dT[i] = CFL_matrix_from_base(dT[i].base);
     }
 
     // Rule [Variable -> Variable1 Variable2]
@@ -425,7 +428,19 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
             // ? <- this means that without this step, unit tests pass,
             // although algorithm requires it.
+
+            // printf("TSrc:\n");
+            // PRINT_MATRIX(TSrc[bin_rule.nonterm].base);
+            // printf("dT:\n");
+            // PRINT_MATRIX(dT[bin_rule.prod_A].base);
+
+            // tests fail on this because they compare answers incorrectly
             GRB_TRY(CFL_mxm(&M2, &TSrc[bin_rule.nonterm], &dT[bin_rule.prod_A], false, false, opt_mask));
+
+            // printf("row M2 = TSrc * dT:\n");
+            // PRINT_MATRIX(M2.base_row);
+            // printf("col M2 = TSrc * dT:\n");
+            // PRINT_MATRIX(M2.base_col);
 
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("After M = TSrc^A * T^B:\n");
