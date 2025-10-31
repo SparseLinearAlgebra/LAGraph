@@ -100,6 +100,7 @@ GrB_Info matrix_clear_empty(Matrix *A, int8_t optimizations) {
         return matrix_clear_format(A, optimizations);
     }
 
+    CFL_matrix_update(A);
     if (A->nvals == 0) {
         return GrB_SUCCESS;
     }
@@ -127,6 +128,8 @@ GrB_Info matrix_dup_format(Matrix *output, Matrix *input, int8_t optimizations) 
     }
 
     if (!output->is_both) {
+        CFL_matrix_update(output);
+        CFL_matrix_update(input);
         Matrix *larger = output->nvals > input->nvals ? output : input;
 
         matrix_to_format(output, larger->format, false);
@@ -151,6 +154,7 @@ GrB_Info matrix_dup_empty(Matrix *output, Matrix *input, int8_t optimizations) {
         return matrix_dup_format(output, input, optimizations);
     }
 
+    CFL_matrix_update(input);
     if (input->nvals == 0) {
         return matrix_clear_empty(output, optimizations);
     }
@@ -196,6 +200,8 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
     GrB_Scalar scalar_true;
     GrB_Scalar_new(&scalar_true, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(scalar_true, true);
+
+    CFL_matrix_update(matrix);
 
     if (matrix->block_type == VEC_VERT) {
         // fix: change to lagraph malloc
@@ -254,6 +260,8 @@ void block_matrix_to_diag(Matrix *diag, Matrix *input) {
     GrB_Scalar_new(&scalar_true, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(scalar_true, true);
 
+    CFL_matrix_update(input);
+
     GrB_Index *rows = malloc(input->nvals * sizeof(GrB_Index));
     GrB_Index *cols = malloc(input->nvals * sizeof(GrB_Index));
     GrB_Matrix_extractTuples_BOOL(rows, cols, NULL, &input->nvals, input->base);
@@ -285,6 +293,8 @@ void block_matrix_reduce(Matrix *matrix, Matrix *input, int8_t optimizations) {
     GrB_Scalar scalar_true;
     GrB_Scalar_new(&scalar_true, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(scalar_true, true);
+
+    CFL_matrix_update(input);
 
     GrB_Index *rows = malloc(input->nvals * sizeof(GrB_Index));
     GrB_Index *cols = malloc(input->nvals * sizeof(GrB_Index));
@@ -329,9 +339,12 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
 GrB_Info matrix_sort_lazy(Matrix *A, bool reverse) {
     for (size_t i = 0; i < A->base_matrices_count; i++) {
         for (size_t j = i + 1; j < A->base_matrices_count; j++) {
-            Matrix first = reverse ? A->base_matrices[i] : A->base_matrices[j];
-            Matrix second = reverse ? A->base_matrices[j] : A->base_matrices[i];
-            if (first.nvals < second.nvals) {
+            Matrix *first = reverse ? &A->base_matrices[i] : &A->base_matrices[j];
+            Matrix *second = reverse ? &A->base_matrices[j] : &A->base_matrices[i];
+            CFL_matrix_update(first);
+            CFL_matrix_update(second);
+
+            if (first->nvals < second->nvals) {
                 Matrix temp = A->base_matrices[i];
                 A->base_matrices[i] = A->base_matrices[j];
                 A->base_matrices[j] = temp;
@@ -363,6 +376,7 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold, int8_t optimizations) 
     matrix_sort_lazy(A, false);
 
     for (size_t i = 0; i < A->base_matrices_count; i++) {
+        CFL_matrix_update(&A->base_matrices[i]);
         if (new_size == 0 || A->base_matrices[i].nvals > threshold) {
             new_matrices[new_size++] = A->base_matrices[i];
             continue;
@@ -381,7 +395,6 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold, int8_t optimizations) 
 }
 
 // create and update methods
-
 void CFL_matrix_update(Matrix *matrix) {
     if (!matrix->is_lazy) {
         GrB_Matrix_nvals(&matrix->nvals, matrix->base);
@@ -483,6 +496,8 @@ GrB_Info matrix_mxm_format(Matrix *output, Matrix *first, Matrix *second, bool a
         return matrix_mxm(output, first, second, accum, swap);
     }
 
+    CFL_matrix_update(first);
+    CFL_matrix_update(second);
     GrB_Index left_nvals = swap ? second->nvals : first->nvals;
     GrB_Index right_nvals = swap ? first->nvals : second->nvals;
 
@@ -507,11 +522,15 @@ GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second, bool ac
         return matrix_mxm_format(output, first, second, accum, swap, optimizations);
     }
 
+    CFL_matrix_update(first);
+    CFL_matrix_update(second);
+
     if (first->nvals == 0 || second->nvals == 0) {
         if (accum) {
             return GrB_SUCCESS;
         }
 
+        CFL_matrix_update(output);
         if (output->nvals == 0) {
             return GrB_SUCCESS;
         }
@@ -532,6 +551,8 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         return matrix_mxm_empty(output, first, second, accum, swap, optimizations);
     }
 
+    CFL_matrix_update(second);
+
     matrix_combine_lazy(first, second->nvals, optimizations);
     matrix_sort_lazy(first, false);
 
@@ -549,7 +570,9 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
     }
 
     for (size_t i = 0; i < first->base_matrices_count; i++) {
+        CFL_matrix_update(&acc_matrices[i]);
         for (size_t j = i + 1; j < first->base_matrices_count; j++) {
+            CFL_matrix_update(&acc_matrices[j]);
             if (acc_matrices[i].nvals > acc_matrices[j].nvals) {
                 Matrix temp = acc_matrices[i];
                 acc_matrices[i] = acc_matrices[j];
@@ -654,6 +677,10 @@ GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool 
     }
 
     if (!output->is_both) {
+        CFL_matrix_update(output);
+        CFL_matrix_update(first);
+        CFL_matrix_update(second);
+    
         Matrix *larger = output->nvals > first->nvals ? output : first;
         larger = larger->nvals > second->nvals ? larger : second;
 
@@ -684,6 +711,10 @@ GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second, bool a
     if (!(optimizations & OPT_EMPTY)) {
         return matrix_wise_format(output, first, second, accum, optimizations);
     }
+
+    CFL_matrix_update(first);
+    CFL_matrix_update(second);
+    CFL_matrix_update(output);
 
     if (output == first) {
         if (first->nvals == 0) {
@@ -754,6 +785,7 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         bool found = false;
 
         for (size_t i = 0; i < first->base_matrices_count; i++) {
+            CFL_matrix_update(&first->base_matrices[i]);
             size_t self_nvals =
                 first->base_matrices[i].nvals >= 10 ? first->base_matrices[i].nvals : 10;
 
@@ -846,6 +878,9 @@ GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask, int8_t optimizations) 
         return matrix_rsub(output, mask);
     }
 
+    CFL_matrix_update(output);
+    CFL_matrix_update(mask);
+
     Matrix *larger_matrix = output->nvals > mask->nvals ? output : mask;
     matrix_to_format(output, larger_matrix->format, false);
     matrix_to_format(mask, larger_matrix->format, false);
@@ -872,6 +907,8 @@ GrB_Info matrix_rsub_empty(Matrix *output, Matrix *mask, int8_t optimizations) {
         return matrix_rsub_format(output, mask, optimizations);
     }
 
+    CFL_matrix_update(mask);
+    CFL_matrix_update(output);
     if (mask->nvals == 0 || output->nvals == 0) {
         return GrB_SUCCESS;
     }
@@ -888,6 +925,7 @@ GrB_Info matrix_rsub_lazy(Matrix *output, Matrix *mask, int8_t optimizations) {
         return matrix_rsub_empty(output, mask, optimizations);
     }
 
+    CFL_matrix_update(output);
     matrix_combine_lazy(mask, output->nvals, optimizations);
     matrix_sort_lazy(mask, true);
 
@@ -946,6 +984,7 @@ GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask, int8_t optimizations) {
 
 //     A = &temp;
 //     GxB_print(A->base, pr);
+//     CFL_matrix_update(A);
 //     // printf("nnz: %ld\n", A->nvals);
 //     GrB_free(&_temp);
 // }
