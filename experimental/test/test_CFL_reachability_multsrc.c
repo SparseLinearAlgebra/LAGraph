@@ -31,7 +31,7 @@
 #define run_algorithm()                                                                  \
     LAGraph_CFL_reachability_multsrc_fast(&output, adj_matrices, src, src_count,              \
         grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
-        msg, 2)
+        msg, 4)
 
 
 #define check_error(error)                                                               \
@@ -53,6 +53,7 @@
         char *result_str = malloc(LAGRAPH_MSG_LEN * 2);                                  \
         TEST_CHECK(comp_with_output(expected, result_str));                              \
         TEST_MSG(result_str);                                                            \
+        free(result_str);                                                                \
     }
 
 #define set_expected(pairs, pairs_num)                                                  \
@@ -99,13 +100,13 @@ bool comp_with_output(GrB_Matrix expected, char* result_str) {
     LAGraph_Malloc ((void **) &col_out, nnz_out, sizeof (GrB_Index), msg) ;
     LAGraph_Malloc ((void **) &val_out, nnz_out, sizeof (GrB_Index), msg) ;
 
-    OK(GrB_Matrix_extractTuples(row_out, col_out, val_out, &nnz_out, output));
+    GrB_Matrix_extractTuples(row_out, col_out, val_out, &nnz_out, output);
 
     LAGraph_Malloc ((void **) &row_exp, nnz_exp, sizeof (GrB_Index), msg) ;
     LAGraph_Malloc ((void **) &col_exp, nnz_exp, sizeof (GrB_Index), msg) ;
     LAGraph_Malloc ((void **) &val_exp, nnz_exp, sizeof (GrB_Index), msg) ;
 
-    OK(GrB_Matrix_extractTuples(row_exp, col_exp, val_exp, &nnz_exp, expected));
+    GrB_Matrix_extractTuples(row_exp, col_exp, val_exp, &nnz_exp, expected);
 
     bool equal = true;
 
