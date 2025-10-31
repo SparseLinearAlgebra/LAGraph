@@ -32,19 +32,29 @@ typedef enum CFL_Matrix_block Matrix_block;
 #define TO_ROW(matrix) GrB_set(matrix, GrB_ROWMAJOR, GrB_STORAGE_ORIENTATION_HINT)
 
 GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
-    // Matrix contain both formats so just switch base matrix
-    if (matrix->is_both) {
-        matrix->base = format == GrB_ROWMAJOR ? matrix->base_row : matrix->base_col;
-        matrix->format = format;
-        return GrB_SUCCESS;
-    }
-
     // No changes required
     if (matrix->format == format) {
         return GrB_SUCCESS;
     }
 
-    // Matrix contain just one matrix and format is not same
+    // Matrix contains both formats, need to update required format and switch to it
+    if (matrix->is_both) {
+        if (matrix->format == GrB_ROWMAJOR && format == GrB_COLMAJOR) {
+            GrB_Matrix_assign(matrix->base_col, GrB_NULL, GrB_NULL, matrix->base, GrB_ALL,
+                    matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
+            TO_COL(matrix->base_col);
+            matrix->base = matrix->base_col;
+        } else if (matrix->format == GrB_COLMAJOR && format == GrB_ROWMAJOR) {
+            GrB_Matrix_assign(matrix->base_row, GrB_NULL, GrB_NULL, matrix->base, GrB_ALL,
+                    matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
+            TO_ROW(matrix->base_row);
+            matrix->base = matrix->base_row;
+        }
+        matrix->format = format;
+        return GrB_SUCCESS;
+    }
+
+    // Matrix contains just one matrix and format is not same
     GrB_Matrix *new_matrix =
         matrix->format == GrB_ROWMAJOR ? &matrix->base_col : &matrix->base_row;
     GrB_Matrix *old_matrix =
