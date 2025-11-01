@@ -59,56 +59,55 @@
         rule.count++;                                                                    \
     }
 
-// clang-format off
 #if BENCH_CFL_REACHBILITY
-    #define IS_ISO(matrix, str)                                                              \
-    {                                                                                    \
-        bool iso_flag;                                                                   \
-        GrB_Index nnz;                                                                   \
-        GxB_Matrix_iso(&iso_flag, matrix);                                               \
-        GrB_Matrix_nvals(&nnz, matrix);                                                  \
-        if (!iso_flag && nnz) {                                                          \
-            printf("-----ISO ALERT----- (%s)\n", str);                                   \
-            GxB_print(matrix, 1);                                                        \
-            printf("-------------------\n");                                             \
-        }                                                                                \
-    }
+    #define IS_ISO(matrix, str)                                                          \
+        {                                                                                \
+            bool iso_flag;                                                               \
+            GrB_Index nnz;                                                               \
+            GxB_Matrix_iso(&iso_flag, matrix);                                           \
+            GrB_Matrix_nvals(&nnz, matrix);                                              \
+            if (!iso_flag && nnz) {                                                      \
+                printf("-----ISO ALERT----- (%s)\n", str);                               \
+                GxB_print(matrix, 1);                                                    \
+                printf("-------------------\n");                                         \
+            }                                                                            \
+        }
 
-    #define TIMER_START()                                                                    \
-    {                                                                                    \
-        start_time = LAGraph_WallClockTime();                                            \
-    }
+    #define TIMER_START()                                                                \
+        {                                                                                \
+            start_time = LAGraph_WallClockTime();                                        \
+        }
 
-    #define TIMER_STOP(label, accumulator)                                                   \
-    {                                                                                    \
-        end_time = LAGraph_WallClockTime();                                              \
-        printf("%s %.3fs\n", label, end_time - start_time);                              \
-        if (accumulator != NULL) {                                                       \
-            *(accumulator) += (end_time - start_time);                                   \
-        }                                                                                \
-    }
+    #define TIMER_STOP(label, accumulator)                                               \
+        {                                                                                \
+            end_time = LAGraph_WallClockTime();                                          \
+            printf("%s %.3fs\n", label, end_time - start_time);                          \
+            if (accumulator != NULL) {                                                   \
+                *(accumulator) += (end_time - start_time);                               \
+            }                                                                            \
+        }
 
-    #define IS_ROW(matrix, str)                                                              \
-    {                                                                                    \
-        int32_t orientation;                                                             \
-        GrB_get(matrix, &orientation, GrB_STORAGE_ORIENTATION_HINT);                     \
-        if (orientation != GrB_ROWMAJOR) {                                               \
-            printf("-----NOT A ROW----- (%s)\n", str);                                   \
-            GxB_print(matrix, 1);                                                        \
-            printf("-------------------\n");                                             \
-        }                                                                                \
-    }
+    #define IS_ROW(matrix, str)                                                          \
+        {                                                                                \
+            int32_t orientation;                                                         \
+            GrB_get(matrix, &orientation, GrB_STORAGE_ORIENTATION_HINT);                 \
+            if (orientation != GrB_ROWMAJOR) {                                           \
+                printf("-----NOT A ROW----- (%s)\n", str);                               \
+                GxB_print(matrix, 1);                                                    \
+                printf("-------------------\n");                                         \
+            }                                                                            \
+        }
 
-    #define IS_COL(matrix, str)                                                              \
-    {                                                                                    \
-        int32_t orientation;                                                             \
-        GrB_get(matrix, &orientation, GrB_STORAGE_ORIENTATION_HINT);                     \
-        if (orientation != GrB_COLMAJOR) {                                               \
-            printf("-----NOT A COL----- (%s)\n", str);                                   \
-            GxB_print(matrix, 1);                                                        \
-            printf("-------------------\n");                                             \
-        }                                                                                \
-    }
+    #define IS_COL(matrix, str)                                                          \
+        {                                                                                \
+            int32_t orientation;                                                         \
+            GrB_get(matrix, &orientation, GrB_STORAGE_ORIENTATION_HINT);                 \
+            if (orientation != GrB_COLMAJOR) {                                           \
+                printf("-----NOT A COL----- (%s)\n", str);                               \
+                GxB_print(matrix, 1);                                                    \
+                printf("-------------------\n");                                         \
+            }                                                                            \
+        }
 #else
     #define IS_ISO(matrix, str)
     #define TIMER_START()
@@ -245,7 +244,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Create nonterms matrices
     for (size_t i = 0; i < symbols_amount; i++) {
-        GrB_Matrix matrix;
 
         GrB_Index nrows;
         GrB_Matrix_nrows(&nrows, adj_matrices[i]);
@@ -256,6 +254,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GrB_Matrix_dup(&new_adj_matrix, adj_matrices[i]);
         delta_matrices[i] = CFL_matrix_from_base(new_adj_matrix);
 
+        GrB_Matrix matrix;
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
         matrices[i] = ((optimizations & OPT_LAZY) || (optimizations & OPT_BLOCK))
                           ? CFL_matrix_from_base_lazy(matrix)
