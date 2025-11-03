@@ -62,6 +62,19 @@ static Matrix make_simple_matrix(int n) {
     return M;
 }
 
+// 1  0  .. 0
+// 0  1  .. 0
+// .. .. .. ..
+// 0  0  .. 0
+static Matrix make_simple_matrix_inverted(int n) {
+    GrB_Matrix A;
+    OK(GrB_Matrix_new(&A, GrB_BOOL, n, n));
+    OK(GrB_Matrix_setElement_BOOL(A, true, 0, 0));
+    OK(GrB_Matrix_setElement_BOOL(A, true, 1, 1));
+    Matrix M = CFL_matrix_from_base(A);
+    return M;
+}
+
 // 1  1  .. 1
 // 1  1  .. 1
 // .. .. .. ..
@@ -81,6 +94,50 @@ static Matrix make_ones_matrix(int n) {
 }
 
 static void free_matrix(Matrix *M) { CFL_matrix_free(M); }
+
+static bool compare_matrices(Matrix first, Matrix second) {
+    Matrix A, B, C;
+    A = CFL_matrix_to_base(&first, OPT_LAZY);
+    B = CFL_matrix_to_base(&second, OPT_LAZY);
+    C = CFL_matrix_create(A.nrows, A.ncols);
+
+    if (A.nvals != B.nvals) {
+        CFL_matrix_free(&A);
+        CFL_matrix_free(&B);
+        CFL_matrix_free(&C);
+
+        return false;
+    }
+
+    GrB_eWiseMult(C.base, GrB_NULL, false, GrB_EQ_BOOL, A.base, B.base, GrB_NULL);
+    CFL_matrix_update(&C);
+
+    bool result = C.nvals == A.nvals;
+
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
+    CFL_matrix_free(&C);
+
+    return result;
+}
+
+static void test_compare_matrices_function(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A = make_simple_matrix(5);
+    Matrix B = make_simple_matrix_inverted(5);
+
+    TEST_CHECK(!compare_matrices(A, B));
+    TEST_CHECK(compare_matrices(A, A));
+    TEST_CHECK(compare_matrices(B, B));
+
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
+
+    teardown();
+#endif
+}
 
 //------------------------------------------------------------------------------
 // Сreation and Free
@@ -642,10 +699,228 @@ static void test_CFL_empty_rsub_both_empty(void) {
 }
 
 //------------------------------------------------------------------------------
+// Lazy optimization
+//------------------------------------------------------------------------------
+
+static void test_CFL_lazy_create(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    GrB_Matrix A_base;
+    GrB_Matrix_new(&A_base, GrB_BOOL, 5, 5);
+    Matrix A = CFL_matrix_from_base_lazy(A_base);
+    TEST_CHECK(A.base_matrices != NULL);
+    TEST_CHECK(A.base_matrices_count == 1);
+    TEST_CHECK(A.is_lazy == true);
+    TEST_CHECK(A.nvals == 0);
+
+    teardown();
+#endif
+}
+
+// Create lazy matrix
+// 1 1 1 0 .. 0 (count of 1: 111)
+// 1 0 0 0 .. 0 (count of 1: 1)
+// 1 1 0 0 .. 0 (count of 1: 11)
+// . . . . .. .
+// 0 0 0 0 .. 0
+static Matrix make_lazy_matrix(size_t base_matrices_count) {
+    size_t n = 0;
+    Matrix base_matrices[base_matrices_count];
+    // 1 -> 1, 2 -> 11, 3 -> 111, 4 -> 1111
+    for (size_t i = 0; i < base_matrices_count; i++) {
+        n *= 10;
+        n++;
+    }
+
+    size_t tmp_n = 0;
+    for (size_t i = 0; i < base_matrices_count; i++) {
+        tmp_n *= 10;
+        tmp_n++;
+        GrB_Matrix base_matrix;
+        GrB_Matrix_new(&base_matrix, GrB_BOOL, n, n);
+        for (size_t j = 0; j < tmp_n; j++) {
+            // i+1 for future testing of sorting matrices
+            GrB_Matrix_setElement_BOOL(base_matrix, true, (i + 1) % base_matrices_count,
+                                       j);
+        }
+
+        base_matrices[(i + 1) % base_matrices_count] = CFL_matrix_from_base(base_matrix);
+    }
+
+    GrB_Matrix _result;
+    GrB_Matrix_new(&_result, GrB_BOOL, n, n);
+    Matrix result = CFL_matrix_from_base_lazy(_result);
+
+    result.is_lazy = true;
+    result.base_matrices_count = base_matrices_count;
+    for (size_t i = 0; i < base_matrices_count; i++) {
+        result.base_matrices[i] = base_matrices[i];
+    }
+
+    CFL_matrix_update(&result);
+
+    return result;
+}
+
+static void test_CFL_lazy_mxm(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        for (size_t is_reverse = 0; is_reverse < 2; is_reverse++) {
+            Matrix A = make_lazy_matrix(4);
+            Matrix B = make_ones_matrix(1111);
+            Matrix C = CFL_matrix_create(1111, 1111);
+
+            Matrix A_base = CFL_matrix_to_base(&A, OPT_LAZY);
+            Matrix B_base = CFL_matrix_to_base(&B, OPT_LAZY);
+            Matrix C_base = CFL_matrix_to_base(&C, OPT_LAZY);
+
+            CFL_mxm(&C, &A, &B, is_accum, is_reverse, OPT_LAZY);
+            CFL_mxm(&C_base, &A_base, &B_base, is_accum, is_reverse, 0);
+
+            TEST_CHECK(compare_matrices(C, C_base));
+
+            free_matrix(&A);
+            free_matrix(&B);
+            free_matrix(&C);
+            free_matrix(&A_base);
+            free_matrix(&B_base);
+            free_matrix(&C_base);
+        }
+    }
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        for (size_t is_reverse = 0; is_reverse < 2; is_reverse++) {
+            Matrix A = make_lazy_matrix(4);
+            Matrix B = CFL_matrix_create(1111, 1111);
+            Matrix C = CFL_matrix_create(1111, 1111);
+
+            Matrix A_base = CFL_matrix_to_base(&A, OPT_LAZY);
+            Matrix B_base = CFL_matrix_to_base(&B, OPT_LAZY);
+            Matrix C_base = CFL_matrix_to_base(&C, OPT_LAZY);
+
+            CFL_mxm(&C, &A, &B, is_accum, is_reverse, OPT_LAZY);
+            CFL_mxm(&C_base, &A_base, &B_base, is_accum, is_reverse, 0);
+
+            TEST_CHECK(compare_matrices(C, C_base));
+
+            free_matrix(&A);
+            free_matrix(&B);
+            free_matrix(&C);
+            free_matrix(&A_base);
+            free_matrix(&B_base);
+            free_matrix(&C_base);
+        }
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_lazy_wise(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        Matrix A = make_lazy_matrix(4);
+        Matrix B = CFL_matrix_create(1111, 1111);
+        Matrix C = CFL_matrix_create(1111, 1111);
+
+        Matrix A_base = CFL_matrix_to_base(&A, OPT_LAZY);
+        Matrix B_base = CFL_matrix_to_base(&B, OPT_LAZY);
+        Matrix C_base = CFL_matrix_to_base(&C, OPT_LAZY);
+
+        CFL_wise(&C, &A, &B, is_accum, OPT_LAZY);
+        CFL_wise(&C_base, &A_base, &B_base, is_accum, 0);
+
+        TEST_CHECK(compare_matrices(A, C_base));
+
+        free_matrix(&A);
+        free_matrix(&B);
+        free_matrix(&C);
+        free_matrix(&A_base);
+        free_matrix(&B_base);
+        free_matrix(&C_base);
+    }
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        Matrix A = CFL_matrix_create(1111, 1111);
+        Matrix B = make_lazy_matrix(4);
+        Matrix C = CFL_matrix_create(1111, 1111);
+
+        Matrix A_base = CFL_matrix_to_base(&A, OPT_LAZY);
+        Matrix B_base = CFL_matrix_to_base(&B, OPT_LAZY);
+        Matrix C_base = CFL_matrix_to_base(&C, OPT_LAZY);
+
+        CFL_wise(&C, &A, &B, is_accum, OPT_LAZY);
+        CFL_wise(&C_base, &A_base, &B_base, is_accum, 0);
+
+        TEST_CHECK(compare_matrices(C, C_base));
+
+        free_matrix(&A);
+        free_matrix(&B);
+        free_matrix(&C);
+        free_matrix(&A_base);
+        free_matrix(&B_base);
+        free_matrix(&C_base);
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_lazy_rsub(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    {
+        Matrix A = make_lazy_matrix(4);
+        Matrix B = CFL_matrix_create(1111, 1111);
+
+        Matrix A_base = CFL_matrix_to_base(&A, OPT_LAZY);
+        Matrix B_base = CFL_matrix_to_base(&B, OPT_LAZY);
+
+        CFL_rsub(&A, &B, OPT_LAZY);
+        CFL_rsub(&A_base, &B_base, 0);
+
+        TEST_CHECK(compare_matrices(A, A_base));
+
+        free_matrix(&A);
+        free_matrix(&B);
+        free_matrix(&A_base);
+        free_matrix(&B_base);
+    }
+
+    {
+        Matrix A = CFL_matrix_create(1111, 1111);
+        Matrix B = make_lazy_matrix(4);
+
+        Matrix A_base = CFL_matrix_to_base(&A, OPT_LAZY);
+        Matrix B_base = CFL_matrix_to_base(&B, OPT_LAZY);
+
+        CFL_rsub(&A, &B, OPT_LAZY);
+        CFL_rsub(&A_base, &B_base, 0);
+
+        TEST_CHECK(compare_matrices(A, A_base));
+
+        free_matrix(&A);
+        free_matrix(&B);
+        free_matrix(&A_base);
+        free_matrix(&B_base);
+    }
+
+    teardown();
+#endif
+}
+
+//------------------------------------------------------------------------------
 // TEST LIST
 //------------------------------------------------------------------------------
 
 TEST_LIST = {
+    {"test_compare_matrices_function", test_compare_matrices_function},
     {"test CFL create and free", test_CFL_create_free},
     {"test CFL mxm", test_CFL_mxm},
     {"test CFL clear", test_CFL_clear},
@@ -665,4 +940,8 @@ TEST_LIST = {
     {"test_CFL_empty_mxm_one_is_empty", test_CFL_empty_mxm_one_is_empty},
     {"test_CFL_empty_wise", test_CFL_empty_wise},
     {"test_CFL_empty_rsub_both_empty", test_CFL_empty_rsub_both_empty},
+    {"test_CFL_lazy_create", test_CFL_lazy_create},
+    {"test_CFL_lazy_mxm", test_CFL_lazy_mxm},
+    {"test_CFL_lazy_wise", test_CFL_lazy_wise},
+    {"test_CFL_lazy_rsub", test_CFL_lazy_rsub},
     {NULL, NULL}};
