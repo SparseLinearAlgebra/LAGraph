@@ -1144,7 +1144,7 @@ GrB_Info CFL_dup(CFL_Matrix *output, CFL_Matrix *input, int8_t optimizations);
 CFL_Matrix CFL_matrix_to_base
 (
     // input
-    const CFL_Matrix *matrix,
+    CFL_Matrix *matrix,
     int8_t optimizations
 ) ;
 

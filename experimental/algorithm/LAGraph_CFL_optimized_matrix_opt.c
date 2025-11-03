@@ -162,19 +162,38 @@ GrB_Info matrix_dup_empty(Matrix *output, Matrix *input, int8_t optimizations) {
     return matrix_dup_format(output, input, optimizations);
 }
 
+GrB_Info matrix_dup_lazy(Matrix *output, Matrix *input, int8_t optimizations) {
+    if (!(optimizations & OPT_LAZY)) {
+        return matrix_dup_empty(output, input, optimizations);
+    }
+
+    if (!input->is_lazy) {
+        return matrix_dup_empty(output, input, optimizations);
+    }
+
+    bool result = true;
+    for (size_t i = 0; i < input->base_matrices_count; i++) {
+        result &= matrix_dup_empty(&output->base_matrices[i], &input->base_matrices[i],
+                                   optimizations);
+    }
+    output->base_matrices_count = input->base_matrices_count;
+
+    return result;
+}
+
 GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block format);
 
 GrB_Info matrix_dup_block(Matrix *output, Matrix *input, int8_t optimizations) {
     if (!(optimizations & OPT_BLOCK)) {
-        return matrix_dup_empty(output, input, optimizations);
+        return matrix_dup_lazy(output, input, optimizations);
     }
 
     if (output->block_type == CELL && input->block_type == CELL) {
-        return matrix_dup_empty(output, input, optimizations);
+        return matrix_dup_lazy(output, input, optimizations);
     }
 
     block_matrix_hyper_rotate_i(input, output->block_type);
-    return matrix_dup_empty(output, input, optimizations);
+    return matrix_dup_lazy(output, input, optimizations);
 }
 
 // block optimization specific methods
@@ -355,7 +374,7 @@ GrB_Info matrix_sort_lazy(Matrix *A, bool reverse) {
     return GrB_SUCCESS;
 }
 
-Matrix CFL_matrix_to_base(const Matrix *input, int8_t optimizations) {
+Matrix CFL_matrix_to_base(Matrix *input, int8_t optimizations) {
     if (!input->is_lazy) {
         Matrix result = CFL_matrix_create(input->nrows, input->ncols);
         CFL_dup(&result, input, optimizations);
@@ -363,7 +382,16 @@ Matrix CFL_matrix_to_base(const Matrix *input, int8_t optimizations) {
     }
 
     Matrix acc = CFL_matrix_create(input->nrows, input->ncols);
-    Matrix matrix = CFL_matrix_create(input->nrows, input->ncols);
+
+    GrB_Matrix _matrix;
+    GrB_Matrix_new(&_matrix, GrB_BOOL, input->nrows, input->ncols);
+    Matrix matrix = CFL_matrix_from_base_lazy(_matrix);
+
+    for (size_t i = 0; i < input->base_matrices_count; i++) {
+        Matrix base = CFL_matrix_create(input->nrows, input->ncols);
+        matrix.base_matrices[i] = base;
+    }
+
     CFL_dup(&matrix, input, optimizations);
 
     matrix_sort_lazy(&matrix, false);
