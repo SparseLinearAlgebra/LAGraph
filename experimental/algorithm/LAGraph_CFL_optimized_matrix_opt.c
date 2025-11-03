@@ -355,18 +355,25 @@ GrB_Info matrix_sort_lazy(Matrix *A, bool reverse) {
     return GrB_SUCCESS;
 }
 
-GrB_Matrix CFL_matrix_lazy_to_base(Matrix *matrix, int8_t optimizations) {
-    GrB_Matrix _acc;
-    GrB_Matrix_new(&_acc, GrB_BOOL, matrix->nrows, matrix->ncols);
-    Matrix acc = CFL_matrix_from_base(_acc);
-
-    matrix_sort_lazy(matrix, false);
-    for (size_t j = 0; j < matrix->base_matrices_count; j++) {
-        CFL_wise(&acc, &acc, &matrix->base_matrices[j], false, optimizations);
-        GrB_free(&matrix->base_matrices[j].base);
+Matrix CFL_matrix_to_base(const Matrix *input, int8_t optimizations) {
+    if (!input->is_lazy) {
+        Matrix result = CFL_matrix_create(input->nrows, input->ncols);
+        CFL_dup(&result, input, optimizations);
+        return result;
     }
 
-    return acc.base;
+    Matrix acc = CFL_matrix_create(input->nrows, input->ncols);
+    Matrix matrix = CFL_matrix_create(input->nrows, input->ncols);
+    CFL_dup(&matrix, input, optimizations);
+
+    matrix_sort_lazy(&matrix, false);
+    for (size_t j = 0; j < matrix.base_matrices_count; j++) {
+        CFL_wise(&acc, &acc, &matrix.base_matrices[j], false, optimizations);
+    }
+
+    CFL_matrix_free(&matrix);
+
+    return acc;
 }
 
 GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold, int8_t optimizations) {
@@ -428,7 +435,7 @@ Matrix CFL_matrix_from_base(GrB_Matrix matrix) {
     Matrix result;
 
     result.base = matrix;
-    result.nvals = 0; // We will get actual info in update functoin
+    result.nvals = 0; // We will get actual info in update function
     result.nrows = 0;
     result.ncols = 0;
 
@@ -440,7 +447,7 @@ Matrix CFL_matrix_from_base(GrB_Matrix matrix) {
 
     // Lazy addition optimization fields
     result.is_lazy = false;
-    result.base_matrices = malloc(sizeof(CFL_Matrix) * 40); // TODO: dynamic size
+    result.base_matrices = NULL;
     result.base_matrices_count = 0;
 
     // Block optimization fields
@@ -455,6 +462,7 @@ Matrix CFL_matrix_from_base_lazy(GrB_Matrix matrix) {
 
     Matrix lazy_result = CFL_matrix_from_base(matrix);
     lazy_result.is_lazy = true;
+    lazy_result.base_matrices = malloc(sizeof(CFL_Matrix) * 40); // TODO: dynamic size
     lazy_result.base_matrices[0] = result;
     lazy_result.base_matrices_count = 1;
     CFL_matrix_update(&lazy_result);
@@ -680,7 +688,7 @@ GrB_Info matrix_wise_format(Matrix *output, Matrix *first, Matrix *second, bool 
         CFL_matrix_update(output);
         CFL_matrix_update(first);
         CFL_matrix_update(second);
-    
+
         Matrix *larger = output->nvals > first->nvals ? output : first;
         larger = larger->nvals > second->nvals ? larger : second;
 
