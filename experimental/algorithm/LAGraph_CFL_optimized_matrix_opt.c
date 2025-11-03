@@ -605,18 +605,6 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
                          optimizations);
     }
 
-    for (size_t i = 0; i < first->base_matrices_count; i++) {
-        CFL_matrix_update(&acc_matrices[i]);
-        for (size_t j = i + 1; j < first->base_matrices_count; j++) {
-            CFL_matrix_update(&acc_matrices[j]);
-            if (acc_matrices[i].nvals > acc_matrices[j].nvals) {
-                Matrix temp = acc_matrices[i];
-                acc_matrices[i] = acc_matrices[j];
-                acc_matrices[j] = temp;
-            }
-        }
-    }
-
     GrB_Matrix acc;
     GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
                    swap ? first->ncols : second->ncols);
@@ -803,7 +791,7 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
 
     if (!first->is_lazy && second->is_lazy) {
         for (size_t i = 0; i < second->base_matrices_count; i++) {
-            matrix_wise_empty(output, first, &second->base_matrices[i], false,
+            matrix_wise_empty(output, first, &second->base_matrices[i], true,
                               optimizations);
         }
 
@@ -845,6 +833,8 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         first->base_matrices[first->base_matrices_count++] = other;
         break;
     }
+
+    CFL_matrix_update(output);
 
     return GrB_SUCCESS;
 }
