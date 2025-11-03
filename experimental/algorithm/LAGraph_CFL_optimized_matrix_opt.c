@@ -914,18 +914,6 @@ GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask, int8_t optimizations) 
     if (!output->is_both) {
         return matrix_rsub(output, mask);
     }
-
-    printf("LOOOOOO\n\n");
-
-    matrix_to_format(output, GrB_ROWMAJOR, false);
-    GrB_Info result = matrix_rsub(output, mask);
-
-    if (result < GrB_SUCCESS) {
-        return result;
-    }
-
-    matrix_to_format(output, GrB_COLMAJOR, false);
-    return matrix_rsub(output, mask);
 }
 
 GrB_Info matrix_rsub_empty(Matrix *output, Matrix *mask, int8_t optimizations) {
