@@ -35,6 +35,12 @@ extern GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_bool);
 extern GrB_Info matrix_clear_format(Matrix *A, int8_t optimizations);
 extern GrB_Info matrix_dup_format(Matrix *output, Matrix *input, int8_t optimizations);
 
+// extern GrB_Info matrix_clear_empty(Matrix *A, int8_t optimizations);
+// extern GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second,
+//                                  bool accum, bool swap, int8_t optimizations);
+// extern GrB_Info matrix_wise_empty(Matrix *output, Matrix *first, Matrix *second,
+//                                   bool accum, int8_t optimizations);
+
 //------------------------------------------------------------------------------
 // helpers
 //------------------------------------------------------------------------------
@@ -229,7 +235,7 @@ static void test_CFL_dup(void) {
         CFL_Matrix A = make_simple_matrix(3);
         CFL_Matrix B = CFL_matrix_create(3, 3);
 
-        OK(CFL_dup(&A, &B, OPT_FORMAT));
+        OK(CFL_dup(&A, &B, mask));
 
         GrB_Index nvals_A, nvals_B;
         OK(GrB_Matrix_nvals(&nvals_A, A.base));
@@ -240,6 +246,19 @@ static void test_CFL_dup(void) {
         free_matrix(&A);
         free_matrix(&B);
     }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_dup_same(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    CFL_Matrix A = make_simple_matrix(3);
+    OK(CFL_dup(&A, &A, 0));
+
+    free_matrix(&A);
 
     teardown();
 #endif
@@ -459,6 +478,170 @@ static void test_CFL_format_wise_when_both(void) {
 }
 
 //------------------------------------------------------------------------------
+// Empty optimization
+//------------------------------------------------------------------------------
+
+static void test_CFL_empty_clear_empty_matrix(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A = CFL_matrix_create(5, 5);
+
+    OK(CFL_clear(&A, OPT_EMPTY));
+    TEST_CHECK(A.nvals == 0);
+
+    CFL_matrix_free(&A);
+
+    teardown();
+#endif
+}
+
+static void test_CFL_empty_dup(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A = CFL_matrix_create(5, 5);
+    Matrix B = make_ones_matrix(5);
+
+    OK(CFL_dup(&A, &B, OPT_EMPTY));
+    TEST_CHECK(A.nvals == 25);
+
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
+
+    teardown();
+#endif
+}
+
+static void test_CFL_empty_mxm_one_is_empty(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A, B, C;
+
+    // accum
+    A = CFL_matrix_create(5, 5);
+    B = make_ones_matrix(5);
+    C = make_ones_matrix(5);
+
+    OK(CFL_mxm(&C, &A, &B, true, false, OPT_EMPTY));
+    TEST_CHECK(C.nvals == 25);
+
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
+    CFL_matrix_free(&C);
+
+    // without accum
+    A = CFL_matrix_create(5, 5);
+    B = make_ones_matrix(5);
+    C = make_ones_matrix(5);
+
+    OK(CFL_mxm(&C, &A, &B, false, false, OPT_EMPTY));
+    TEST_CHECK(C.nvals == 0);
+
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
+    CFL_matrix_free(&C);
+
+    // output empty
+    A = CFL_matrix_create(5, 5);
+    B = make_ones_matrix(5);
+    C = CFL_matrix_create(5, 5);
+
+    OK(CFL_mxm(&C, &A, &B, false, false, OPT_EMPTY));
+    TEST_CHECK(C.nvals == 0);
+
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
+    CFL_matrix_free(&C);
+
+    teardown();
+#endif
+}
+
+// wise(C, A, B, accum)
+// matrix may be empty and full
+// we have 16 states
+static void test_CFL_empty_wise(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A, B, C;
+
+    for (size_t is_first_empty = 0; is_first_empty < 2; is_first_empty++) {
+        for (size_t is_second_empty = 0; is_second_empty < 2; is_second_empty++) {
+            for (size_t is_output_empty = 0; is_output_empty < 2; is_output_empty++) {
+                for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+                    A = is_first_empty ? CFL_matrix_create(5, 5) : make_ones_matrix(5);
+                    B = is_second_empty ? CFL_matrix_create(5, 5) : make_ones_matrix(5);
+                    C = is_output_empty ? CFL_matrix_create(5, 5) : make_ones_matrix(5);
+
+                    CFL_wise(&C, &A, &B, is_accum, OPT_EMPTY);
+
+                    TEST_CHECK(A.nvals == (is_first_empty ? 0 : 25));
+                    TEST_CHECK(B.nvals == (is_second_empty ? 0 : 25));
+
+                    if (is_first_empty && is_second_empty) {
+                        if (!is_accum) {
+                            TEST_CHECK(C.nvals == 0);
+                        } else {
+                            TEST_CHECK(C.nvals == (is_output_empty ? 0 : 25));
+                        }
+                    } else {
+                        TEST_CHECK(C.nvals == 25);
+                    }
+
+                    CFL_matrix_free(&A);
+                    CFL_matrix_free(&B);
+                    CFL_matrix_free(&C);
+                }
+            }
+        }
+    }
+
+    // if output equal first argument (iadd)
+    for (size_t is_first_empty = 0; is_first_empty < 2; is_first_empty++) {
+        for (size_t is_second_empty = 0; is_second_empty < 2; is_second_empty++) {
+            for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+                A = is_first_empty ? CFL_matrix_create(5, 5) : make_ones_matrix(5);
+                B = is_second_empty ? CFL_matrix_create(5, 5) : make_ones_matrix(5);
+
+                CFL_wise(&A, &A, &B, is_accum, OPT_EMPTY);
+
+                TEST_CHECK(B.nvals == (is_second_empty ? 0 : 25));
+
+                if (is_second_empty) {
+                    TEST_CHECK(A.nvals == (is_first_empty ? 0 : 25));
+                } else {
+                    TEST_CHECK(A.nvals == 25);
+                }
+
+                CFL_matrix_free(&A);
+                CFL_matrix_free(&B);
+            }
+        }
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_empty_rsub_both_empty(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A, B;
+    A = CFL_matrix_create(5, 5);
+    B = CFL_matrix_create(5, 5);
+
+    OK(CFL_rsub(&A, &B, OPT_EMPTY));
+    TEST_CHECK(A.nvals == 0);
+
+    teardown();
+#endif
+}
+
+//------------------------------------------------------------------------------
 // TEST LIST
 //------------------------------------------------------------------------------
 
@@ -467,6 +650,7 @@ TEST_LIST = {
     {"test CFL mxm", test_CFL_mxm},
     {"test CFL clear", test_CFL_clear},
     {"test CFL dup", test_CFL_dup},
+    {"test_CFL_dup_same", test_CFL_dup_same},
     {"test_CFL_wise", test_CFL_wise},
     {"test_CFL_rsub", test_CFL_rsub},
     {"test_CFL_format_create_rowmajor_matrix", test_CFL_format_create_rowmajor_matrix},
@@ -476,4 +660,9 @@ TEST_LIST = {
     {"test_CFL_format_wise_when_both", test_CFL_format_wise_when_both},
     {"test_CFL_format_mxm_second_greather_then_k",
      test_CFL_format_mxm_second_greather_then_k},
+    {"test_CFL_empty_clear_empty_matrix", test_CFL_empty_clear_empty_matrix},
+    {"test_CFL_empty_dup", test_CFL_empty_dup},
+    {"test_CFL_empty_mxm_one_is_empty", test_CFL_empty_mxm_one_is_empty},
+    {"test_CFL_empty_wise", test_CFL_empty_wise},
+    {"test_CFL_empty_rsub_both_empty", test_CFL_empty_rsub_both_empty},
     {NULL, NULL}};
