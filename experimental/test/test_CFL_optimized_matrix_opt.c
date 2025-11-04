@@ -128,15 +128,27 @@ static void test_compare_matrices_function(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
 
-    Matrix A = make_simple_matrix(5);
-    Matrix B = make_simple_matrix_inverted(5);
+    {
+        Matrix A = make_simple_matrix(5);
+        Matrix B = CFL_matrix_create(5, 5);
 
-    TEST_CHECK(!compare_matrices(A, B));
-    TEST_CHECK(compare_matrices(A, A));
-    TEST_CHECK(compare_matrices(B, B));
+        TEST_CHECK(!compare_matrices(A, B));
 
-    CFL_matrix_free(&A);
-    CFL_matrix_free(&B);
+        CFL_matrix_free(&A);
+        CFL_matrix_free(&B);
+    }
+
+    {
+        Matrix A = make_simple_matrix(5);
+        Matrix B = make_simple_matrix_inverted(5);
+
+        TEST_CHECK(!compare_matrices(A, B));
+        TEST_CHECK(compare_matrices(A, A));
+        TEST_CHECK(compare_matrices(B, B));
+
+        CFL_matrix_free(&A);
+        CFL_matrix_free(&B);
+    }
 
     teardown();
 #endif
@@ -439,36 +451,7 @@ static void test_CFL_format_dup_format(void) {
     TEST_CHECK(A.nvals == B.nvals);
     TEST_CHECK(A.base != B.base);
 
-    GrB_Index nvals_A = A.nvals;
-    GrB_Index nvals_B = B.nvals;
-
-    GrB_Index *rows_A = malloc(nvals_A * sizeof(GrB_Index));
-    GrB_Index *cols_A = malloc(nvals_A * sizeof(GrB_Index));
-    bool *vals_A = malloc(nvals_A * sizeof(bool));
-
-    GrB_Index *rows_B = malloc(nvals_B * sizeof(GrB_Index));
-    GrB_Index *cols_B = malloc(nvals_B * sizeof(GrB_Index));
-    bool *vals_B = malloc(nvals_B * sizeof(bool));
-
-    GrB_Matrix_extractTuples_BOOL(rows_A, cols_A, vals_A, &nvals_A, A.base);
-    GrB_Matrix_extractTuples_BOOL(rows_B, cols_B, vals_B, &nvals_B, B.base);
-
-    bool equal = true;
-    for (GrB_Index i = 0; i < nvals_A; i++) {
-        bool found = false;
-        for (GrB_Index j = 0; j < nvals_B; j++) {
-            if (rows_A[i] == rows_B[j] && cols_A[i] == cols_B[j] &&
-                vals_A[i] == vals_B[j]) {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            equal = false;
-            break;
-        }
-    }
-    TEST_CHECK(equal);
+    TEST_CHECK(compare_matrices(A, B));
 
     // NULL Matrix
     GrB_Matrix old_base = A.base;
@@ -962,59 +945,23 @@ static Matrix make_block_vector(size_t n, size_t alpha, Matrix_block format) {
 
         return CFL_matrix_from_base(result);
 
-    case VEC_HORIZ:
-        GrB_Matrix_new(&result, GrB_BOOL, n, n * alpha);
-        for (size_t i = 0; i < n * alpha; i++) {
-            for (size_t j = 0; j < n; j++) {
-                bool value = j == (i + 5 % n) || j == ((i + 6) % n) ? true : false;
-                if (!value)
-                    continue;
+    default:
+        break;
+    }
 
-                GrB_Matrix_setElement_BOOL(result, value, i, j);
-            }
+    // VEC_HORIZ:
+    GrB_Matrix_new(&result, GrB_BOOL, n, n * alpha);
+    for (size_t i = 0; i < n * alpha; i++) {
+        for (size_t j = 0; j < n; j++) {
+            bool value = j == (i + 5 % n) || j == ((i + 6) % n) ? true : false;
+            if (!value)
+                continue;
+
+            GrB_Matrix_setElement_BOOL(result, value, i, j);
         }
-
-        return CFL_matrix_from_base(result);
-    }
-}
-
-static Matrix make_lazy_block_matrix(size_t base_matrices_count) {
-    size_t n = 0;
-    Matrix base_matrices[base_matrices_count];
-    // 1 -> 1, 2 -> 11, 3 -> 111, 4 -> 1111
-    for (size_t i = 0; i < base_matrices_count; i++) {
-        n *= 10;
-        n++;
     }
 
-    size_t tmp_n = 0;
-    for (size_t i = 0; i < base_matrices_count; i++) {
-        tmp_n *= 10;
-        tmp_n++;
-        GrB_Matrix base_matrix;
-        GrB_Matrix_new(&base_matrix, GrB_BOOL, n, n);
-        for (size_t j = 0; j < tmp_n; j++) {
-            // i+1 for future testing of sorting matrices
-            GrB_Matrix_setElement_BOOL(base_matrix, true, (i + 1) % base_matrices_count,
-                                       j);
-        }
-
-        base_matrices[(i + 1) % base_matrices_count] = CFL_matrix_from_base(base_matrix);
-    }
-
-    GrB_Matrix _result;
-    GrB_Matrix_new(&_result, GrB_BOOL, n, n);
-    Matrix result = CFL_matrix_from_base_lazy(_result);
-
-    result.is_lazy = true;
-    result.base_matrices_count = base_matrices_count;
-    for (size_t i = 0; i < base_matrices_count; i++) {
-        result.base_matrices[i] = base_matrices[i];
-    }
-
-    CFL_matrix_update(&result);
-
-    return result;
+    return CFL_matrix_from_base(result);
 }
 
 // TODO: create equality check with basic mxm
