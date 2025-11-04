@@ -346,6 +346,7 @@ void block_matrix_repeat_into_vector(Matrix *matrix, Matrix *input,
 
     GxB_Matrix_concat(matrix->base, tiles, block_count, 1, GrB_NULL);
     CFL_matrix_update(matrix);
+    free(tiles);
 }
 
 // lazy optimization specific methods
@@ -384,6 +385,8 @@ Matrix CFL_matrix_to_base(Matrix *input, int8_t optimizations) {
     GrB_Matrix _matrix;
     GrB_Matrix_new(&_matrix, GrB_BOOL, input->nrows, input->ncols);
     Matrix matrix = CFL_matrix_from_base_lazy(_matrix);
+    GrB_free(&_matrix);
+    matrix.base = NULL;
 
     for (size_t i = 0; i < input->base_matrices_count; i++) {
         Matrix base = CFL_matrix_create(input->nrows, input->ncols);
@@ -420,6 +423,7 @@ GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold, int8_t optimizations) 
         GrB_free(&A->base_matrices[i].base);
     }
 
+    free(A->base_matrices);
     A->base_matrices = new_matrices;
     A->base_matrices_count = new_size;
     CFL_matrix_update(A);
@@ -506,8 +510,24 @@ Matrix CFL_matrix_create(GrB_Index nrows, GrB_Index ncols) {
 
 // TODO: free all base_matrices, free format matrices
 void CFL_matrix_free(Matrix *matrix) {
-    free(matrix->base_matrices);
-    GrB_free(&matrix->base);
+    if (matrix->is_lazy) {
+        for (size_t i = 0; i < matrix->base_matrices_count; i++) {
+            CFL_matrix_free(&matrix->base_matrices[i]);
+        }
+
+        free(matrix->base_matrices);
+        matrix->base_matrices = NULL;
+        return;
+    }
+
+    if (matrix->is_both) {
+        // matrix->base is base_row or base_col
+        GrB_Matrix_free(&matrix->base_row);
+        GrB_Matrix_free(&matrix->base_col);
+        return;
+    }
+
+    GrB_Matrix_free(&matrix->base);
 }
 
 // mxm operations
@@ -613,13 +633,18 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
                           optimizations);
         GrB_free(&acc_matrices[i].base);
     }
+    free(accs);
+    free(acc_matrices);
 
     if (accum) {
-        return matrix_wise_empty(output, output, &acc_matrix, false, optimizations);
+        GrB_Info result =
+            matrix_wise_empty(output, output, &acc_matrix, false, optimizations);
+        CFL_matrix_free(&acc_matrix);
+        return result;
     }
 
     GrB_Info result = matrix_dup_block(output, &acc_matrix, optimizations);
-    GrB_free(&acc_matrix.base);
+    CFL_matrix_free(&acc_matrix);
 
     return result;
 }
@@ -675,7 +700,10 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
 
     Matrix temp = CFL_matrix_create(first->nrows, diag.ncols);
     matrix_mxm_lazy(&temp, first, &diag, false, swap, optimizations);
-    return matrix_wise_block(output, output, &temp, false, optimizations);
+    GrB_Info result = matrix_wise_block(output, output, &temp, false, optimizations);
+    CFL_matrix_free(&temp);
+    CFL_matrix_free(&diag);
+    return result;
 }
 
 // wise operations

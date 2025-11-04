@@ -423,14 +423,17 @@ static void test_CFL_format_clear_format(void) {
 
     // NULL Matrix
     GrB_Matrix old_base = A.base;
-    GrB_Matrix old_base_row = A.base;
+    GrB_Matrix old_base_row = A.base_row;
+    GrB_Matrix old_base_col = A.base_col;
     A.base = NULL;
     A.base_row = NULL;
+    A.base_col = NULL;
     GrB_Info result = matrix_clear_format(&A, OPT_FORMAT);
     OK(!result);
 
     A.base = old_base;
     A.base_row = old_base_row;
+    A.base_col = old_base_col;
     CFL_matrix_free(&A);
 
     teardown();
@@ -455,14 +458,17 @@ static void test_CFL_format_dup_format(void) {
 
     // NULL Matrix
     GrB_Matrix old_base = A.base;
-    GrB_Matrix old_base_row = A.base;
+    GrB_Matrix old_base_row = A.base_row;
+    GrB_Matrix old_base_col = A.base_col;
     A.base = NULL;
     A.base_row = NULL;
+    A.base_col = NULL;
     GrB_Info result = matrix_dup_format(&A, &B, OPT_FORMAT);
     OK(!result);
 
     A.base = old_base;
     A.base_row = old_base_row;
+    A.base_col = old_base_col;
     CFL_matrix_free(&A);
     CFL_matrix_free(&B);
 
@@ -471,6 +477,8 @@ static void test_CFL_format_dup_format(void) {
     B = CFL_matrix_create(5, 5);
     OK(matrix_to_format(&A, GrB_COLMAJOR, true));
     OK(matrix_dup_format(&A, &B, 0));
+    CFL_matrix_free(&A);
+    CFL_matrix_free(&B);
 
     teardown();
 #endif
@@ -487,6 +495,10 @@ static void test_CFL_format_mxm_second_greather_then_k(void) {
     OK(matrix_to_format(&A, GrB_COLMAJOR, false));
     OK(CFL_mxm(&C, &A, &B, false, false, OPT_FORMAT));
     TEST_CHECK(C.nvals == 0);
+
+    free_matrix(&A);
+    free_matrix(&B);
+    free_matrix(&C);
 
     teardown();
 #endif
@@ -505,12 +517,15 @@ static void test_CFL_format_wise_when_both(void) {
 
     // NULL Matrix
     GrB_Matrix old_base = A.base;
-    GrB_Matrix old_base_row = A.base;
+    GrB_Matrix old_base_row = A.base_row;
+    GrB_Matrix old_base_col = A.base_col;
     A.base = NULL;
     A.base_row = NULL;
+    A.base_col = NULL;
     GrB_Info result = CFL_wise(&A, &A, &B, false, OPT_FORMAT);
     A.base = old_base;
     A.base_row = old_base_row;
+    A.base_col = old_base_col;
     OK(!result);
 
     CFL_matrix_free(&A);
@@ -680,6 +695,9 @@ static void test_CFL_empty_rsub_both_empty(void) {
     OK(CFL_rsub(&A, &B, OPT_EMPTY));
     TEST_CHECK(A.nvals == 0);
 
+    free_matrix(&A);
+    free_matrix(&B);
+
     teardown();
 #endif
 }
@@ -699,6 +717,8 @@ static void test_CFL_lazy_create(void) {
     TEST_CHECK(A.base_matrices_count == 1);
     TEST_CHECK(A.is_lazy == true);
     TEST_CHECK(A.nvals == 0);
+
+    free_matrix(&A);
 
     teardown();
 #endif
@@ -737,6 +757,8 @@ static Matrix make_lazy_matrix(size_t base_matrices_count) {
     GrB_Matrix _result;
     GrB_Matrix_new(&_result, GrB_BOOL, n, n);
     Matrix result = CFL_matrix_from_base_lazy(_result);
+    GrB_free(&_result);
+    result.base = NULL;
 
     result.is_lazy = true;
     result.base_matrices_count = base_matrices_count;
@@ -1010,6 +1032,9 @@ static void test_CFL_block_dup(void) {
 
         OK(CFL_dup(&B, &A, OPT_BLOCK));
         TEST_CHECK(B.nvals == A.nvals);
+
+        free_matrix(&A);
+        free_matrix(&B);
     }
 
     {
@@ -1018,6 +1043,9 @@ static void test_CFL_block_dup(void) {
 
         OK(CFL_dup(&B, &A, OPT_BLOCK));
         TEST_CHECK(B.nvals == A.nvals);
+
+        free_matrix(&A);
+        free_matrix(&B);
     }
 
     {
@@ -1026,6 +1054,9 @@ static void test_CFL_block_dup(void) {
 
         OK(CFL_dup(&B, &A, OPT_BLOCK));
         TEST_CHECK(B.nvals == A.nvals);
+
+        free_matrix(&A);
+        free_matrix(&B);
     }
 
     {
@@ -1034,6 +1065,9 @@ static void test_CFL_block_dup(void) {
 
         OK(CFL_dup(&B, &A, OPT_BLOCK));
         TEST_CHECK(B.nvals == A.nvals);
+
+        free_matrix(&A);
+        free_matrix(&B);
     }
 
     teardown();
@@ -1114,16 +1148,17 @@ static void test_CFL_block_hyper_rotate(void) {
         GrB_Matrix _A;
         GrB_Matrix_new(&_A, GrB_BOOL, 20 * 20, 20);
         Matrix A = CFL_matrix_from_base_lazy(_A);
+        GrB_free(&_A);
 
         GrB_Matrix _A0;
         GrB_Matrix_new(&_A0, GrB_BOOL, 20 * 20, 20);
         Matrix A0 = CFL_matrix_from_base(_A0);
         GrB_Matrix _A1;
         GrB_Matrix_new(&_A1, GrB_BOOL, 20 * 20, 20);
-        Matrix A1 = CFL_matrix_from_base(_A0);
+        Matrix A1 = CFL_matrix_from_base(_A1);
         GrB_Matrix _A2;
         GrB_Matrix_new(&_A2, GrB_BOOL, 20 * 20, 20);
-        Matrix A2 = CFL_matrix_from_base(_A0);
+        Matrix A2 = CFL_matrix_from_base(_A2);
 
         A.base_matrices[0] = A0;
         A.base_matrices[1] = A1;
@@ -1135,9 +1170,9 @@ static void test_CFL_block_hyper_rotate(void) {
         TEST_CHECK(A.ncols == 20 * 20);
 
         free_matrix(&A);
-        free_matrix(&A0);
-        free_matrix(&A1);
-        free_matrix(&A2);
+        // free_matrix(&A0);
+        // free_matrix(&A1);
+        // free_matrix(&A2);
     }
 
     // cell
