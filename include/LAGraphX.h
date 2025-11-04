@@ -1220,6 +1220,33 @@ GrB_Info CFL_matrix_to_base
 
 GrB_Info CFL_clear(CFL_Matrix *A, int8_t optimizations);
 
+GrB_Info LAGraph_CFL_reachability_adv
+(
+    // Output
+    GrB_Matrix *outputs, // Array of matrices containing results.
+                         // The size of the array must be equal to nonterms_count.
+                         //
+                         // outputs[k]: (i, j) = true if and only if there is a path
+                         // from node i to node j whose edge labels form a word
+                         // derivable from the non-terminal 'k' of the specified CFG.
+    // Input
+    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
+                                    // The length of this array is equal to the count of
+                                    // terminals (terms_count).
+                                    //
+                                    // adj_matrices[t]: (i, j) == 1 if and only if there
+                                    // is an edge between nodes i and j with the label of
+                                    // the terminal corresponding to index 't' (where t is
+                                    // in the range [0, terms_count - 1]).
+    size_t symbols_amount,
+    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
+    size_t rules_count,             // The total number of rules in the CFG.
+    char *msg,                      // Message string for error reporting.
+    int8_t optimizations            // Optimizations flags
+);
+
+
+
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
 //------------------------------------------------------------------------------
