@@ -535,7 +535,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (matrices[i].base_matrices_count == 0) {
             outputs[i] = matrices[i].base;
         } else {
-            outputs[i] = CFL_matrix_lazy_to_base(&matrices[i], optimizations);
+            CFL_Matrix result = CFL_matrix_to_base(&matrices[i], optimizations);
+            outputs[i] = result.base;
         }
         // outputs[i] = matrices[i].base;
     }
