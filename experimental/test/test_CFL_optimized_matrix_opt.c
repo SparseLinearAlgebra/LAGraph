@@ -34,6 +34,9 @@ typedef enum CFL_Matrix_block Matrix_block;
 extern GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_bool);
 extern GrB_Info matrix_clear_format(Matrix *A, int8_t optimizations);
 extern GrB_Info matrix_dup_format(Matrix *output, Matrix *input, int8_t optimizations);
+extern GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block format);
+extern void block_matrix_to_diag(Matrix *diag, Matrix *input);
+extern void block_matrix_reduce(Matrix *matrix, Matrix *input, int8_t optimizations);
 
 // extern GrB_Info matrix_clear_empty(Matrix *A, int8_t optimizations);
 // extern GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second,
@@ -916,6 +919,346 @@ static void test_CFL_lazy_rsub(void) {
 }
 
 //------------------------------------------------------------------------------
+// Block optimization
+//------------------------------------------------------------------------------
+
+// Create block vector
+static Matrix make_block_vector(size_t n, size_t alpha, Matrix_block format) {
+    GrB_Matrix result;
+    switch (format) {
+    case CELL:
+        // 1 1 0 0 0 0 .
+        // 0 1 1 0 0 0 .
+        // 0 0 1 1 0 0 .
+        // 0 0 0 1 1 0 .
+        // 0 0 0 0 1 1 .
+        // 1 0 0 0 0 1 .
+        // 1 1 0 0 0 0 .
+        // . . . . . . .
+        GrB_Matrix_new(&result, GrB_BOOL, n, n);
+        for (size_t i = 0; i < n; i++) {
+            for (size_t j = 0; j < n; j++) {
+                bool value = j == (i % n) || j == ((i + 1) % n) ? true : false;
+                if (!value)
+                    continue;
+
+                GrB_Matrix_setElement_BOOL(result, value, i, j);
+            }
+        }
+
+        return CFL_matrix_from_base(result);
+
+    case VEC_VERT:
+        GrB_Matrix_new(&result, GrB_BOOL, n * alpha, n);
+        for (size_t i = 0; i < n * alpha; i++) {
+            for (size_t j = 0; j < n; j++) {
+                bool value = j == (i + 2 % n) || j == ((i + 3) % n) ? true : false;
+                if (!value)
+                    continue;
+
+                GrB_Matrix_setElement_BOOL(result, value, i, j);
+            }
+        }
+
+        return CFL_matrix_from_base(result);
+
+    case VEC_HORIZ:
+        GrB_Matrix_new(&result, GrB_BOOL, n, n * alpha);
+        for (size_t i = 0; i < n * alpha; i++) {
+            for (size_t j = 0; j < n; j++) {
+                bool value = j == (i + 5 % n) || j == ((i + 6) % n) ? true : false;
+                if (!value)
+                    continue;
+
+                GrB_Matrix_setElement_BOOL(result, value, i, j);
+            }
+        }
+
+        return CFL_matrix_from_base(result);
+    }
+}
+
+static Matrix make_lazy_block_matrix(size_t base_matrices_count) {
+    size_t n = 0;
+    Matrix base_matrices[base_matrices_count];
+    // 1 -> 1, 2 -> 11, 3 -> 111, 4 -> 1111
+    for (size_t i = 0; i < base_matrices_count; i++) {
+        n *= 10;
+        n++;
+    }
+
+    size_t tmp_n = 0;
+    for (size_t i = 0; i < base_matrices_count; i++) {
+        tmp_n *= 10;
+        tmp_n++;
+        GrB_Matrix base_matrix;
+        GrB_Matrix_new(&base_matrix, GrB_BOOL, n, n);
+        for (size_t j = 0; j < tmp_n; j++) {
+            // i+1 for future testing of sorting matrices
+            GrB_Matrix_setElement_BOOL(base_matrix, true, (i + 1) % base_matrices_count,
+                                       j);
+        }
+
+        base_matrices[(i + 1) % base_matrices_count] = CFL_matrix_from_base(base_matrix);
+    }
+
+    GrB_Matrix _result;
+    GrB_Matrix_new(&_result, GrB_BOOL, n, n);
+    Matrix result = CFL_matrix_from_base_lazy(_result);
+
+    result.is_lazy = true;
+    result.base_matrices_count = base_matrices_count;
+    for (size_t i = 0; i < base_matrices_count; i++) {
+        result.base_matrices[i] = base_matrices[i];
+    }
+
+    CFL_matrix_update(&result);
+
+    return result;
+}
+
+// TODO: create equality check with basic mxm
+static void test_CFL_block_mxm(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        for (size_t is_reverse = 0; is_reverse < 2; is_reverse++) {
+            for (size_t first_format = 0; first_format < 3; first_format++) {
+                for (size_t second_format = 0; second_format < 3; second_format++) {
+                    Matrix A = make_block_vector(20, 20, first_format);
+                    Matrix B = make_block_vector(20, 20, second_format);
+
+                    Matrix C;
+                    if (first_format != CELL && second_format != CELL) {
+                        size_t nrows = first_format == VEC_HORIZ ? 20 : 20 * 20;
+                        size_t ncols = first_format == VEC_HORIZ ? 20 * 20 : 20;
+                        C = CFL_matrix_create(nrows, ncols);
+                    } else {
+                        C = CFL_matrix_create(first_format == CELL ? 20 : 20 * 20,
+                                              second_format == CELL ? 20 : 20 * 20);
+                    }
+
+                    OK(CFL_mxm(&C, &A, &B, is_accum, is_reverse, OPT_BLOCK));
+
+                    free_matrix(&A);
+                    free_matrix(&B);
+                    free_matrix(&C);
+                }
+            }
+        }
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_block_dup(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    {
+        Matrix A = make_block_vector(20, 20, VEC_HORIZ);
+        Matrix B = CFL_matrix_create(20 * 20, 20);
+
+        OK(CFL_dup(&B, &A, OPT_BLOCK));
+        TEST_CHECK(B.nvals == A.nvals);
+    }
+
+    {
+        Matrix A = make_block_vector(20, 20, VEC_VERT);
+        Matrix B = CFL_matrix_create(20 * 20, 20);
+
+        OK(CFL_dup(&B, &A, OPT_BLOCK));
+        TEST_CHECK(B.nvals == A.nvals);
+    }
+
+    {
+        Matrix A = make_block_vector(20, 20, VEC_HORIZ);
+        Matrix B = CFL_matrix_create(20, 20 * 20);
+
+        OK(CFL_dup(&B, &A, OPT_BLOCK));
+        TEST_CHECK(B.nvals == A.nvals);
+    }
+
+    {
+        Matrix A = make_block_vector(20, 20, VEC_VERT);
+        Matrix B = CFL_matrix_create(20, 20 * 20);
+
+        OK(CFL_dup(&B, &A, OPT_BLOCK));
+        TEST_CHECK(B.nvals == A.nvals);
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_block_wise(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    {
+        Matrix A = make_block_vector(20, 20, VEC_HORIZ);
+        Matrix B = make_block_vector(20, 20, VEC_HORIZ);
+        Matrix C = make_block_vector(20, 20, VEC_HORIZ);
+
+        TEST_CHECK(CFL_wise(&C, &A, &B, false, OPT_BLOCK) == GrB_INVALID_VALUE);
+
+        free_matrix(&A);
+        free_matrix(&B);
+        free_matrix(&C);
+    }
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        for (size_t is_reverse = 0; is_reverse < 2; is_reverse++) {
+            for (size_t first_format = 0; first_format < 3; first_format++) {
+                for (size_t second_format = 0; second_format < 3; second_format++) {
+                    Matrix A = make_block_vector(20, 20, first_format);
+                    Matrix B = make_block_vector(20, 20, second_format);
+
+                    OK(CFL_wise(&A, &A, &B, is_accum, OPT_BLOCK));
+
+                    free_matrix(&A);
+                    free_matrix(&B);
+                }
+            }
+        }
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_block_rsub(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+        for (size_t is_reverse = 0; is_reverse < 2; is_reverse++) {
+            for (size_t first_format = 0; first_format < 3; first_format++) {
+                for (size_t second_format = 0; second_format < 3; second_format++) {
+                    Matrix A = make_block_vector(20, 20, first_format);
+                    Matrix B = make_block_vector(20, 20, second_format);
+
+                    if ((first_format != CELL && second_format == CELL) ||
+                        (first_format == CELL && second_format != CELL)) {
+                        TEST_CHECK(CFL_rsub(&A, &B, OPT_BLOCK) == GrB_INVALID_VALUE);
+                    } else {
+                        OK(CFL_rsub(&A, &B, OPT_BLOCK));
+                    }
+
+                    free_matrix(&A);
+                    free_matrix(&B);
+                }
+            }
+        }
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_block_hyper_rotate(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    // lazy
+    {
+        GrB_Matrix _A;
+        GrB_Matrix_new(&_A, GrB_BOOL, 20 * 20, 20);
+        Matrix A = CFL_matrix_from_base_lazy(_A);
+
+        GrB_Matrix _A0;
+        GrB_Matrix_new(&_A0, GrB_BOOL, 20 * 20, 20);
+        Matrix A0 = CFL_matrix_from_base(_A0);
+        GrB_Matrix _A1;
+        GrB_Matrix_new(&_A1, GrB_BOOL, 20 * 20, 20);
+        Matrix A1 = CFL_matrix_from_base(_A0);
+        GrB_Matrix _A2;
+        GrB_Matrix_new(&_A2, GrB_BOOL, 20 * 20, 20);
+        Matrix A2 = CFL_matrix_from_base(_A0);
+
+        A.base_matrices[0] = A0;
+        A.base_matrices[1] = A1;
+        A.base_matrices[2] = A2;
+        A.base_matrices_count = 3;
+
+        OK(block_matrix_hyper_rotate_i(&A, VEC_HORIZ));
+        TEST_CHECK(A.nrows == 20);
+        TEST_CHECK(A.ncols == 20 * 20);
+
+        free_matrix(&A);
+        free_matrix(&A0);
+        free_matrix(&A1);
+        free_matrix(&A2);
+    }
+
+    // cell
+    {
+        Matrix A = CFL_matrix_create(5, 5);
+
+        OK(block_matrix_hyper_rotate_i(&A, VEC_HORIZ));
+
+        free_matrix(&A);
+    }
+
+    // VERT
+    {
+        Matrix A = make_block_vector(5, 5, VEC_VERT);
+        TEST_CHECK(A.nvals != 0);
+        TEST_CHECK(A.is_lazy != true);
+
+        OK(block_matrix_hyper_rotate_i(&A, VEC_HORIZ));
+
+        free_matrix(&A);
+    }
+
+    teardown();
+#endif
+}
+
+static void test_CFL_block_to_diag(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A = CFL_matrix_create(5, 5);
+    Matrix B = CFL_matrix_create(5, 5);
+
+    GrB_Index nvals_before;
+    GrB_Matrix_nvals(&nvals_before, A.base);
+    block_matrix_to_diag(&A, &B);
+    GrB_Index nvals_after;
+    GrB_Matrix_nvals(&nvals_after, A.base);
+
+    // A didn't change
+    TEST_CHECK(nvals_after == nvals_before);
+
+    free_matrix(&A);
+    free_matrix(&B);
+
+    teardown();
+#endif
+}
+
+static void test_CFL_block_to_reduce(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    Matrix A = CFL_matrix_create(5, 5);
+    Matrix B = make_ones_matrix(5);
+
+    // cell matrix cause just dup
+    block_matrix_reduce(&A, &B, OPT_BLOCK);
+    TEST_CHECK(A.nvals == B.nvals);
+
+    free_matrix(&A);
+    free_matrix(&B);
+
+    teardown();
+#endif
+}
+
+//------------------------------------------------------------------------------
 // TEST LIST
 //------------------------------------------------------------------------------
 
@@ -944,4 +1287,11 @@ TEST_LIST = {
     {"test_CFL_lazy_mxm", test_CFL_lazy_mxm},
     {"test_CFL_lazy_wise", test_CFL_lazy_wise},
     {"test_CFL_lazy_rsub", test_CFL_lazy_rsub},
+    {"test_CFL_block_mxm", test_CFL_block_mxm},
+    {"test_CFL_block_wise", test_CFL_block_wise},
+    {"test_CFL_block_rsub", test_CFL_block_rsub},
+    {"test_CFL_block_dup", test_CFL_block_dup},
+    {"test_CFL_block_hyper_rotate", test_CFL_block_hyper_rotate},
+    {"test_CFL_block_to_diag", test_CFL_block_to_diag},
+    {"test_CFL_block_to_reduce", test_CFL_block_to_reduce},
     {NULL, NULL}};
