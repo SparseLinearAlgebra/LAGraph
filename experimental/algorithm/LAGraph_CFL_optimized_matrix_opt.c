@@ -246,33 +246,31 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
         return GrB_SUCCESS;
     }
 
-    if (matrix->block_type == VEC_HORIZ) {
-        GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
-        GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
+    GrB_Index *nrows = malloc(matrix->nvals * sizeof(GrB_Index));
+    GrB_Index *ncols = malloc(matrix->nvals * sizeof(GrB_Index));
 
-        GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
+    GrB_Matrix_extractTuples_BOOL(nrows, ncols, NULL, &matrix->nvals, matrix->base);
 
-        for (size_t i = 0; i < matrix->nvals; i++) {
-            nrows[i] = nrows[i] + ncols[i] / matrix->nrows * matrix->nrows;
-            ncols[i] = ncols[i] % matrix->nrows;
-        }
-
-        GrB_Matrix new;
-        GrB_Matrix_new(&new, GrB_BOOL, matrix->ncols, matrix->nrows);
-        GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals);
-        CFL_matrix_free(matrix);
-        *matrix =
-            matrix->is_lazy ? CFL_matrix_from_base_lazy(new) : CFL_matrix_from_base(new);
-        free(nrows);
-        free(ncols);
-        GrB_free(&scalar_true);
-        return GrB_SUCCESS;
+    for (size_t i = 0; i < matrix->nvals; i++) {
+        nrows[i] = nrows[i] + ncols[i] / matrix->nrows * matrix->nrows;
+        ncols[i] = ncols[i] % matrix->nrows;
     }
+
+    GrB_Matrix new;
+    GrB_Matrix_new(&new, GrB_BOOL, matrix->ncols, matrix->nrows);
+    GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals);
+    CFL_matrix_free(matrix);
+    *matrix =
+        matrix->is_lazy ? CFL_matrix_from_base_lazy(new) : CFL_matrix_from_base(new);
+    free(nrows);
+    free(ncols);
+    GrB_free(&scalar_true);
+    return GrB_SUCCESS;
 }
 
 void block_matrix_to_diag(Matrix *diag, Matrix *input) {
     if (input->block_type == CELL) {
-        exit(-1);
+        return;
     }
 
     GrB_Scalar scalar_true;
@@ -851,8 +849,8 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
     }
 
     if (output != first) {
-        fprintf(stderr, "Matrix wise currently support only iadd operation");
-        exit(-122);
+        // fprintf(stderr, "Matrix wise currently support only iadd operation");
+        return GrB_INVALID_VALUE;
     }
 
     if (first->block_type == CELL && second->block_type == CELL) {
@@ -911,9 +909,7 @@ GrB_Info matrix_rsub_format(Matrix *output, Matrix *mask, int8_t optimizations) 
     matrix_to_format(output, larger_matrix->format, false);
     matrix_to_format(mask, larger_matrix->format, false);
 
-    if (!output->is_both) {
-        return matrix_rsub(output, mask);
-    }
+    return matrix_rsub(output, mask);
 }
 
 GrB_Info matrix_rsub_empty(Matrix *output, Matrix *mask, int8_t optimizations) {
@@ -957,8 +953,8 @@ GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask, int8_t optimizations) {
 
     if ((output->block_type == CELL && mask->block_type != CELL) ||
         (output->block_type != CELL && mask->block_type == CELL)) {
-        fprintf(stderr, "Don't support rsub operation between cell and vector");
-        exit(-1);
+        // fprintf(stderr, "Don't support rsub operation between cell and vector");
+        return GrB_INVALID_VALUE;
     }
 
     if (output->block_type == CELL) {
