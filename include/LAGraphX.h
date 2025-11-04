@@ -1195,7 +1195,23 @@ GrB_Info CFL_wise(CFL_Matrix *output, CFL_Matrix *first, CFL_Matrix *second, boo
                   int8_t optimizations);
 GrB_Info CFL_rsub(CFL_Matrix *output, CFL_Matrix *mask, int8_t optimizations);
 GrB_Info CFL_dup(CFL_Matrix *output, CFL_Matrix *input, int8_t optimizations);
-GrB_Matrix CFL_matrix_lazy_to_base(CFL_Matrix *matrix, int8_t optimizations);
+
+// Converts a matrix (lazy or regular) into its evaluated base form by merging
+// all underlying base matrices. If the input matrix is not lazy, returns its copy.
+//
+// Parameters:
+//   input          - [in]  Pointer to the source matrix (may be lazy).
+//   optimizations  - [in]  Bitmask specifying enabled optimizations.
+//
+// Returns:
+//   A new matrix representing the fully evaluated base form.
+CFL_Matrix CFL_matrix_to_base
+(
+    // input
+    CFL_Matrix *matrix,
+    int8_t optimizations
+) ;
+
 GrB_Info CFL_clear(CFL_Matrix *A, int8_t optimizations);
 
 //------------------------------------------------------------------------------
