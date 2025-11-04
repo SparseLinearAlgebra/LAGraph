@@ -999,17 +999,17 @@ GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask, int8_t optimizations) {
 //     GrB_free(&_temp);
 // }
 
-void print_graph_info(Matrix *matrices, size_t count) {
-    GrB_Index nnz = 0;
+// void print_graph_info(Matrix *matrices, size_t count) {
+//     GrB_Index nnz = 0;
 
-    for (size_t i = 0; i < count; i++) {
-        Matrix *A = &matrices[i];
-        CFL_matrix_update(A);
-        nnz += A->nvals;
-    }
+//     for (size_t i = 0; i < count; i++) {
+//         Matrix *A = &matrices[i];
+//         CFL_matrix_update(A);
+//         nnz += A->nvals;
+//     }
 
-    printf("NNZ: %ld\n", nnz);
-}
+//     printf("NNZ: %ld\n", nnz);
+// }
 
 // order of optimizations: block -> lazy -> empty -> format
 
