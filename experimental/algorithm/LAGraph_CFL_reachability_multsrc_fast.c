@@ -228,7 +228,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     LG_TRY(LAGraph_Calloc((void **) &nnzs_TSrc_C, nonterms_count, sizeof(GrB_Index), msg));
 
     for (int32_t i = 0; i < terms_count; i++) {
-        Adj[i] = CFL_matrix_from_base(adj_matrices[i]);
+        Adj[i] = ((opt_mask & OPT_LAZY) || (opt_mask & OPT_BLOCK))
+                          ? CFL_matrix_from_base_lazy(adj_matrices[i])
+                          : CFL_matrix_from_base(adj_matrices[i]);
     }
 
     // Create nonterms matrices
@@ -240,13 +242,20 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
                           ? CFL_matrix_from_base_lazy(matrix)
                           : CFL_matrix_from_base(matrix);
 
+        GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
+        dT[i] = ((opt_mask & OPT_LAZY) || (opt_mask & OPT_BLOCK))
+                          ? CFL_matrix_from_base_lazy(matrix)
+                          : CFL_matrix_from_base(matrix);
+
         TSrc[i] = CFL_matrix_create(n, n);
     }
 
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0].base, true, src[i], src[i]);
     }
-    TSrc[0] = CFL_matrix_from_base(TSrc[0].base);
+    TSrc[0] = ((opt_mask & OPT_LAZY) || (opt_mask & OPT_BLOCK))
+                    ? CFL_matrix_from_base_lazy(TSrc[0].base)
+                    : CFL_matrix_from_base(TSrc[0].base);
 
     t_src_is_empty[0] = false;
 
@@ -360,7 +369,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
         // t_is_empty[term_rule.nonterm] = false;
 
-        GRB_TRY(CFL_wise(&T[term_rule.nonterm], &T[term_rule.nonterm], &Adj[term_rule.prod_A], true, opt_mask));
+        GRB_TRY(CFL_wise(&dT[term_rule.nonterm], &T[term_rule.nonterm], &Adj[term_rule.prod_A], true, opt_mask));
 
         // #ifdef DEBUG_CFL_REACHABILITY
         // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
@@ -379,8 +388,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         //     T[eps_rule.nonterm].base,true_scalar,identity_matrix,true_scalar,GrB_NULL
         // );
 
-        // dt?
-        GRB_TRY(CFL_wise(&T[eps_rule.nonterm], &T[eps_rule.nonterm], &iden, true, opt_mask));
+        GRB_TRY(CFL_wise(&dT[eps_rule.nonterm], &T[eps_rule.nonterm], &iden, true, opt_mask));
         
         // t_is_empty[eps_rule.nonterm] = false;
 
@@ -389,12 +397,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         // printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n",
         //         eps_rule.nonterm, iso_flag);
         // #endif
-    }
-
-    // maybe can do everything for dT from the start
-    for (int32_t i = 0; i < nonterms_count; i++) {
-        GRB_TRY(GrB_Matrix_dup(&dT[i].base, T[i].base));
-        dT[i] = CFL_matrix_from_base(dT[i].base);
     }
 
     // Rule [Variable -> Variable1 Variable2]
