@@ -235,9 +235,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     for (int32_t i = 0; i < nonterms_count; i++) {
         GrB_Matrix matrix;
 
-        // dT[i] = CFL_matrix_from_base(adj_matrices[i]);
-        // dT[i] = CFL_matrix_create(n, n);
-
         GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
         T[i] = ((opt_mask & OPT_LAZY) || (opt_mask & OPT_BLOCK))
                           ? CFL_matrix_from_base_lazy(matrix)
@@ -249,12 +246,12 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0].base, true, src[i], src[i]);
     }
+    TSrc[0] = CFL_matrix_from_base(TSrc[0].base);
 
     t_src_is_empty[0] = false;
 
-    // Need to do from_base to correctly initialize fields
-    GRB_TRY(GrB_Matrix_dup(&MSrc.base, TSrc[0].base));
-    MSrc = CFL_matrix_from_base(MSrc.base);
+    MSrc = CFL_matrix_create(n, n);
+    CFL_dup(&MSrc, &TSrc[0], opt_mask);
 
     GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
@@ -434,7 +431,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // printf("dT:\n");
             // PRINT_MATRIX(dT[bin_rule.prod_A].base);
 
-            // tests fail on this because they compare answers incorrectly
             GRB_TRY(CFL_mxm(&M2, &TSrc[bin_rule.nonterm], &dT[bin_rule.prod_A], false, false, opt_mask));
 
             // printf("row M2 = TSrc * dT:\n");
@@ -465,8 +461,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // ?
             GRB_TRY(CFL_mxm(&Temp2, &M2, &T[bin_rule.prod_B], false, false, opt_mask));
 
+            GRB_TRY(CFL_dup(&dT[bin_rule.nonterm], &Temp1, opt_mask));
 
-            GRB_TRY(CFL_wise(&dT[bin_rule.nonterm], &Temp1, &Temp2, false, opt_mask));
+            GRB_TRY(CFL_wise(&dT[bin_rule.nonterm], &dT[bin_rule.nonterm], &Temp2, false, opt_mask));
 
             // GRB_TRY(GrB_eWiseAdd(dT[bin_rule.nonterm].base, GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
             //             Temp1.base, Temp2.base, GrB_NULL));
@@ -507,14 +504,12 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // PRINT_MATRIX(M);
             // #endif
 
-
             // Update source vertices matrix to find appropriate paths only
             // M1[i, j] == 1 => A[j, j] == 1
             GRB_TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M1.base, GrB_NULL));
             GRB_TRY(GrB_Matrix_free(&A.base));
             GRB_TRY(GrB_Matrix_diag(&A.base, a, 0));
             A = CFL_matrix_from_base(A.base);
-
 
             // #ifdef DEBUG_CFL_REACHABILITY
             // printf("After A = dest(M)\n");
@@ -562,9 +557,13 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
             // Check if any of the matrices changed. If not, job is done.
             GrB_Index nnz_T, nnz_TSrc_B, nnz_TSrc_C;
 
-            GRB_TRY(GrB_Matrix_nvals(&nnz_T, T[bin_rule.nonterm].base));
-            GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_B, TSrc[bin_rule.prod_A].base));
-            GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_C, TSrc[bin_rule.prod_B].base));
+            CFL_matrix_update(&T[bin_rule.nonterm]);
+            CFL_matrix_update(&TSrc[bin_rule.prod_A]);
+            CFL_matrix_update(&TSrc[bin_rule.prod_B]);
+
+            nnz_T = T[bin_rule.nonterm].nvals;
+            nnz_TSrc_B = TSrc[bin_rule.prod_A].nvals;
+            nnz_TSrc_C = TSrc[bin_rule.prod_B].nvals;
             
             if (nnz_T != 0) t_is_empty[bin_rule.nonterm] = false;
             if (nnz_TSrc_B != 0) t_src_is_empty[bin_rule.prod_A] = false;
@@ -598,7 +597,13 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     // PRINT_MATRIX(MSrc)
     // #endif
 
-    GRB_TRY(GrB_Matrix_dup(output, MSrc.base));
+    if (MSrc.base_matrices_count == 0) {
+        GRB_TRY(GrB_Matrix_dup(output, MSrc.base));
+    } else {
+        CFL_Matrix res = CFL_matrix_to_base(&MSrc, opt_mask);
+        GRB_TRY(GrB_Matrix_dup(output, res.base));
+        CFL_matrix_free(&res);
+    }
 
     LG_FREE_ALL;
     return GrB_SUCCESS;
