@@ -369,7 +369,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
 
         // t_is_empty[term_rule.nonterm] = false;
 
-        GRB_TRY(CFL_wise(&dT[term_rule.nonterm], &T[term_rule.nonterm], &Adj[term_rule.prod_A], true, opt_mask));
+        GRB_TRY(CFL_wise(&T[term_rule.nonterm], &T[term_rule.nonterm], &Adj[term_rule.prod_A], true, opt_mask));
+        GRB_TRY(CFL_wise(&dT[term_rule.nonterm], &dT[term_rule.nonterm], &Adj[term_rule.prod_A], true, opt_mask));
 
         // #ifdef DEBUG_CFL_REACHABILITY
         // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
@@ -388,7 +389,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
         //     T[eps_rule.nonterm].base,true_scalar,identity_matrix,true_scalar,GrB_NULL
         // );
 
-        GRB_TRY(CFL_wise(&dT[eps_rule.nonterm], &T[eps_rule.nonterm], &iden, true, opt_mask));
+        GRB_TRY(CFL_wise(&T[eps_rule.nonterm], &T[eps_rule.nonterm], &iden, true, opt_mask));
+        GRB_TRY(CFL_wise(&dT[eps_rule.nonterm], &dT[eps_rule.nonterm], &iden, true, opt_mask));
         
         // t_is_empty[eps_rule.nonterm] = false;
 
