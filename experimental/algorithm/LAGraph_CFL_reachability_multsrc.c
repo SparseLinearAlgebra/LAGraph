@@ -425,6 +425,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 
             // M[i, j] == 1 => A[j, j] == 1
             GRB_TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M, GrB_NULL));
+            GrB_Matrix_free(&A);
             GRB_TRY(GrB_Matrix_diag(&A, a, 0));
 
             // #ifdef DEBUG_CFL_REACHABILITY
