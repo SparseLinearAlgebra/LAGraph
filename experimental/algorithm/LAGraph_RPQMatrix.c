@@ -118,11 +118,13 @@
     GrB_Info info = (s);                                \
     if (info != GrB_SUCCESS)                            \
     {                                                   \
-        fprintf(stderr, "GraphBLAS error: %d\n", info); \
+        printf("Message: %s\n", msg);                   \
+        fprintf(stderr, "GraphBLAS error: %d (%s, %d)\n", info, __FILE__, __LINE__); \
         return info;                                    \
     }                                                   \
 }
 
+char msg[LAGRAPH_MSG_LEN] ;
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -179,11 +181,7 @@ GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan)
     {
         return GrB_SUCCESS ;
     }
-    if (plan->mat != NULL)
-    {
-        OK(GrB_Matrix_free(&(plan->mat))) ;
-    }
-    if (plan->res_mat != NULL)
+    if (plan->res_mat != NULL && plan->mat != plan->res_mat)
     {
         OK(GrB_Matrix_free(&(plan->res_mat))) ;
     }
@@ -201,8 +199,8 @@ GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg) ;
 static GrB_Info LAGraph_RPQMatrixLor(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(plan->op == RPQ_MATRIX_OP_LOR, GrB_INVALID_VALUE) ;
-    LG_ASSERT(plan->res_mat == NULL, GrB_INVALID_VALUE) ;
+    LG_ASSERT_MSG(plan->op == RPQ_MATRIX_OP_LOR, GrB_INVALID_VALUE, "operator is not lor") ;
+    LG_ASSERT_MSG(plan->res_mat == NULL, GrB_INVALID_VALUE, "resulting matrix is already set as lor result") ;
 
     RPQMatrixPlan *lhs = plan->lhs ;
     RPQMatrixPlan *rhs = plan->rhs ;
@@ -234,8 +232,8 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
 {
 
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(plan->op == RPQ_MATRIX_OP_CONCAT, GrB_INVALID_VALUE) ;
-    LG_ASSERT(plan->res_mat == NULL, GrB_INVALID_VALUE) ;
+    LG_ASSERT_MSG(plan->op == RPQ_MATRIX_OP_CONCAT, GrB_INVALID_VALUE, "operator is not concat") ;
+    LG_ASSERT_MSG(plan->res_mat == NULL, GrB_INVALID_VALUE, "resulting matrix is already set as concat result") ;
 
     RPQMatrixPlan *lhs = plan->lhs ;
     RPQMatrixPlan *rhs = plan->rhs ;
@@ -263,14 +261,14 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
 static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(plan->op == RPQ_MATRIX_OP_KLEENE, GrB_INVALID_VALUE) ;
-    LG_ASSERT(plan->res_mat == NULL, GrB_INVALID_VALUE) ;
+    LG_ASSERT_MSG(plan->op == RPQ_MATRIX_OP_KLEENE, GrB_INVALID_VALUE, "operator is not kleene") ;
+    LG_ASSERT_MSG(plan->res_mat == NULL, GrB_INVALID_VALUE, "resulting matrix is already set for kleene") ;
 
     RPQMatrixPlan *lhs = plan->lhs ;
     RPQMatrixPlan *rhs = plan->rhs ;
 
     // Kleene star should have one child. Always right.
-    LG_ASSERT(lhs == NULL, GrB_INVALID_VALUE) ;
+    LG_ASSERT_MSG(lhs == NULL, GrB_INVALID_VALUE, "lhs is expected to be NULL for kleene") ;
     LG_ASSERT(rhs != NULL, GrB_NULL_POINTER) ;
 
     OK(LAGraph_RPQMatrix_solver(rhs, msg)) ;
@@ -351,8 +349,8 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
 static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(plan->op == RPQ_MATRIX_OP_KLEENE_L, GrB_INVALID_VALUE) ;
-    LG_ASSERT(plan->res_mat == NULL, GrB_INVALID_VALUE) ;
+    LG_ASSERT_MSG(plan->op == RPQ_MATRIX_OP_KLEENE_L, GrB_INVALID_VALUE, "different operator is not expected left-kleene") ;
+    LG_ASSERT_MSG(plan->res_mat == NULL, GrB_INVALID_VALUE, "resulting matrix is already set for left-kleene") ;
 
     RPQMatrixPlan *lhs = plan->lhs ; // A
     RPQMatrixPlan *rhs = plan->rhs ; // B
@@ -426,8 +424,8 @@ static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
 static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(plan->op == RPQ_MATRIX_OP_KLEENE_R, GrB_INVALID_VALUE) ;
-    LG_ASSERT(plan->res_mat == NULL, GrB_INVALID_VALUE) ;
+    LG_ASSERT_MSG(plan->op == RPQ_MATRIX_OP_KLEENE_R, GrB_INVALID_VALUE, "different operator is not expected right-kleene") ;
+    LG_ASSERT_MSG(plan->res_mat == NULL, GrB_INVALID_VALUE, "resulting matrix is already set for right-kleene") ;
 
     RPQMatrixPlan *lhs = plan->lhs ; // A
     RPQMatrixPlan *rhs = plan->rhs ; // B
@@ -473,7 +471,10 @@ static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
 
 GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg)
 {
-    LG_ASSERT(plan->res_mat == NULL, GrB_INVALID_VALUE) ;
+    if (plan->res_mat != NULL)
+    {
+        return (GrB_SUCCESS) ;
+    }
 
     switch (plan->op)
     {
@@ -500,7 +501,7 @@ GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg)
 
 GrB_Info LAGraph_RPQMatrix_initialize(void)
 {
-    sr = GxB_ANY_PAIR_BOOL ;
+    sr = LAGraph_any_one_bool ;
     op = GxB_ANY_BOOL_MONOID ;
     return GrB_SUCCESS;
 }
