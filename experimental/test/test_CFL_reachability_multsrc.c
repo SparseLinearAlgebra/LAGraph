@@ -6,7 +6,7 @@
 // LAGraph, (c) 2019-2025 by The LAGraph Contributors, All Rights Reserved.
 // SPDX-License-Identifier: BSD-2-Clause
 
-// Contributed by Ilhom Kombaev, Vlasenco Daniel, Semyon Grigoriev, St. Petersburg State University.
+// Contributed by Vlasenco Daniel, Ilhom Kombaev, Semyon Grigoriev, St. Petersburg State University.
 
 //------------------------------------------------------------------------------
 
@@ -23,16 +23,10 @@
 #include <acutest.h>
 #include <stdio.h>
 
-// #define run_algorithm()                                                                  \
-//     LAGraph_CFL_reachability_multsrc(&output, adj_matrices, src, src_count,              \
-//         grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
-//         msg)
-
 #define run_algorithm()                                                                  \
-    LAGraph_CFL_reachability_multsrc_fast(&output, adj_matrices, src, src_count,              \
+    LAGraph_CFL_reachability_multsrc(&output, adj_matrices, src, src_count,              \
         grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
-        msg, 4)
-
+        msg)
 
 #define check_error(error)                                                               \
     {                                                                                    \
@@ -48,21 +42,6 @@
         TEST_MSG("Wrong result. Actual: %s", expected);                                  \
     }
 
-#define check_result_m(expected)                                                         \
-    {                                                                                    \
-        char *result_str = malloc(LAGRAPH_MSG_LEN * 2);                                  \
-        TEST_CHECK(comp_with_output(expected, result_str));                              \
-        TEST_MSG(result_str);                                                            \
-        free(result_str);                                                                \
-    }
-
-#define set_expected(pairs, pairs_num)                                                  \
-    {                                                                                   \
-        for (int _i = 0; _i < pairs_num; _i++) {                                        \
-            GrB_Matrix_setElement(expected, true, pairs[_i][0], pairs[_i][1]);          \
-        }                                                                               \
-    }
-
 typedef struct {
     size_t nonterms_count;
     size_t terms_count;
@@ -72,104 +51,12 @@ typedef struct {
 
 GrB_Matrix *adj_matrices = NULL;
 GrB_Matrix output = NULL;
-GrB_Matrix expected = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 char msg[LAGRAPH_MSG_LEN];
 
 void setup() { LAGraph_Init(msg); }
 
 void teardown(void) { LAGraph_Finalize(msg); }
-
-bool comp_with_output(GrB_Matrix expected, char* result_str) {
-    GrB_Index nnz_out, nnz_exp;
-    OK(GrB_Matrix_nvals(&nnz_out, output));
-    OK(GrB_Matrix_nvals(&nnz_exp, expected));
-
-
-    char *ptr = result_str;
-
-    if (nnz_out != nnz_exp) {
-        ptr += sprintf(ptr, "Expected nnz: %u, actual: %u\n", nnz_exp, nnz_out);
-        // return false;
-    }
-
-    GrB_Index *row_out, *row_exp;
-    GrB_Index *col_out, *col_exp;
-    bool *val_out, *val_exp;
-    LAGraph_Malloc ((void **) &row_out, nnz_out, sizeof (GrB_Index), msg) ;
-    LAGraph_Malloc ((void **) &col_out, nnz_out, sizeof (GrB_Index), msg) ;
-    LAGraph_Malloc ((void **) &val_out, nnz_out, sizeof (GrB_Index), msg) ;
-
-    GrB_Matrix_extractTuples(row_out, col_out, val_out, &nnz_out, output);
-
-    LAGraph_Malloc ((void **) &row_exp, nnz_exp, sizeof (GrB_Index), msg) ;
-    LAGraph_Malloc ((void **) &col_exp, nnz_exp, sizeof (GrB_Index), msg) ;
-    LAGraph_Malloc ((void **) &val_exp, nnz_exp, sizeof (GrB_Index), msg) ;
-
-    GrB_Matrix_extractTuples(row_exp, col_exp, val_exp, &nnz_exp, expected);
-
-    bool equal = true;
-
-    // check if expected is a subset of actual
-    for (int i = 0; i < nnz_exp; i++) {
-        bool found = false;
-
-        for (int j = 0; j < nnz_out; j++) {
-            if (row_exp[i] == row_out[j] && col_exp[i] == col_out[j] && val_exp[i] == val_out[j]) {
-                found = true;
-            }
-        }
-        if (!found) {
-            equal = false;
-            break;
-        }
-    }
-
-    // check if actual is a subset of expected
-    for (int i = 0; i < nnz_out; i++) {
-        bool found = false;
-
-        for (int j = 0; j < nnz_exp; j++) {
-            if (row_exp[i] == row_out[j] && col_exp[i] == col_out[j] && val_exp[i] == val_out[j]) {
-                found = true;
-            }
-        }
-        if (!found) {
-            equal = false;
-            break;
-        }
-    }
-
-    if (!equal) {
-        ptr += sprintf(ptr, "Wrong result.\nExpected: ");
-
-        for (int i = 0; i < nnz_exp; i++) {
-            if (val_exp[i]) {
-                ptr += sprintf(ptr, "(%ld, %ld) ", row_exp[i], col_exp[i]);
-            }
-        }
-        ptr += sprintf(ptr, "\n");
-        ptr += sprintf(ptr, "Actual: ");
-
-        for (int i = 0; i < nnz_out; i++) {
-            if (val_out[i]) {
-                ptr += sprintf(ptr, "(%ld, %ld) ", row_out[i], col_out[i]);
-            }
-        }
-    }
-
-    ptr += sprintf(ptr, "\0");
-
-    LAGraph_Free ((void **) &row_out, msg);
-    LAGraph_Free ((void **) &col_out, msg);
-    LAGraph_Free ((void **) &val_out, msg);
-
-    LAGraph_Free ((void **) &row_exp, msg);
-    LAGraph_Free ((void **) &col_exp, msg);
-    LAGraph_Free ((void **) &val_exp, msg);
-
-    return equal;
-}
 
 char *output_to_str(size_t nonterm) {
     GrB_Index nnz = 0;
@@ -209,7 +96,6 @@ void free_workspace() {
     LAGraph_Free ((void **) &adj_matrices, msg);
 
     GrB_free(&output);
-    GrB_free(&expected);
 
     LAGraph_Free ((void **) &grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
@@ -370,12 +256,9 @@ void init_graph_double_cycle() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
 
-    int n = 4;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n));
-    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, n, n));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 4, 4));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -402,12 +285,9 @@ void init_graph_1() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
 
-    int n = 8;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n));
-    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, n, n));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 8, 8));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -441,12 +321,9 @@ void init_graph_tree() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
 
-    int n = 7;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n));
-    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, n, n));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 7, 7));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -475,11 +352,8 @@ void init_graph_one_cycle() {
 //  adj_matrices = calloc(1, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
 
-    int n = 3;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n));
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -498,12 +372,9 @@ void init_graph_line() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
 
-    int n = 5;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, n, n);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 5, 5);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -524,13 +395,10 @@ void init_graph_2() {
 //  adj_matrices = calloc(3, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 3, sizeof (GrB_Matrix), msg) ;
 
-    int n = 3;
-    GrB_Matrix_new(&expected, GrB_BOOL, n, n);
-
     GrB_Matrix adj_matrix_a, adj_matrix_b, adj_matrix_c;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, n, n);
-    GrB_Matrix_new(&adj_matrix_c, GrB_BOOL, n, n);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 3, 3);
+    GrB_Matrix_new(&adj_matrix_c, GrB_BOOL, 3, 3);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 0));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 1));
@@ -550,12 +418,9 @@ void init_graph_3() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
 
-    int n = 2;
-    GrB_Matrix_new(&expected, GrB_BOOL, n, n);
-
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, n, n);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 2, 2);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 2, 2);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 0));
@@ -581,11 +446,8 @@ void init_graph_whirlpool() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
 
-    int n = 6;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 6, 6));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 0));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
@@ -613,11 +475,8 @@ void init_graph_allout() {
 //  adj_matrices = calloc(2, sizeof(GrB_Matrix));
     LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
 
-    int n = 5;
-    OK(GrB_Matrix_new(&expected, GrB_BOOL, n, n));
-
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, n, n));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
@@ -641,16 +500,9 @@ void test_CFL_reachability_cycle_allsrc(void) {
     init_grammar_aS();
     init_graph_one_cycle();
 
-    int pairs[][2] = { {0, 0}, {0, 1}, {0, 2}, {1, 0}, {1, 1},
-                       {1, 2}, {2, 0}, {2, 1}, {2, 2} };
-    int n = 9;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
 
-
-    GrB_Matrix_free(&expected);
     free_workspace();
     teardown();
 }
@@ -664,12 +516,8 @@ void test_CFL_reachability_two_cycle_allsrc(void) {
     init_grammar_aSb();
     init_graph_double_cycle();
 
-    int pairs[][2] = { {0, 0}, {0, 3}, {1, 0}, {1, 3}, {2, 0}, {2, 3} };
-    int n = 6;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
 
     free_workspace();
     teardown();
@@ -684,12 +532,8 @@ void test_CFL_reachability_labels_more_than_nonterms_allsrc(void) {
     init_grammar_aSb();
     init_graph_2();
 
-    int pairs[][2] = { {0, 1} };
-    int n = 1;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 1)");
 
     free_workspace();
     teardown();
@@ -704,12 +548,8 @@ void test_CFL_reachability_complex_grammar_allsrc(void) {
     init_grammar_complex();
     init_graph_1();
 
-    int pairs[][2] = { {1, 6}, {0, 7} };
-    int n = 2;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 7) (1, 6)");
 
     free_workspace();
     teardown();
@@ -724,13 +564,9 @@ void test_CFL_reachability_tree_allsrc(void) {
     init_grammar_aSb();
     init_graph_tree();
 
-    int pairs[][2] = { {0, 0}, {0, 1}, {0, 3}, {0, 4}, {1, 0}, {1, 1}, {1, 3}, {1, 4}, {2, 2}, {2, 5},
-                       {3, 0}, {3, 1}, {3, 3}, {3, 4}, {4, 0}, {4, 1}, {4, 3}, {4, 4}, {5, 2}, {5, 5} };
-    int n = 20;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
+                 "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
 
     free_workspace();
     teardown();
@@ -745,12 +581,8 @@ void test_CFL_reachability_line_allsrc(void) {
     init_grammar_aSb();
     init_graph_line();
 
-    int pairs[][2] = { {0, 4}, {1, 3} };
-    int n = 2;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 4) (1, 3)");
 
     free_workspace();
     teardown();
@@ -765,12 +597,8 @@ void test_CFL_reachability_two_nodes_cycle_allsrc(void) {
     init_grammar_aSb();
     init_graph_3();
 
-    int pairs[][2] = { {0, 0}, {1, 0} };
-    int n = 2;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 0) (1, 0)");
 
     free_workspace();
     teardown();
@@ -789,12 +617,8 @@ void test_CFL_reachability_tree_msrc(void) {
     init_grammar_aSb();
     init_graph_tree();
 
-    int pairs[][2] = { {2, 2}, {2, 5}, {3, 0}, {3, 1}, {3, 3}, {3, 4} };
-    int n = 6;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(2, 2) (2, 5) (3, 0) (3, 1) (3, 3) (3, 4)");
 
     free_workspace();
     teardown();
@@ -809,13 +633,9 @@ void test_CFL_reachability_allin_1_4(void) {
     init_grammar_aS();
     init_graph_whirlpool();
 
-    size_t pairs[][2] = { {1, 0}, {1, 1}, {1, 2}, {1, 3}, {1, 4}, {1, 5},
-                                   {4, 0}, {4, 1}, {4, 2}, {4, 3}, {4, 4}, {4, 5} };
-    int n = 12;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result(
+        "(1, 0) (1, 1) (1, 2) (1, 3) (1, 4) (1, 5) (4, 0) (4, 1) (4, 2) (4, 3) (4, 4) (4, 5)");
 
     free_workspace();
     teardown();
@@ -834,14 +654,8 @@ void test_CFL_reachability_cycle_onesrc(void) {
     init_grammar_aS();
     init_graph_one_cycle();
 
-    int pairs[][2] = { {0, 0}, {0, 1}, {0, 2}
-        ,{1, 1} // IS INCORRECT, JUST CHECKING
-    };
-    int n = 3;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 0) (0, 1) (0, 2)");
 
     free_workspace();
     teardown();
@@ -856,12 +670,8 @@ void test_CFL_reachability_allin_1(void) {
     init_grammar_aS();
     init_graph_whirlpool();
 
-    int pairs[][2] = { {} };
-    int n = 0;
-    set_expected(pairs, 0);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("");
 
     free_workspace();
     teardown();
@@ -876,12 +686,8 @@ void test_CFL_reachability_allout_0(void) {
     init_grammar_aS();
     init_graph_allout();
 
-    int pairs[][2] = { {0, 1}, {0, 2}, {0, 3}, {0, 4} };
-    int n = 4;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("(0, 1) (0, 2) (0, 3) (0, 4)");
 
     free_workspace();
     teardown();
@@ -896,12 +702,8 @@ void test_CFL_reachability_allout_1(void) {
     init_grammar_aS();
     init_graph_allout();
 
-    int pairs[][2] = { {} };
-    int n = 0;
-    set_expected(pairs, n);
-
     OK(run_algorithm());
-    check_result_m(expected);
+    check_result("");
 
     free_workspace();
     teardown();
