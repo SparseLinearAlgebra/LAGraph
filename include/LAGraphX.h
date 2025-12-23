@@ -1028,6 +1028,95 @@ int LAGraph_SquareClustering
     int32_t index;   // For rules that can be grouped by index
  } LAGraph_rule_WCNF;
 
+// Flags for indecies of EWCNF rules
+enum {
+    LAGraph_EWNCF_INDEX_NONTERM = 1 << 0,
+    LAGraph_EWNCF_INDEX_PROD_A  = 1 << 1,
+    LAGraph_EWNCF_INDEX_PROD_B = 1 << 2,
+};
+
+// Production rule of Context-free grammar in Extended Weak Chomsky Normal Form
+//
+// All grammar symbols (terminal and nonterminals) are presented by natural numbers from range [0; symbols_amount).
+//
+// Rule without indecies defined by tuple of [NONTERM, PROD_A, PROD_B, INDEXED_COUNT, INDEXED]
+// in Extended Weak Chomsky Normal Form where INDEXED_COUNT and INDEXED are zero:
+// Variable -> eps: [NONTERM, -1, -1, 0, 0]
+// Variable -> X: [NONTERM, PROD_X, -1, 0, 0]
+// Variable -> X Y: [NONTERM, PROD_X, PROD_Y, 0, 0]
+//
+// Where X, Y are arbitrary grammar symbols (terminal or nonterminal)
+//
+// Example:
+// Nonterms: [0 S] [1 A] [2 B] [3 C]
+// Terms: [4 a] [5 b]
+// S -> A B  [0  1  2 0 0]
+// S -> A b  [0  1  5 0 0]
+// S -> a B  [0  4  2 0 0]
+// S -> C    [0  3 -1 0 0]
+// A -> a    [1  4 -1 0 0]
+// B -> b    [2  5 -1 0 0]
+// C -> b    [3  5 -1 0 0]
+// S -> eps  [0 -1 -1 0 0]
+//
+// Warning: 
+// Variable -> _ B: [NONTERM, -1, PROD_B, INDEXED_COUNT, INDEXED] is not valid rule and may causes errors
+//
+// --------------- Indexed rules --------------- 
+// Rule may represent a family of indexed productions of size `indexed_count`.
+//
+// Indexed symbols are specified by 'indexed' bit mask
+// Posible indexed forms:
+// 
+//   1) N   -> A_i B        [N, A, B, INDEXED_COUNT, INDEX_PROD_A]
+//   2) N   -> A B_i        [N, A, B, INDEXED_COUNT, INDEX_PROD_A]
+//   3) N   -> A_i B_i      [N, A, B, INDEXED_COUNT, INDEX_PROD_A | INDEX_PROD_B]
+//   4) N_i -> A B          [N, A, B, INDEXED_COUNT, INDEX_NONTERM]
+//   5) N_i -> A_i B        [N, A, B, INDEXED_COUNT, INDEX_NONTERM | INDEX_PROD_A]
+//   6) N_i -> A B_i        [N, A, B, INDEXED_COUNT, INDEX_NONTERM | INDEX_PROD_B]
+//   7) N_i -> A_i B_i      [N, A, B, INDEXED_COUNT, INDEX_NONTERM | INDEX_PROD_A | INDEX_PROD_B]
+//
+// There are constraints about indexed rules:
+// 
+// 1) If symbol A is indexed in one rule, it must be indexed
+//    in all rules where it appears.
+// 2) If multiple symbols are indexed in the same rule,
+//    their indexed_count must be equal.
+// 3) Indexed symbols must be numbered consecutively:
+//    A_0, A_1, ..., A_{k-1} -> [base, base+1, ..., base+k-1]
+// 4) For indexed rules, base symbol A must represent by A_0.
+//
+// Actual rules are expanded as:
+//
+// for i in range [0; indexed_count)
+// N[_i] -> A[_i] B[_i]    (only for symbols marked as indexed)
+//
+// Example:
+// Z -> X_i Y (represented by [Z; X, Y, 3, INDEX_PROD_A]) expanded as:
+// 
+// Z -> X_0 Y
+// Z -> X_1 Y
+// Z -> X_2 Y
+//
+// --------------- Difference from standard Weak Chomsky Normal Form (WCNF) ---------------
+//
+// Standard WCNF allows only:
+//   N -> A B   (A,B are nonterminals)
+//   N -> a     (a are terminal)
+//   N -> eps
+//
+// EWCNF allows:
+//   N -> X Y   (X are terminal or nonterminal, Y are terminal or nonterminal)
+//   N -> X     (X are terminal or nonterminal)
+//   N -> eps
+//   and indexed rules.
+ typedef struct {
+    int32_t nonterm;       // LHS nonterminal symbol id
+    int32_t prod_A;        // first RHS symbol id or -1
+    int32_t prod_B;        // second RHS symbol id or -1
+    uint32_t indexed_count; // Number of indexed rules (zero if not indexed)
+    uint8_t indexed;        // Bitmask of indexed symbols
+} LAGraph_rule_EWCNF;
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //
@@ -1224,26 +1313,36 @@ GrB_Info LAGraph_CFL_reachability_adv
 (
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to nonterms_count.
+                         // The size of the array must be equal to the count
+                         // of symbols (symbols_amount).
                          //
                          // outputs[k]: (i, j) = true if and only if there is a path
                          // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
+                         // derivable from the symbol 'k' of the specified CFG.
+                         //
+                         // Note: output[t] where t is index of terminal will be just full
+                         // copy of adj_matrices[t]
     // Input
-    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
-                                    // The length of this array is equal to the count of
-                                    // terminals (terms_count).
-                                    //
-                                    // adj_matrices[t]: (i, j) == 1 if and only if there
-                                    // is an edge between nodes i and j with the label of
-                                    // the terminal corresponding to index 't' (where t is
-                                    // in the range [0, terms_count - 1]).
-    size_t symbols_amount,
-    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
-    size_t rules_count,             // The total number of rules in the CFG.
-    char *msg,                      // Message string for error reporting.
-    int8_t optimizations            // Optimizations flags
-);
+    const GrB_Matrix
+        *adj_matrices,  // Array of adjacency matrices representing the graph.
+                        // The length of this array is equal to the count of
+                        // symbols (symbols_amount).
+                        //
+                        // adj_matrices[i]: (i, j) == 1 if and only if there
+                        // is an edge between nodes i and j with the label of
+                        // the symbol corresponding to index 'i' (where i is
+                        // in the range [0, symbols_amount - 1]).
+                        //
+                        // Note: adj_matrices[N] where N is index of nonterminal doesn't
+                        // used for algorithms and may be NULL
+    size_t symbols_amount,           // Count of terminal and nonterminals
+    const LAGraph_rule_EWCNF *rules, // The rules of the CFG.
+                                     // Warning: now not ready for N -> A rules, where is
+                                     // N and A are nonterminals.
+    size_t rules_count,              // The total number of rules in the CFG.
+    char *msg,                       // Message string for error reporting.
+    int8_t optimizations             // Optimizations flags
+) ;
 
 
 

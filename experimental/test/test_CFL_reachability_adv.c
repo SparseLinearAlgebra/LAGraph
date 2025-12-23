@@ -41,7 +41,7 @@ typedef struct {
     size_t nonterms_count;
     size_t terms_count;
     size_t rules_count;
-    LAGraph_rule_WCNF *rules;
+    LAGraph_rule_EWCNF *rules;
 } grammar_t;
 
 GrB_Matrix *adj_matrices = NULL;
@@ -124,14 +124,14 @@ void free_workspace() {
 // A -> a  [1 4 -1 0]
 // B -> b  [2 5 -1 0]
 void init_grammar_aSb() {
-    LAGraph_rule_WCNF *rules = NULL;
-    LAGraph_Calloc((void **)&rules, 5, sizeof(LAGraph_rule_WCNF), msg);
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 5, sizeof(LAGraph_rule_EWCNF), msg);
 
-    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
-    rules[2] = (LAGraph_rule_WCNF){3, 0, 2, 0};
-    rules[3] = (LAGraph_rule_WCNF){1, 4, -1, 0};
-    rules[4] = (LAGraph_rule_WCNF){2, 5, -1, 0};
+    rules[0] = (LAGraph_rule_EWCNF){0, 1, 2, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){0, 1, 3, 0, 0};
+    rules[2] = (LAGraph_rule_EWCNF){3, 0, 2, 0, 0};
+    rules[3] = (LAGraph_rule_EWCNF){1, 4, -1, 0, 0};
+    rules[4] = (LAGraph_rule_EWCNF){2, 5, -1, 0, 0};
 
     grammar = (grammar_t){
         .nonterms_count = 4, .terms_count = 2, .rules_count = 5, .rules = rules};
@@ -145,12 +145,12 @@ void init_grammar_aSb() {
 // S -> a  [0 1 -1 0]
 // S -> eps [0 -1 -1 0]
 void init_grammar_aS() {
-    LAGraph_rule_WCNF *rules = NULL;
-    LAGraph_Calloc((void **)&rules, 3, sizeof(LAGraph_rule_WCNF), msg);
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 3, sizeof(LAGraph_rule_EWCNF), msg);
 
-    rules[0] = (LAGraph_rule_WCNF){0, 0, 0, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 1, -1, 0};
-    rules[2] = (LAGraph_rule_WCNF){0, -1, -1, 0};
+    rules[0] = (LAGraph_rule_EWCNF){0, 0, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){0, 1, -1, 0};
+    rules[2] = (LAGraph_rule_EWCNF){0, -1, -1, 0};
 
     grammar = (grammar_t){
         .nonterms_count = 1, .terms_count = 1, .rules_count = 3, .rules = rules};
@@ -188,35 +188,35 @@ void init_grammar_aS() {
 // S23 -> b         [23 26 -1 0]
 // S24 -> b         [24 26 -1 0]
 void init_grammar_complex() {
-    LAGraph_rule_WCNF *rules = NULL;
-    LAGraph_Calloc((void **)&rules, 26, sizeof(LAGraph_rule_WCNF), msg);
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 26, sizeof(LAGraph_rule_EWCNF), msg);
 
-    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 15, 16, 0};
-    rules[2] = (LAGraph_rule_WCNF){1, 3, 4, 0};
-    rules[3] = (LAGraph_rule_WCNF){2, 5, 6, 0};
-    rules[4] = (LAGraph_rule_WCNF){3, 7, 8, 0};
-    rules[5] = (LAGraph_rule_WCNF){4, 9, 10, 0};
-    rules[6] = (LAGraph_rule_WCNF){5, 11, 12, 0};
-    rules[7] = (LAGraph_rule_WCNF){6, 13, 14, 0};
-    rules[8] = (LAGraph_rule_WCNF){16, 17, 18, 0};
-    rules[9] = (LAGraph_rule_WCNF){17, 19, 20, 0};
-    rules[10] = (LAGraph_rule_WCNF){18, 21, 22, 0};
-    rules[11] = (LAGraph_rule_WCNF){22, 23, 24, 0};
-    rules[12] = (LAGraph_rule_WCNF){7, 25, -1, 0};
-    rules[13] = (LAGraph_rule_WCNF){8, 25, -1, 0};
-    rules[14] = (LAGraph_rule_WCNF){9, 25, -1, 0};
-    rules[15] = (LAGraph_rule_WCNF){10, 25, -1, 0};
-    rules[16] = (LAGraph_rule_WCNF){11, 26, -1, 0};
-    rules[17] = (LAGraph_rule_WCNF){12, 26, -1, 0};
-    rules[18] = (LAGraph_rule_WCNF){13, 26, -1, 0};
-    rules[19] = (LAGraph_rule_WCNF){14, 26, -1, 0};
-    rules[20] = (LAGraph_rule_WCNF){15, 25, -1, 0};
-    rules[21] = (LAGraph_rule_WCNF){19, 25, -1, 0};
-    rules[22] = (LAGraph_rule_WCNF){20, 25, -1, 0};
-    rules[23] = (LAGraph_rule_WCNF){21, 26, -1, 0};
-    rules[24] = (LAGraph_rule_WCNF){23, 26, -1, 0};
-    rules[25] = (LAGraph_rule_WCNF){24, 26, -1, 0};
+    rules[0] = (LAGraph_rule_EWCNF){0, 1, 2, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){0, 15, 16, 0, 0};
+    rules[2] = (LAGraph_rule_EWCNF){1, 3, 4, 0, 0};
+    rules[3] = (LAGraph_rule_EWCNF){2, 5, 6, 0, 0};
+    rules[4] = (LAGraph_rule_EWCNF){3, 7, 8, 0, 0};
+    rules[5] = (LAGraph_rule_EWCNF){4, 9, 10, 0, 0};
+    rules[6] = (LAGraph_rule_EWCNF){5, 11, 12, 0, 0};
+    rules[7] = (LAGraph_rule_EWCNF){6, 13, 14, 0, 0};
+    rules[8] = (LAGraph_rule_EWCNF){16, 17, 18, 0, 0};
+    rules[9] = (LAGraph_rule_EWCNF){17, 19, 20, 0, 0};
+    rules[10] = (LAGraph_rule_EWCNF){18, 21, 22, 0, 0};
+    rules[11] = (LAGraph_rule_EWCNF){22, 23, 24, 0, 0};
+    rules[12] = (LAGraph_rule_EWCNF){7, 25, -1, 0, 0};
+    rules[13] = (LAGraph_rule_EWCNF){8, 25, -1, 0, 0};
+    rules[14] = (LAGraph_rule_EWCNF){9, 25, -1, 0, 0};
+    rules[15] = (LAGraph_rule_EWCNF){10, 25, -1, 0, 0};
+    rules[16] = (LAGraph_rule_EWCNF){11, 26, -1, 0, 0};
+    rules[17] = (LAGraph_rule_EWCNF){12, 26, -1, 0, 0};
+    rules[18] = (LAGraph_rule_EWCNF){13, 26, -1, 0, 0};
+    rules[19] = (LAGraph_rule_EWCNF){14, 26, -1, 0, 0};
+    rules[20] = (LAGraph_rule_EWCNF){15, 25, -1, 0, 0};
+    rules[21] = (LAGraph_rule_EWCNF){19, 25, -1, 0, 0};
+    rules[22] = (LAGraph_rule_EWCNF){20, 25, -1, 0, 0};
+    rules[23] = (LAGraph_rule_EWCNF){21, 26, -1, 0, 0};
+    rules[24] = (LAGraph_rule_EWCNF){23, 26, -1, 0, 0};
+    rules[25] = (LAGraph_rule_EWCNF){24, 26, -1, 0, 0};
 
     grammar = (grammar_t){
         .nonterms_count = 25, .terms_count = 2, .rules_count = 26, .rules = rules};
@@ -663,27 +663,27 @@ void test_CFL_reachability_invalid_rules(void) {
 
     // Rule [Variable -> _ B]
     grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
+        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
 
     // Rule [_ -> A B]
     grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
+        (LAGraph_rule_EWCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
 
     // Rule [C -> A B], where C >= nonterms_count
     grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
+        (LAGraph_rule_EWCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
 
     // Rule [S -> A B], where A >= nonterms_count
     grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .index = 0};
+        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
 
     // Rule [C -> t], where t >= terms_count
-    grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
+    grammar.rules[0] = (LAGraph_rule_EWCNF){
+        .nonterm = 0, .prod_A = 10, .prod_B = -1, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
 
     free_workspace();
