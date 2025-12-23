@@ -131,7 +131,7 @@
         }                                                                                \
     }
 
-// LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
+// LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
 // adjacency matrices) such that there is a path from u to v, where the edge labels
@@ -176,25 +176,35 @@
 GrB_Info LAGraph_CFL_reachability_adv(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to nonterms_count.
+                         // The size of the array must be equal to the count
+                         // of symbols (symbols_amount).
                          //
                          // outputs[k]: (i, j) = true if and only if there is a path
                          // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
+                         // derivable from the symbol 'k' of the specified CFG.
+                         //
+                         // Note: output[t] where t is index of terminal will be just full
+                         // copy of adj_matrices[t]
     // Input
-    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
-                                    // The length of this array is equal to the count of
-                                    // terminals (terms_count).
-                                    //
-                                    // adj_matrices[t]: (i, j) == 1 if and only if there
-                                    // is an edge between nodes i and j with the label of
-                                    // the terminal corresponding to index 't' (where t is
-                                    // in the range [0, terms_count - 1]).
-    size_t symbols_amount,
-    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
-    size_t rules_count,             // The total number of rules in the CFG.
-    char *msg,                      // Message string for error reporting.
-    int8_t optimizations            // Optimizations flags
+    const GrB_Matrix
+        *adj_matrices, // Array of adjacency matrices representing the graph.
+                       // The length of this array is equal to the count of
+                       // symbols (symbols_amount).
+                       //
+                       // adj_matrices[i]: (i, j) == 1 if and only if there
+                       // is an edge between nodes i and j with the label of
+                       // the symbol corresponding to index 'i' (where i is
+                       // in the range [0, symbols_amount - 1]).
+                       //
+                       // Note: adj_matrices[N] where N is index of nonterminal doesn't
+                       // used for algorithms and may be NULL
+    size_t symbols_amount,           // Count of terminal and nonterminals
+    const LAGraph_rule_EWCNF *rules, // The rules of the CFG.
+                                     // Warning: now not ready for N -> A rules, where is
+                                     // N and A are nonterminals.
+    size_t rules_count,              // The total number of rules in the CFG.
+    char *msg,                       // Message string for error reporting.
+    int8_t optimizations             // Optimizations flags
 ) {
     // Declare workspace and clear the msg string, if not NULL
     CFL_Matrix *delta_matrices, *matrices, *temp_matrices;
@@ -242,7 +252,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GrB_Index n;
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
-    // Create nonterms matrices
+    // Create symbol matrices
     for (size_t i = 0; i < symbols_amount; i++) {
 
         GrB_Index nrows;
@@ -278,7 +288,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     rule_error_s nonterm_err = {0};
     rule_error_s invalid_err = {0};
     for (size_t i = 0; i < rules_count; i++) {
-        LAGraph_rule_WCNF rule = rules[i];
+        LAGraph_rule_EWCNF rule = rules[i];
 
         bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
         bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
@@ -346,7 +356,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
-        LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+        LAGraph_rule_EWCNF term_rule = rules[term_rules[i]];
         CFL_Matrix *nonterm_matrix = &delta_matrices[term_rule.nonterm];
         CFL_Matrix *term_matrix = &delta_matrices[term_rule.prod_A];
 
@@ -368,7 +378,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
-        LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
+        LAGraph_rule_EWCNF eps_rule = rules[eps_rules[i]];
 
         CFL_Matrix *nonterm_matrix = &delta_matrices[eps_rule.nonterm];
 
@@ -406,7 +416,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START();
         for (size_t i = 0; i < bin_rules_count; i++) {
-            LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+            LAGraph_rule_EWCNF bin_rule = rules[bin_rules[i]];
             CFL_Matrix *A = &matrices[bin_rule.prod_A];
             CFL_Matrix *B = &delta_matrices[bin_rule.prod_B];
             CFL_Matrix *C = &temp_matrices[bin_rule.nonterm];
@@ -441,7 +451,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START()
         for (size_t i = 0; i < bin_rules_count; i++) {
-            LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+            LAGraph_rule_EWCNF bin_rule = rules[bin_rules[i]];
             CFL_Matrix *A = &matrices[bin_rule.prod_B];
             CFL_Matrix *B = &delta_matrices[bin_rule.prod_A];
             CFL_Matrix *C = &temp_matrices[bin_rule.nonterm];
@@ -460,7 +470,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         // Rule [Variable -> term]
         for (size_t i = 0; i < term_rules_count; i++) {
-            LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+            LAGraph_rule_EWCNF term_rule = rules[term_rules[i]];
             CFL_Matrix *A = &temp_matrices[term_rule.nonterm];
             CFL_Matrix *B = &delta_matrices[term_rule.prod_A];
 
