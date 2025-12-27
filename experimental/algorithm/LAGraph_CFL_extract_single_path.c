@@ -217,13 +217,11 @@ GrB_Info LAGraph_CFL_extract_single_path(
     }
     PathIndex index;
     GrB_Info info = GrB_Matrix_extractElement_UDT(&index, T[nonterm], start, end);
-    // GxB_Matrix_fprint(T[nonterm], "homka", GxB_SHORT, stdout);;
-    printf("Nonterm: %ld, Start: %ld, End: %ld, Height: %d, Adresss: %p\n", nonterm, start, end, index.height, T[nonterm]);
-    if (info == GrB_SUCCESS)
+    if (info == GrB_SUCCESS) // Such a path exists
     {
         if (index.height == 1)
         {
-            if (start == end)
+            if (start == end) // Height = 1 and start = end is an empty eps-path
             {
                 for (size_t i = 0; i < eps_rules_count; i++)
                 {
@@ -235,6 +233,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
                     }
                 }
             }
+            // Height = 1 and different vertices is a term-path
             for (int64_t i = 0; i < terms_count; i++)
             {
                 bool edge;
@@ -246,7 +245,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
                         if (term_rule.nonterm == nonterm && term_rule.prod_A == i)
                         {
                             LG_TRY(LAGraph_Calloc((void **)&output->path, 1, sizeof(Edge), msg));
-                            output->len++;
+                            output->len = 1;
                             output->path[0] = (Edge){start, i, end};
                             LG_FREE_WORK;
                             return GrB_SUCCESS;
@@ -257,45 +256,64 @@ GrB_Info LAGraph_CFL_extract_single_path(
             LG_FREE_WORK;
             return GrB_NO_VALUE;
         }
+        // Rules of the form Nonterm -> Nonterm * Nonterm are traversed recursively and merged
         for (size_t i = 0; i < bin_rules_count; i++)
         {
             LAGraph_rule_WCNF term_rule = rules[bin_rules[i]];
             if (term_rule.nonterm == nonterm)
             {
                 PathIndex indexB, indexC;
-                if (GrB_Matrix_extractElement_UDT(&indexB, T[term_rule.prod_A], start, index.middle) == GrB_SUCCESS && GrB_Matrix_extractElement_UDT(&indexC, T[term_rule.prod_B], index.middle, end) == GrB_SUCCESS)
+                if ((info = GrB_Matrix_extractElement_UDT(&indexB, T[term_rule.prod_A], start, index.middle)) != GrB_SUCCESS)
                 {
-                    if (indexB.height != 0 && indexC.height != 0)
+                    // If haven't found such a piece of the path, then continue.
+                    if (info != GrB_NO_VALUE)
                     {
-                        int32_t maxH = (indexB.height > indexC.height ? indexB.height : indexC.height);
-                        if (index.height == maxH + 1)
-                        {
-                            Path left, right;
+                        return info;
+                    }
 
-                            LG_TRY(LAGraph_CFL_extract_single_path(&left, start, index.middle, term_rule.prod_A, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg));
-                            LG_TRY(LAGraph_CFL_extract_single_path(&right, index.middle, end, term_rule.prod_B, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg));
-                            output->len = left.len + right.len;
-                            LG_TRY(LAGraph_Calloc((void **)&output->path, output->len, sizeof(Edge), msg));
-                            memcpy(output->path, left.path, left.len * sizeof(Edge));
-                            memcpy(output->path + left.len, right.path, right.len * sizeof(Edge));
-                            LG_TRY(LAGraph_Free((void **)&left.path, msg));
-                            LG_TRY(LAGraph_Free((void **)&right.path, msg));
-                            LG_FREE_WORK;
-                            return GrB_SUCCESS;
-                        }
+                    continue;
+                }
+                if ((info = GrB_Matrix_extractElement_UDT(&indexC, T[term_rule.prod_B], index.middle, end)) != GrB_SUCCESS)
+                {
+                    if (info != GrB_NO_VALUE)
+                    {
+                        return info;
+                    }
+                    continue;
+                }
+
+                if (!((indexB.height == 0 && indexB.middle == 0) || (indexC.height == 0 && indexC.middle == 0)))
+                {
+                    int32_t maxH = (indexB.height > indexC.height ? indexB.height : indexC.height);
+                    if (index.height == maxH + 1)
+                    {
+                        Path left, right;
+                        LG_TRY(LAGraph_CFL_extract_single_path(&left, start, index.middle, term_rule.prod_A, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg));
+                        LG_TRY(LAGraph_CFL_extract_single_path(&right, index.middle, end, term_rule.prod_B, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg));
+
+                        output->len = left.len + right.len;
+
+                        LG_TRY(LAGraph_Calloc((void **)&output->path, output->len, sizeof(Edge), msg));
+
+                        memcpy(output->path, left.path, left.len * sizeof(Edge));
+                        memcpy(output->path + left.len, right.path, right.len * sizeof(Edge));
+                        LG_TRY(LAGraph_Free((void **)&left.path, msg));
+                        LG_TRY(LAGraph_Free((void **)&right.path, msg));
+                        LG_FREE_WORK;
+                        return GrB_SUCCESS;
                     }
                 }
             }
         }
-        LG_FREE_WORK;
         return GrB_NO_VALUE;
     }
+    // Such a path doesn't exists - return an empty path and GrB_NO_VALUE
     else if (info == GrB_NO_VALUE)
     {
         LG_FREE_WORK;
         return GrB_NO_VALUE;
     }
-
-    LG_FREE_WORK;
-    GRB_TRY(info);
+    // Return some other error
+    LG_FREE_ALL;
+    return info;
 }
