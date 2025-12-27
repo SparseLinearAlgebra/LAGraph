@@ -15,6 +15,13 @@
                                     grammar.nonterms_count, grammar.rules, grammar.rules_count,       \
                                     msg)
 
+#define check_error(error)                         \
+    {                                              \
+        retval = run_algorithm();                  \
+        TEST_CHECK(retval == error);               \
+        TEST_MSG("retval = %d (%s)", retval, msg); \
+    }
+
 // Check the path through the string
 #define check_result1(expected_ret, result)             \
     {                                                   \
@@ -742,12 +749,180 @@ void test_CFL_extract_single_path_with_empty_adj_matrix(void)
         for (GrB_Index end = 0; end < 2; end++)
         {
             check_result2(expected[start * 2 + end]);
-            if (path.len > 0)
-            {
-                LAGraph_Free((void **)&path.path, msg);
-            }
+            LAGraph_Free((void **)&path.path, msg);
         }
     }
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_inappropriate_grammar(void)
+{
+#if LAGRAPH_SUITESPARSE
+
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+    OK(run_aux_algorithm());
+    // Random path
+    GrB_Index start = 0;
+    GrB_Index end = 0;
+
+    LAGraph_Free((void **)&grammar.rules, msg);
+    grammar = (grammar_t){0, 0, 0, NULL};
+    init_grammar_aS();
+    check_result2(non_exist);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_inappropriate_graph(void)
+{
+#if LAGRAPH_SUITESPARSE
+
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+    OK(run_aux_algorithm());
+    // Random path
+    GrB_Index start = 0;
+    GrB_Index end = 0;
+
+    GrB_free(&adj_matrices[0]);
+    GrB_free(&adj_matrices[1]);
+    LAGraph_Free((void **)&adj_matrices, msg);
+
+    init_graph_4();
+    check_result2(non_exist);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+//===========================
+// Tests with invalid result
+//===========================
+
+void test_CFL_extract_single_path_invalid_rules(void)
+{
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+    OK(run_aux_algorithm());
+    // Random path
+    GrB_Index start = 1;
+    GrB_Index end = 2;
+
+    // Rule [Variable -> _ B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [_ -> A B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> A B], where C >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [S -> A B], where A >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> t], where t >= terms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_null_pointers(void)
+{
+#if LAGRAPH_SUITESPARSE
+
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+    OK(run_aux_algorithm());
+    // Random path
+    GrB_Index start = 1;
+    GrB_Index end = 2;
+
+    //  adj_matrices[0] = NULL;
+    //  adj_matrices[1] = NULL;
+    GrB_free(&adj_matrices[0]);
+    GrB_free(&adj_matrices[1]);
+
+    check_error(GrB_NULL_POINTER);
+
+    //  adj_matrices = NULL;
+    LAGraph_Free((void **)&adj_matrices, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    //  outputs = NULL;
+    LAGraph_Free((void **)&outputs, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    //  grammar.rules = NULL;
+    LAGraph_Free((void **)&grammar.rules, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_vertex_out_the_graph(void)
+{
+#if LAGRAPH_SUITESPARSE
+
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle(); // 4 * 4
+    init_outputs();
+    OK(run_aux_algorithm());
+
+    GrB_Index start = 4; // Vertex outside the graph
+    GrB_Index end = 2;
+
+    check_error(GrB_INVALID_INDEX);
+
     free_workspace();
     teardown();
 #endif
@@ -762,4 +937,9 @@ TEST_LIST = {
     {"CFL_extract_single_path_line", test_CFL_extract_single_path_line},
     {"CFL_extract_single_path_two_nodes_cycle", test_CFL_extract_single_path_two_nodes_cycle},
     {"CFL_extract_single_path_with_empty_adj_matrix", test_CFL_extract_single_path_with_empty_adj_matrix},
+    {"CFL_extract_single_path_inappropriate_grammar", test_CFL_extract_single_path_inappropriate_grammar},
+    {"CFL_extract_single_path_inappropriate_graph", test_CFL_extract_single_path_inappropriate_graph},
+    {"CFL_extract_single_path_invalid_rules", test_CFL_extract_single_path_invalid_rules},
+    {"CFL_extract_single_path_null_pointers", test_CFL_extract_single_path_null_pointers},
+    {"CFL_extract_single_path_vertex_out_the_graph", test_CFL_extract_single_path_vertex_out_the_graph},
     {NULL, NULL}};
