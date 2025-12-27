@@ -108,10 +108,9 @@ void mult_path_index(PathIndex *z,
 
 void set_path_index(PathIndex *z,
                     const PathIndex *x, GrB_Index ix, GrB_Index jx,
-                    const void *y, GrB_Index iy, GrB_Index jy,
+                    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,
                     const void *theta)
 {
-    const bool *edge_exist = (const bool *)y;
     if (*edge_exist)
     {
         z->middle = ix;
@@ -128,10 +127,9 @@ void set_path_index(PathIndex *z,
     "void set_path_index(                                                   \n" \
     "    PathIndex *z,                                                      \n" \
     "    const PathIndex *x, GrB_Index ix, GrB_Index jx,                    \n" \
-    "    const void *y, GrB_Index iy, GrB_Index jy,                         \n" \
+    "    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,        \n" \
     "    const void *theta)                                                 \n" \
     "{                                                                      \n" \
-    "    const bool *edge_exist = (const bool *) y;                         \n" \
     "    if (*edge_exist)                                                   \n" \
     "    {                                                                  \n" \
     "        z->middle = ix;                                                \n" \
