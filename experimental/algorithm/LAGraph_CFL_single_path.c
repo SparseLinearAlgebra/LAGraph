@@ -13,7 +13,6 @@
         GrB_free(&PI_add);                           \
         GrB_free(&PI_semiring);                      \
         GrB_free(&Theta);                            \
-        GrB_free(&PI_type);                          \
         GrB_free(&PI_monoid);                        \
         GrB_free(&identity_matrix);                  \
         LAGraph_Free((void **)&t_empty_flags, NULL); \
