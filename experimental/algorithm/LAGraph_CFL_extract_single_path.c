@@ -5,13 +5,6 @@
         LAGraph_Free((void **)&bin_rules, NULL);  \
     }
 
-#define LG_FREE_ALL                                 \
-    {                                               \
-        LAGraph_Free((void **)&output->path, NULL); \
-        output->len = 0;                            \
-        LG_FREE_WORK;                               \
-    }
-
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -264,7 +257,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
             }
             // If couldn't find rules for outputting an empty or terminal path,
             // then the path were looking for doesn't match the rules
-            LG_FREE_ALL;
+            LG_FREE_WORK;
             ADD_TO_MSG("The extracted path does not match the input grammar.");
             return GrB_NO_VALUE;
         }
@@ -272,64 +265,87 @@ GrB_Info LAGraph_CFL_extract_single_path(
         for (size_t i = 0; i < bin_rules_count; i++)
         {
             LAGraph_rule_WCNF term_rule = rules[bin_rules[i]];
-            if (term_rule.nonterm == nonterm)
+            if (term_rule.nonterm != nonterm)
             {
-                PathIndex indexB, indexC;
-                if ((info = GrB_Matrix_extractElement_UDT(&indexB, T[term_rule.prod_A], start, index.middle)) != GrB_SUCCESS)
-                {
-                    // If haven't found such a piece of the path, then continue.
-                    if (info != GrB_NO_VALUE)
-                    {
-                        return info;
-                    }
-
-                    continue;
-                }
-                if ((info = GrB_Matrix_extractElement_UDT(&indexC, T[term_rule.prod_B], index.middle, end)) != GrB_SUCCESS)
-                {
-                    if (info != GrB_NO_VALUE)
-                    {
-                        return info;
-                    }
-                    continue;
-                }
-
-                if (!((indexB.height == 0 && indexB.middle == 0) || (indexC.height == 0 && indexC.middle == 0)))
-                {
-                    int32_t maxH = (indexB.height > indexC.height ? indexB.height : indexC.height);
-                    if (index.height == maxH + 1)
-                    {
-                        Path left, right;
-                        LG_TRY(LAGraph_CFL_extract_single_path(&left, start, index.middle, term_rule.prod_A, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg));
-                        LG_TRY(LAGraph_CFL_extract_single_path(&right, index.middle, end, term_rule.prod_B, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg));
-
-                        output->len = left.len + right.len;
-
-                        LG_TRY(LAGraph_Calloc((void **)&output->path, output->len, sizeof(Edge), msg));
-
-                        memcpy(output->path, left.path, left.len * sizeof(Edge));
-                        memcpy(output->path + left.len, right.path, right.len * sizeof(Edge));
-                        LG_TRY(LAGraph_Free((void **)&left.path, msg));
-                        LG_TRY(LAGraph_Free((void **)&right.path, msg));
-                        LG_FREE_WORK;
-                        return GrB_SUCCESS;
-                    }
-                }
+                continue;
             }
+            PathIndex indexB, indexC;
+            if ((info = GrB_Matrix_extractElement_UDT(&indexB, T[term_rule.prod_A], start, index.middle)) != GrB_SUCCESS)
+            {
+                // If haven't found such a piece of the path, then continue.
+                if (info != GrB_NO_VALUE)
+                {
+                    LG_FREE_WORK;
+                    return info;
+                }
+
+                continue;
+            }
+            if ((info = GrB_Matrix_extractElement_UDT(&indexC, T[term_rule.prod_B], index.middle, end)) != GrB_SUCCESS)
+            {
+                if (info != GrB_NO_VALUE)
+                {
+                    LG_FREE_WORK;
+                    return info;
+                }
+                continue;
+            }
+
+            // Height compliance check
+            int32_t maxH = (indexB.height > indexC.height ? indexB.height : indexC.height);
+            if (index.height != maxH + 1)
+            {
+                continue;
+            }
+
+            Path left, right;
+            // If didn't find the path, try the other rules.
+            if ((info = LAGraph_CFL_extract_single_path(&left, start, index.middle, term_rule.prod_A, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg)) != GrB_SUCCESS)
+            {
+                if (info == GrB_NO_VALUE)
+                {
+                    continue;
+                }
+                LG_FREE_WORK;
+                return info;
+            }
+            if ((info = LAGraph_CFL_extract_single_path(&right, index.middle, end, term_rule.prod_B, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg)) != GrB_SUCCESS)
+            {
+                if (info == GrB_NO_VALUE)
+                {
+                    LG_TRY(LAGraph_Free((void **)&left.path, msg));
+                    continue;
+                }
+                LG_TRY(LAGraph_Free((void **)&left.path, msg));
+                LG_FREE_WORK;
+                return info;
+            }
+
+            output->len = left.len + right.len;
+
+            LG_TRY(LAGraph_Calloc((void **)&output->path, output->len, sizeof(Edge), msg));
+
+            memcpy(output->path, left.path, left.len * sizeof(Edge));
+            memcpy(output->path + left.len, right.path, right.len * sizeof(Edge));
+            LG_TRY(LAGraph_Free((void **)&left.path, msg));
+            LG_TRY(LAGraph_Free((void **)&right.path, msg));
+            LG_FREE_WORK;
+            return GrB_SUCCESS;
         }
+
         // If couldn't find rules for outputting an path,
         // then the path were looking for doesn't match the rules
-        LG_FREE_ALL;
+        LG_FREE_WORK;
         ADD_TO_MSG("The extracted path does not match the input grammar.");
         return GrB_NO_VALUE;
     }
     // Such a path doesn't exists - return an empty path and GrB_NO_VALUE
     else if (info == GrB_NO_VALUE)
     {
-        LG_FREE_ALL;
+        LG_FREE_WORK;
         return GrB_NO_VALUE;
     }
     // Return some other error
-    LG_FREE_ALL;
+    LG_FREE_WORK;
     return info;
 }
