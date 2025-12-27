@@ -5,6 +5,13 @@
         LAGraph_Free((void **)&bin_rules, NULL);  \
     }
 
+#define LG_FREE_ALL                                 \
+    {                                               \
+        LAGraph_Free((void **)&output->path, NULL); \
+        output->len = 0;                            \
+        LG_FREE_WORK;                               \
+    }
+
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -69,6 +76,8 @@ GrB_Info LAGraph_CFL_extract_single_path(
                   "The number of non-terminals must be greater than zero.");
     LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
                   "The number of rules must be greater than zero.");
+    LG_ASSERT_MSG(nonterm < nonterms_count, GrB_INVALID_VALUE,
+                  "The start non-terminal must be no greater than the number of non-terminals.");
     LG_ASSERT_MSG(T != NULL, GrB_NULL_POINTER, "The T array cannot be null.");
     LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
@@ -253,7 +262,10 @@ GrB_Info LAGraph_CFL_extract_single_path(
                     }
                 }
             }
-            LG_FREE_WORK;
+            // If couldn't find rules for outputting an empty or terminal path,
+            // then the path were looking for doesn't match the rules
+            LG_FREE_ALL;
+            ADD_TO_MSG("The extracted path does not match the input grammar.");
             return GrB_NO_VALUE;
         }
         // Rules of the form Nonterm -> Nonterm * Nonterm are traversed recursively and merged
@@ -305,12 +317,16 @@ GrB_Info LAGraph_CFL_extract_single_path(
                 }
             }
         }
+        // If couldn't find rules for outputting an path,
+        // then the path were looking for doesn't match the rules
+        LG_FREE_ALL;
+        ADD_TO_MSG("The extracted path does not match the input grammar.");
         return GrB_NO_VALUE;
     }
     // Such a path doesn't exists - return an empty path and GrB_NO_VALUE
     else if (info == GrB_NO_VALUE)
     {
-        LG_FREE_WORK;
+        LG_FREE_ALL;
         return GrB_NO_VALUE;
     }
     // Return some other error
