@@ -38,8 +38,13 @@ int n_adj_matrices = 0;
 GrB_Matrix *outputs = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 char msg[LAGRAPH_MSG_LEN];
+GrB_Type PI_type = NULL;
 
-void setup() { LAGraph_Init(msg); }
+void setup()
+{
+    LAGraph_Init(msg);
+    GrB_Type_new(&PI_type, sizeof(PathIndex));
+}
 
 void teardown(void) { LAGraph_Finalize(msg); }
 
@@ -251,6 +256,11 @@ void init_graph_double_cycle()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 4, 4);
+    }
 }
 
 // Graph:
@@ -271,6 +281,11 @@ void init_graph_one_cycle()
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
 
     adj_matrices[0] = adj_matrix_a;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
+    }
 }
 
 // Graph:
@@ -304,6 +319,11 @@ void init_graph_1()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 8, 8);
+    }
 }
 
 // Graph:
@@ -345,6 +365,11 @@ void init_graph_tree()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 7, 7);
+    }
 }
 
 // Graph:
@@ -370,6 +395,11 @@ void init_graph_line()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 5, 5);
+    }
 }
 
 // Graph:
@@ -394,6 +424,11 @@ void init_graph_2()
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
     adj_matrices[2] = adj_matrix_c;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
+    }
 }
 
 // Graph:
@@ -416,6 +451,11 @@ void init_graph_3()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
+    }
 }
 
 // Graph:
@@ -436,6 +476,11 @@ void init_graph_4()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
+    }
 }
 
 //====================
@@ -449,8 +494,8 @@ void test_CFL_single_path_cycle(void)
     GrB_Info retval;
 
     init_grammar_aS();
-    init_graph_one_cycle();
     init_outputs();
+    init_graph_one_cycle();
 
     OK(run_algorithm());
     check_result("(0, 0): middle=0 height=1 "
@@ -475,8 +520,8 @@ void test_CFL_single_path_two_cycle(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     OK(run_algorithm());
     check_result("(0, 0): middle=1 height=12 "
@@ -498,8 +543,8 @@ void test_CFL_single_path_labels_more_than_nonterms(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_2();
     init_outputs();
+    init_graph_2();
 
     OK(run_algorithm());
     check_result("(0, 1): middle=0 height=2 ");
@@ -516,8 +561,8 @@ void test_CFL_single_path_complex_grammar(void)
     GrB_Info retval;
 
     init_grammar_complex();
-    init_graph_1();
     init_outputs();
+    init_graph_1();
 
     OK(run_algorithm());
     check_result("(0, 7): middle=4 height=4 "
@@ -535,8 +580,8 @@ void test_CFL_single_path_tree(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_tree();
     init_outputs();
+    init_graph_tree();
 
     OK(run_algorithm());
     check_result("(0, 0): middle=2 height=2 "
@@ -571,8 +616,8 @@ void test_CFL_single_path_line(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_line();
     init_outputs();
+    init_graph_line();
 
     OK(run_algorithm());
     check_result("(0, 4): middle=1 height=4 "
@@ -590,8 +635,8 @@ void test_CFL_single_path_two_nodes_cycle(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_3();
     init_outputs();
+    init_graph_3();
 
     OK(run_algorithm());
     check_result("(0, 0): middle=1 height=4 "
@@ -609,8 +654,8 @@ void test_CFL_single_path_with_empty_adj_matrix(void)
     GrB_Info retval;
 
     init_grammar_aS();
-    init_graph_4();
     init_outputs();
+    init_graph_4();
 
     OK(run_algorithm());
     check_result("(0, 0): middle=0 height=1 "
@@ -632,8 +677,8 @@ void test_CFL_single_path_invalid_rules(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     // Rule [Variable -> _ B]
     grammar.rules[0] =
@@ -673,8 +718,8 @@ void test_CFL_single_path_null_pointers(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     //  adj_matrices[0] = NULL;
     //  adj_matrices[1] = NULL;
@@ -689,20 +734,30 @@ void test_CFL_single_path_null_pointers(void)
 
     free_workspace();
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     //  outputs = NULL;
+    if (outputs != NULL)
+    {
+        for (size_t i = 0; i < grammar.nonterms_count; i++)
+        {
+            GrB_free(&outputs[i]);
+        }
+    }
+    check_error(GrB_NULL_POINTER);
+
     LAGraph_Free((void **)&outputs, msg);
     check_error(GrB_NULL_POINTER);
 
     free_workspace();
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     //  grammar.rules = NULL;
-    LAGraph_Free((void **)&grammar.rules, msg);    check_error(GrB_NULL_POINTER);
+    LAGraph_Free((void **)&grammar.rules, msg);
+    check_error(GrB_NULL_POINTER);
 
     free_workspace();
     teardown();

@@ -75,6 +75,7 @@ GrB_Matrix *outputs = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 Path path;
 char msg[LAGRAPH_MSG_LEN];
+GrB_Type PI_type = NULL;
 
 typedef enum // Path type
 {
@@ -83,7 +84,11 @@ typedef enum // Path type
     non_exist = 2, // Path does not exist
 } Type_of_path;
 
-void setup() { LAGraph_Init(msg); }
+void setup()
+{
+    LAGraph_Init(msg);
+    GrB_Type_new(&PI_type, sizeof(PathIndex));
+}
 
 void teardown(void) { LAGraph_Finalize(msg); }
 
@@ -307,6 +312,11 @@ void init_graph_double_cycle()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 4, 4);
+    }
 }
 
 // Graph:
@@ -327,6 +337,11 @@ void init_graph_one_cycle()
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
 
     adj_matrices[0] = adj_matrix_a;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
+    }
 }
 
 // Graph:
@@ -360,6 +375,11 @@ void init_graph_1()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 8, 8);
+    }
 }
 
 // Graph:
@@ -401,6 +421,11 @@ void init_graph_tree()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+    
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 7, 7);
+    }
 }
 
 // Graph:
@@ -426,6 +451,11 @@ void init_graph_line()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+    
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 5, 5);
+    }
 }
 
 // Graph:
@@ -450,6 +480,11 @@ void init_graph_2()
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
     adj_matrices[2] = adj_matrix_c;
+    
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
+    }
 }
 
 // Graph:
@@ -472,6 +507,11 @@ void init_graph_3()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+    
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
+    }
 }
 
 // Graph:
@@ -492,6 +532,11 @@ void init_graph_4()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+    
+    for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
+    }
 }
 
 //=====================
@@ -505,8 +550,8 @@ void test_CFL_extract_single_path_two_cycle(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
     int expected_ret[16] = {GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_SUCCESS, GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_SUCCESS, GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_NO_VALUE, GrB_NO_VALUE};
     char *expected_path[16] = {"len: 12 path: 0->(0)->1 1->(0)->2 2->(0)->0 0->(0)->1 1->(0)->2 2->(0)->0 0->(1)->3 3->(1)->0 0->(1)->3 3->(1)->0 0->(1)->3 3->(1)->0 ",
                                "len: 0 path: ",
@@ -552,8 +597,8 @@ void test_CFL_extract_single_path_cycle(void)
     GrB_Info retval;
 
     init_grammar_aS();
-    init_graph_one_cycle();
     init_outputs();
+    init_graph_one_cycle();
     int expected[9] = {empty, non_empty, non_empty,
                        non_empty, empty, non_empty,
                        non_empty, non_empty, empty};
@@ -581,8 +626,8 @@ void test_CFL_extract_single_path_labels_more_than_nonterms(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_2();
     init_outputs();
+    init_graph_2();
 
     int expected[9] = {non_exist, non_empty, non_exist,
                        non_exist, non_exist, non_exist,
@@ -611,8 +656,8 @@ void test_CFL_extract_single_path_complex_grammar(void)
     GrB_Info retval;
 
     init_grammar_complex();
-    init_graph_1();
     init_outputs();
+    init_graph_1();
     int expected[64] = {non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_empty,
                         non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_empty, non_exist,
                         non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
@@ -645,8 +690,8 @@ void test_CFL_extract_single_path_tree(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_tree();
     init_outputs();
+    init_graph_tree();
 
     int expected[49] = {non_empty, non_empty, non_exist, non_empty, non_empty, non_exist, non_exist,
                         non_empty, non_empty, non_exist, non_empty, non_empty, non_exist, non_exist,
@@ -679,8 +724,8 @@ void test_CFL_extract_single_path_line(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_line();
     init_outputs();
+    init_graph_line();
     int expected[25] = {non_exist, non_exist, non_exist, non_exist, non_empty,
                         non_exist, non_exist, non_exist, non_empty, non_exist,
                         non_exist, non_exist, non_exist, non_exist, non_exist,
@@ -710,8 +755,8 @@ void test_CFL_extract_single_path_two_nodes_cycle(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_3();
     init_outputs();
+    init_graph_3();
     int expected[4] = {non_empty, non_exist,
                        non_empty, non_exist};
     OK(run_aux_algorithm());
@@ -738,8 +783,8 @@ void test_CFL_extract_single_path_with_empty_adj_matrix(void)
     GrB_Info retval;
 
     init_grammar_aS();
-    init_graph_4();
     init_outputs();
+    init_graph_4();
 
     int expected[4] = {empty, non_exist,
                        non_exist, empty};
@@ -765,8 +810,8 @@ void test_CFL_extract_single_path_inappropriate_grammar(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
     GrB_Index start = 0;
@@ -790,8 +835,8 @@ void test_CFL_extract_single_path_inappropriate_graph(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
     GrB_Index start = 0;
@@ -820,8 +865,8 @@ void test_CFL_extract_single_path_invalid_rules(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
     GrB_Index start = 1;
@@ -865,8 +910,8 @@ void test_CFL_extract_single_path_null_pointers(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
     GrB_Index start = 1;
@@ -885,17 +930,24 @@ void test_CFL_extract_single_path_null_pointers(void)
 
     free_workspace();
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     //  outputs = NULL;
+    if (outputs != NULL)
+    {
+        for (size_t i = 0; i < grammar.nonterms_count; i++)
+        {
+            GrB_free(&outputs[i]);
+        }
+    }
     LAGraph_Free((void **)&outputs, msg);
     check_error(GrB_NULL_POINTER);
 
     free_workspace();
     init_grammar_aSb();
-    init_graph_double_cycle();
     init_outputs();
+    init_graph_double_cycle();
 
     //  grammar.rules = NULL;
     LAGraph_Free((void **)&grammar.rules, msg);
@@ -914,8 +966,8 @@ void test_CFL_extract_single_path_vertex_out_the_graph(void)
     GrB_Info retval;
 
     init_grammar_aSb();
-    init_graph_double_cycle(); // 4 * 4
     init_outputs();
+    init_graph_double_cycle(); // 4 * 4
     OK(run_aux_algorithm());
 
     GrB_Index start = 4; // Vertex outside the graph
