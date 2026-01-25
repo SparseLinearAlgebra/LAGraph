@@ -1,9 +1,5 @@
-#include "LG_internal.h"
-#include <LAGraphX.h>
-
 #define LG_FREE_WORK                                 \
     {                                                \
-        LAGraph_Free((void **)&T, msg);              \
         GrB_free(&true_scalar);                      \
         GrB_free(&bottom_scalar);                    \
         GrB_free(&IPI_set);                          \
@@ -22,15 +18,8 @@
         LAGraph_Free((void **)&bin_rules, NULL);     \
     }
 
-#define LG_FREE_ALL                                  \
-    {                                                \
-        for (int64_t i = 0; i < nonterms_count; i++) \
-        {                                            \
-            GrB_free(&T[i]);                         \
-        }                                            \
-                                                     \
-        LG_FREE_WORK;                                \
-    }
+#include "LG_internal.h"
+#include <LAGraphX.h>
 
 #define ERROR_RULE(msg, i)                                                  \
     {                                                                       \
@@ -187,89 +176,31 @@ GrB_Info LAGraph_CFL_single_path(
 )
 {
     // Declare workspace
-    GrB_Matrix *T;
-    bool *t_empty_flags = NULL; // t_empty_flags[i] == true <=> T[i] is empty
+    bool *t_empty_flags = NULL; // t_empty_flags[i] == true <=> outputs[i] is empty
     uint64_t *nnzs = NULL;
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
-    GrB_Type PI_type = NULL;
-    GrB_Type_new(&PI_type, sizeof(PathIndex));
-
-    // Create semiring
-    GrB_BinaryOp PI_add;
-    GrB_BinaryOp_new(
-        &PI_add,
-        (void *)add_path_index,
-        PI_type,
-        PI_type,
-        PI_type);
-
-    GrB_Monoid PI_monoid;
-    PathIndex identity = {0, 0}; // ⊥ - neutral element for the addition operation
-    GrB_Monoid_new(
-        &PI_monoid,
-        PI_add,
-        (void *)(&identity));
-
-    GrB_Scalar Theta;
-    // Theta cannot be NULL
-    GrB_Scalar_new(&Theta, GrB_BOOL);
-    GrB_Scalar_setElement_BOOL(Theta, false);
-
-    GxB_IndexBinaryOp IPI_mult;
-    GxB_IndexBinaryOp_new(
-        &IPI_mult,
-        (void *)mult_path_index,
-        PI_type,
-        PI_type,
-        PI_type,
-        GrB_BOOL,
-        "mult_path_index",
-        MULT_PATH_INDEX_DEFN);
-
-    GrB_BinaryOp PI_mult;
-    GxB_BinaryOp_new_IndexOp(
-        &PI_mult,
-        IPI_mult,
-        Theta);
-
-    GrB_Semiring PI_semiring;
-    GrB_Semiring_new(
-        &PI_semiring,
-        PI_monoid,
-        PI_mult);
-
-    GxB_IndexBinaryOp IPI_set;
-    GxB_IndexBinaryOp_new(
-        &IPI_set,
-        (void *)set_path_index,
-        PI_type,
-        PI_type,
-        GrB_BOOL,
-        GrB_BOOL,
-        "set_path_index",
-        SET_PATH_INDEX_DEFN);
-
-    GrB_BinaryOp PI_set;
-    GxB_BinaryOp_new_IndexOp(
-        &PI_set,
-        IPI_set,
-        Theta);
-
     GrB_Matrix identity_matrix = NULL;
-    GrB_Scalar true_scalar, bottom_scalar;
-    PathIndex bottom = {0, 0};
-    GrB_Scalar_new(&true_scalar, GrB_BOOL);
-    GrB_Scalar_setElement_BOOL(true_scalar, true);
-    GrB_Scalar_new(&bottom_scalar, PI_type);
-    GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom));
+    GrB_Type PI_type = NULL; // Type PathIndex
+
+    // Semiring components
+    GrB_BinaryOp PI_add = NULL;
+    GrB_Monoid PI_monoid = NULL;
+    GxB_IndexBinaryOp IPI_mult = NULL;
+    GrB_BinaryOp PI_mult = NULL;
+    GrB_Semiring PI_semiring = NULL;
+    GxB_IndexBinaryOp IPI_set = NULL;
+    GrB_BinaryOp PI_set = NULL;
+
+    GrB_Scalar Theta = NULL;
+    GrB_Scalar true_scalar = NULL;
+    GrB_Scalar bottom_scalar = NULL;
 
     // Arrays for processing rules
     size_t *eps_rules = NULL, eps_rules_count = 0;   // [Variable -> eps]
     size_t *term_rules = NULL, term_rules_count = 0; // [Variable -> term]
     size_t *bin_rules = NULL, bin_rules_count = 0;   // [Variable -> AB]
 
-    LG_TRY(LAGraph_Calloc((void **)&T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&t_empty_flags, nonterms_count, sizeof(bool), msg));
 
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
@@ -308,15 +239,94 @@ GrB_Info LAGraph_CFL_single_path(
         LG_FREE_ALL;
         return GrB_NULL_POINTER;
     }
-    GrB_Index n;
-    GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
-    // Create nonterms matrices
+    // Check that outputs are initialized correctly
+    found_null = false;
     for (int64_t i = 0; i < nonterms_count; i++)
     {
-        GRB_TRY(GrB_Matrix_new(&T[i], PI_type, n, n));
-        t_empty_flags[i] = true;
+        if (outputs[i] != NULL)
+            continue;
+
+        if (!found_null)
+        {
+            ADD_TO_MSG("Outputs matrices with these indexes are null: ");
+            ADD_TO_MSG("%" PRId64, i);
+        }
+        else
+        {
+            ADD_TO_MSG("%" PRId64, i);
+        }
+
+        found_null = true;
     }
+
+    if (found_null)
+    {
+        LG_FREE_ALL;
+        return GrB_NULL_POINTER;
+    }
+
+    GRB_TRY(GxB_Matrix_type(&PI_type, outputs[0]));
+
+    // Theta cannot be NULL
+    GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
+    GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
+
+    PathIndex bottom = {0, 0};
+    GRB_TRY(GrB_Scalar_new(&bottom_scalar, PI_type));
+    GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
+
+    GRB_TRY(GrB_Scalar_new(&true_scalar, GrB_BOOL));
+    GRB_TRY(GrB_Scalar_setElement_BOOL(true_scalar, true));
+
+    // Create semiring
+    GRB_TRY(GrB_BinaryOp_new(
+        &PI_add,
+        (void *)add_path_index,
+        PI_type,
+        PI_type,
+        PI_type));
+
+    GRB_TRY(GrB_Monoid_new(
+        &PI_monoid,
+        PI_add,
+        (void *)(&bottom))); // ⊥ - neutral element for the addition operation
+
+    GRB_TRY(GxB_IndexBinaryOp_new(
+        &IPI_mult,
+        (void *)mult_path_index,
+        PI_type,
+        PI_type,
+        PI_type,
+        GrB_BOOL,
+        "mult_path_index",
+        MULT_PATH_INDEX_DEFN));
+
+    GRB_TRY(GxB_BinaryOp_new_IndexOp(
+        &PI_mult,
+        IPI_mult,
+        Theta));
+
+    GRB_TRY(GrB_Semiring_new(
+        &PI_semiring,
+        PI_monoid,
+        PI_mult));
+
+    GRB_TRY(GxB_IndexBinaryOp_new(
+        &IPI_set,
+        (void *)set_path_index,
+        PI_type,
+        PI_type,
+        GrB_BOOL,
+        GrB_BOOL,
+        "set_path_index",
+        SET_PATH_INDEX_DEFN));
+
+    GRB_TRY(GxB_BinaryOp_new_IndexOp(
+        &PI_set,
+        IPI_set,
+        Theta));
+
     LG_TRY(LAGraph_Calloc((void **)&eps_rules, rules_count, sizeof(size_t), msg));
     LG_TRY(LAGraph_Calloc((void **)&term_rules, rules_count, sizeof(size_t), msg));
     LG_TRY(LAGraph_Calloc((void **)&bin_rules, rules_count, sizeof(size_t), msg));
@@ -421,13 +431,15 @@ GrB_Info LAGraph_CFL_single_path(
         }
         GrB_BinaryOp acc_op = t_empty_flags[term_rule.nonterm] ? GrB_NULL : PI_add;
         GxB_eWiseUnion(
-            T[term_rule.nonterm], GrB_NULL, acc_op, PI_set,
-            T[term_rule.nonterm], bottom_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
+            outputs[term_rule.nonterm], GrB_NULL, acc_op, PI_set,
+            outputs[term_rule.nonterm], bottom_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
 
         t_empty_flags[term_rule.nonterm] = false;
     }
 
     // Rule [Variable -> eps]
+    GrB_Index n;
+    GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
     GrB_Vector v_diag;
     GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
     GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
@@ -439,8 +451,8 @@ GrB_Info LAGraph_CFL_single_path(
         LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
         GrB_BinaryOp acc_op = t_empty_flags[eps_rule.nonterm] ? GrB_NULL : PI_add;
         GxB_eWiseUnion(
-            T[eps_rule.nonterm], GrB_NULL, acc_op, PI_set,
-            T[eps_rule.nonterm], bottom_scalar, identity_matrix, true_scalar, GrB_NULL);
+            outputs[eps_rule.nonterm], GrB_NULL, acc_op, PI_set,
+            outputs[eps_rule.nonterm], bottom_scalar, identity_matrix, true_scalar, GrB_NULL);
 
         t_empty_flags[eps_rule.nonterm] = false;
     }
@@ -462,23 +474,18 @@ GrB_Info LAGraph_CFL_single_path(
             }
 
             GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : PI_add;
-            GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op,
-                            PI_semiring, T[bin_rule.prod_A], T[bin_rule.prod_B],
+            GRB_TRY(GrB_mxm(outputs[bin_rule.nonterm], GrB_NULL, acc_op,
+                            PI_semiring, outputs[bin_rule.prod_A], outputs[bin_rule.prod_B],
                             GrB_NULL))
 
             GrB_Index new_nnz;
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
+            GRB_TRY(GrB_Matrix_nvals(&new_nnz, outputs[bin_rule.nonterm]));
             if (new_nnz != 0)
                 t_empty_flags[bin_rule.nonterm] = false;
 
             changed = changed || (nnzs[bin_rule.nonterm] != new_nnz);
             nnzs[bin_rule.nonterm] = new_nnz;
         }
-    }
-    // finish
-    for (int64_t i = 0; i < nonterms_count; i++)
-    {
-        outputs[i] = T[i];
     }
 
     LG_FREE_WORK;
