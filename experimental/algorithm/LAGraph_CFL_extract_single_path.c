@@ -85,14 +85,9 @@ GrB_Info LAGraph_CFL_extract_single_path(
 
         if (!found_null)
         {
-            ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
-            ADD_TO_MSG("%" PRId64, i);
+            ADD_TO_MSG("Adjacency matrices with these indexes are null:");
         }
-        else
-        {
-            ADD_TO_MSG("%" PRId64, i);
-        }
-
+        ADD_TO_MSG(" %" PRId64, i);
         found_null = true;
     }
 
@@ -111,13 +106,9 @@ GrB_Info LAGraph_CFL_extract_single_path(
 
         if (!found_null)
         {
-            ADD_TO_MSG("T matrices with these indexes are null: ");
-            ADD_TO_MSG("%" PRId64, i);
+            ADD_TO_MSG("T matrices with these indexes are null:");
         }
-        else
-        {
-            ADD_TO_MSG("%" PRId64, i);
-        }
+        ADD_TO_MSG(" %" PRId64, i);
 
         found_null = true;
     }

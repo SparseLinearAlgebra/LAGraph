@@ -12,7 +12,7 @@
         GrB_free(&PI_monoid);                        \
         GrB_free(&identity_matrix);                  \
         LAGraph_Free((void **)&t_empty_flags, NULL); \
-        LAGraph_Free((void **)&nnzs, msg);           \
+        LAGraph_Free((void **)&nnzs, NULL);          \
         LAGraph_Free((void **)&eps_rules, NULL);     \
         LAGraph_Free((void **)&term_rules, NULL);    \
         LAGraph_Free((void **)&bin_rules, NULL);     \
@@ -223,14 +223,9 @@ GrB_Info LAGraph_CFL_single_path(
 
         if (!found_null)
         {
-            ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
-            ADD_TO_MSG("%" PRId64, i);
+            ADD_TO_MSG("Adjacency matrices with these indexes are null:");
         }
-        else
-        {
-            ADD_TO_MSG("%" PRId64, i);
-        }
-
+        ADD_TO_MSG(" %" PRId64, i);
         found_null = true;
     }
 
@@ -249,13 +244,9 @@ GrB_Info LAGraph_CFL_single_path(
 
         if (!found_null)
         {
-            ADD_TO_MSG("Outputs matrices with these indexes are null: ");
-            ADD_TO_MSG("%" PRId64, i);
+            ADD_TO_MSG("Outputs matrices with these indexes are null:");
         }
-        else
-        {
-            ADD_TO_MSG("%" PRId64, i);
-        }
+        ADD_TO_MSG(" %" PRId64, i);
 
         found_null = true;
     }
