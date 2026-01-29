@@ -22,6 +22,7 @@
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             CFL_matrix_free(&temp_matrices[i]);                                          \
             CFL_matrix_free(&delta_matrices[i]);                                         \
+            CFL_matrix_free(&matrices[i]);                                               \
             if (new_adj_matrices != adj_matrices) {                                      \
                 GrB_free(&new_adj_matrices[i]);                                          \
             }                                                                            \
@@ -191,7 +192,7 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
     LG_status = LAGraph_Calloc((void **)symbols, capacity, sizeof(CFL_Symbol), msg);
     if (LG_status < GrB_SUCCESS) {
         free(checked);
-        free(symbols);
+        free(*symbols);
         fprintf(stderr, "Calloc error: (%d): file: %s, line: %d\n%s\n", LG_status,
                 __FILE__, __LINE__, msg);
         return LG_status;
@@ -234,7 +235,7 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
                                             sizeof(CFL_Symbol), msg);
                 if (LG_status < GrB_SUCCESS) {
                     free(checked);
-                    free(symbols);
+                    free(*symbols);
                     fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
                             LG_status, __FILE__, __LINE__, msg);
                     return LG_status;
@@ -257,7 +258,7 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
                                         sizeof(CFL_Symbol), msg);
             if (LG_status < GrB_SUCCESS) {
                 free(checked);
-                free(symbols);
+                free(*symbols);
                 fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
                         LG_status, __FILE__, __LINE__, msg);
                 return LG_status;
@@ -291,7 +292,7 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
     LG_status = LAGraph_Calloc((void **)new_rules, new_rules_capacity,
                                sizeof(LAGraph_rule_EWCNF), msg);
     if (LG_status < GrB_SUCCESS) {
-        free(new_rules);
+        free(*new_rules);
         fprintf(stderr, "Calloc error: (%d): file: %s, line: %d\n%s\n", LG_status,
                 __FILE__, __LINE__, msg);
         return LG_status;
@@ -306,7 +307,7 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
                 LAGraph_Realloc((void **)new_rules, new_rules_capacity * 2,
                                 new_rules_capacity, sizeof(LAGraph_rule_EWCNF), msg);
             if (LG_status < GrB_SUCCESS) {
-                free(new_rules);
+                free(*new_rules);
                 fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
                         LG_status, __FILE__, __LINE__, msg);
                 return LG_status;
@@ -322,7 +323,7 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
                     LAGraph_Realloc((void **)new_rules, new_rules_capacity * 2,
                                     new_rules_capacity, sizeof(LAGraph_rule_EWCNF), msg);
                 if (LG_status < GrB_SUCCESS) {
-                    free(new_rules);
+                    free(*new_rules);
                     fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
                             LG_status, __FILE__, __LINE__, msg);
                     return LG_status;
@@ -832,20 +833,22 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Symbol sym = symbols[i];
             if (sym.count == 0) {
                 if (matrices[sym.index].base_matrices_count == 0) {
-                    outputs[sym.base_index] = matrices[sym.index].base;
+                    GrB_Matrix_dup(&outputs[sym.base_index], matrices[sym.index].base);
                 } else {
                     CFL_Matrix result =
                         CFL_matrix_to_base(&matrices[sym.index], optimizations);
-                    outputs[sym.base_index] = result.base;
+                    GrB_Matrix_dup(&outputs[sym.base_index], result.base);
+                    CFL_matrix_free(&result);
                 }
             } else {
-                GrB_Matrix matrix_to_split;
+                GrB_Matrix matrix_to_split = NULL;
                 if (matrices[sym.index].base_matrices_count == 0) {
-                    matrix_to_split = matrices[sym.index].base;
+                    GrB_Matrix_dup(&matrix_to_split, matrices[sym.index].base);
                 } else {
                     CFL_Matrix result =
                         CFL_matrix_to_base(&matrices[sym.index], optimizations);
-                    matrix_to_split = result.base;
+                    GrB_Matrix_dup(&matrix_to_split, result.base);
+                    CFL_matrix_free(&result);
                 }
 
                 GrB_Index *nrows;
@@ -859,18 +862,22 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
                 GxB_Matrix_split(outputs + sym.base_index, sym.count, 1, nrows, ncols,
                                  matrix_to_split, GrB_NULL);
+                free(nrows);
+                free(ncols);
+                GrB_free(&matrix_to_split);
             }
         } else {
             if (matrices[i].base_matrices_count == 0) {
-                outputs[i] = matrices[i].base;
+                GrB_Matrix_dup(&outputs[i], matrices[i].base);
             } else {
                 CFL_Matrix result = CFL_matrix_to_base(&matrices[i], optimizations);
-                outputs[i] = result.base;
+                GrB_Matrix_dup(&outputs[i], result.base);
+                CFL_matrix_free(&result);
             }
             // outputs[i] = matrices[i].base;
         }
     }
 
-    // LG_FREE_WORK;
+    LG_FREE_WORK;
     return GrB_SUCCESS;
 }
