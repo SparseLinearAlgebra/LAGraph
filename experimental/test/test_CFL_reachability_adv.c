@@ -740,17 +740,17 @@ void test_CFL_reachability_null_pointers(void) {
 #endif
 }
 
-TEST_LIST = {{"CFL_reachability_cycle", test_CFL_reachability_cycle},
-             {"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
+TEST_LIST = {{"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
+             {"CFL_reachability_cycle", test_CFL_reachability_cycle},
              {"CFL_reachability_two_cycle", test_CFL_reachability_two_cycle},
              {"CFL_reachability_labels_more_than_nonterms",
               test_CFL_reachability_labels_more_than_nonterms},
              {"CFL_reachability_tree", test_CFL_reachability_tree},
              {"CFL_reachability_line", test_CFL_reachability_line},
              {"CFL_reachability_two_nodes_cycle", test_CFL_reachability_two_nodes_cycle},
-             {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
              {"test_CFL_reachability_with_empty_adj_matrix",
               test_CFL_reachability_with_empty_adj_matrix},
+             {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
 #if !defined(GRAPHBLAS_HAS_CUDA)
              {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
 #endif
