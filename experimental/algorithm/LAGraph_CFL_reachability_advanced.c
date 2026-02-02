@@ -835,21 +835,24 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Symbol sym = symbols[i];
             if (sym.count == 0) {
                 if (matrices[sym.index].base_matrices_count == 0) {
-                    GrB_Matrix_dup(&outputs[sym.base_index], matrices[sym.index].base);
+                    GrB_Matrix_free(&outputs[sym.base_index]);
+                    TRY(GrB_Matrix_dup(&outputs[sym.base_index],
+                                       matrices[sym.index].base));
                 } else {
+                    // printf("RESULT");
                     CFL_Matrix result =
                         CFL_matrix_to_base(&matrices[sym.index], optimizations);
-                    GrB_Matrix_dup(&outputs[sym.base_index], result.base);
+                    TRY(GrB_Matrix_dup(&outputs[sym.base_index], result.base));
                     CFL_matrix_free(&result);
                 }
             } else {
                 GrB_Matrix matrix_to_split = NULL;
                 if (matrices[sym.index].base_matrices_count == 0) {
-                    GrB_Matrix_dup(&matrix_to_split, matrices[sym.index].base);
+                    TRY(GrB_Matrix_dup(&matrix_to_split, matrices[sym.index].base));
                 } else {
                     CFL_Matrix result =
                         CFL_matrix_to_base(&matrices[sym.index], optimizations);
-                    GrB_Matrix_dup(&matrix_to_split, result.base);
+                    TRY(GrB_Matrix_dup(&matrix_to_split, result.base));
                     CFL_matrix_free(&result);
                 }
 
@@ -862,18 +865,38 @@ GrB_Info LAGraph_CFL_reachability_adv(
                 LAGraph_Calloc((void **)&ncols, 1, sizeof(GrB_Index), msg);
                 ncols[0] = n;
 
-                GxB_Matrix_split(outputs + sym.base_index, sym.count, 1, nrows, ncols,
-                                 matrix_to_split, GrB_NULL);
+                GrB_Index m = sym.count;
+                GrB_Index n = 1;
+
+                GrB_Index matrix_to_split_nrows;
+                GrB_Index matrix_to_split_ncols;
+                GrB_Matrix_nrows(&matrix_to_split_nrows, matrix_to_split);
+                GrB_Matrix_ncols(&matrix_to_split_ncols, matrix_to_split);
+                // printf("%d %d\n", matrix_to_split_nrows, matrix_to_split_ncols);
+                if (matrix_to_split_ncols > matrix_to_split_nrows) {
+                    GrB_Index *temp;
+                    temp = nrows;
+                    nrows = ncols;
+                    ncols = temp;
+
+                    GrB_Index temp_n;
+                    temp_n = m;
+                    m = n;
+                    n = temp_n;
+                }
+
+                TRY(GxB_Matrix_split(outputs + sym.base_index, m, n, nrows, ncols,
+                                     matrix_to_split, GrB_NULL));
                 free(nrows);
                 free(ncols);
                 GrB_free(&matrix_to_split);
             }
         } else {
             if (matrices[i].base_matrices_count == 0) {
-                GrB_Matrix_dup(&outputs[i], matrices[i].base);
+                TRY(GrB_Matrix_dup(&outputs[i], matrices[i].base));
             } else {
                 CFL_Matrix result = CFL_matrix_to_base(&matrices[i], optimizations);
-                GrB_Matrix_dup(&outputs[i], result.base);
+                TRY(GrB_Matrix_dup(&outputs[i], result.base));
                 CFL_matrix_free(&result);
             }
             // outputs[i] = matrices[i].base;
