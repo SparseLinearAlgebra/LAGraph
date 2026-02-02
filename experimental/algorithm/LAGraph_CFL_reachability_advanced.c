@@ -18,6 +18,7 @@
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         CFL_matrix_free(&iden);                                                          \
+        free(symbols);                                                                   \
         LAGraph_Free((void **)&new_rules, msg);                                          \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             CFL_matrix_free(&temp_matrices[i]);                                          \
@@ -142,6 +143,7 @@
         GrB_Info LG_GrB_Info = GrB_method;                                               \
         if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
             fprintf(stderr, "LAGraph failure (file %s, line %d): ", __FILE__, __LINE__); \
+            fprintf(stderr, "\n%d %s", LG_GrB_Info, msg);                                \
             exit(LG_GrB_Info);                                                           \
         }                                                                                \
     }
@@ -537,7 +539,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         new_symbols_amount = symbols_amount;
         new_adj_matrices = (GrB_Matrix *)adj_matrices;
         GRB_TRY(explode_rules(rules, rules_count, &new_rules, &new_rules_count, msg));
-        printf("new rules count %ld\n", new_rules_count);
+        // printf("new rules count %ld\n", new_rules_count);
     }
 
     // Arrays for processing rules
