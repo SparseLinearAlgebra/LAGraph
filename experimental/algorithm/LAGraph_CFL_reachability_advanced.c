@@ -790,10 +790,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Matrix *C = &delta_matrices[i];
 
             // printf("RSUB iteration: %ld i: %ld\n", iteration, i);
-            // matrix_print_lazy(A);
-            // matrix_print_lazy(C);
+            // matrix_print_lazy(A, optimizations);
+            // matrix_print_lazy(C, optimizations);
             TRY(CFL_rsub(C, A, optimizations));
-            // matrix_print_lazy(C);
+            // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
         // print_graph_info(matrices, symbols_amount);
@@ -829,6 +829,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
         // GxB_print(T[i], GxB_SUMMARY);
     }
 #endif
+
+    // printf("PRINTED:\n");
+    // for (size_t i = 0; i < new_symbols_amount; i++) {
+    //     matrix_print_lazy(&matrices[i], optimizations);
+    // }
 
     for (size_t i = 0; i < new_symbols_amount; i++) {
         if (optimizations & OPT_BLOCK) {
