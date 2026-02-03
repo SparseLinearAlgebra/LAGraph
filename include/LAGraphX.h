@@ -1096,25 +1096,66 @@ GrB_Info LAGraph_CFL_reachability
     char *msg                       // Message string for error reporting.
 ) ;
 
+typedef struct
+{
+    GrB_Type type;
+    GrB_Semiring semiring;
+    GrB_BinaryOp add;
+    GrB_BinaryOp mult;
+    GrB_BinaryOp init_path; // Function for defining elements used to describe information about paths of length 0 and 1. Depends on the specific task
+    GrB_Scalar bottom_scalar;
+} CFL_Semiring;
+
 // Edge of the graph from vertex start to vertex end with terminal label
-typedef struct {
+typedef struct
+{
     GrB_Index start;
     int32_t label;
     GrB_Index end;
 } Edge;
 
-typedef struct {
+typedef struct
+{
     Edge *path;
     size_t len;
 } Path;
 
 // Structure for storing single path information
-typedef struct {
+typedef struct
+{
     GrB_Index middle; // Auxiliary vertex for merging paths
-    int32_t height; // Minimum height of the derivation tree of the string formed by this path from a nonterminal
+    int32_t height;   // Minimum height of the derivation tree of the string formed by this path from a nonterminal
+    // int64_t rule;
 } PathIndex;
 
-GrB_Info LAGraph_CFL_single_path(
+GrB_Info LAGraph_CFPQ_core
+(
+    // Output
+    GrB_Matrix *outputs, // Array of matrices containing results.
+                         // The size of the array must be equal to nonterms_count.
+                         //
+                         // outputs[k]: (i, j) contains a _ if and only if there is a path
+                         // from node i to node j whose edge labels form a word
+                         // derivable from the non-terminal 'k' of the specified CFG.
+    // Input
+    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
+                                    // The length of this array is equal to the count of
+                                    // terminals (terms_count).
+                                    //
+                                    // adj_matrices[t]: (i, j) == 1 if and only if there
+                                    // is an edge between nodes i and j with the label of
+                                    // the terminal corresponding to index 't' (where t is
+                                    // in the range [0, terms_count - 1]).
+    int64_t terms_count,            // The total number of terminal symbols in the CFG.
+    int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
+    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
+    int64_t rules_count,            // The total number of rules in the CFG.
+    const CFL_Semiring *semiring,   // The algebraic structure that defines operations on matrices for a specific problem
+    char *msg // Message string for error reporting.
+);
+
+GrB_Info LAGraph_CFL_single_path
+(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.
@@ -1138,7 +1179,8 @@ GrB_Info LAGraph_CFL_single_path(
     char *msg                       // Message string for error reporting.
 );
 
-GrB_Info LAGraph_CFL_extract_single_path(
+GrB_Info LAGraph_CFL_extract_single_path
+(
     // Output
     Path *output, // A path extracted from a graph that forms a word produced by the rules of the grammar.
                   //

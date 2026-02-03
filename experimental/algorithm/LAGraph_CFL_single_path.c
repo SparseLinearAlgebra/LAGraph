@@ -1,56 +1,18 @@
-#define LG_FREE_WORK                                 \
-    {                                                \
-        GrB_free(&true_scalar);                      \
-        GrB_free(&bottom_scalar);                    \
-        GrB_free(&IPI_set);                          \
-        GrB_free(&IPI_mult);                         \
-        GrB_free(&PI_set);                           \
-        GrB_free(&PI_mult);                          \
-        GrB_free(&PI_add);                           \
-        GrB_free(&PI_semiring);                      \
-        GrB_free(&Theta);                            \
-        GrB_free(&PI_monoid);                        \
-        GrB_free(&identity_matrix);                  \
-        LAGraph_Free((void **)&t_empty_flags, NULL); \
-        LAGraph_Free((void **)&nnzs, NULL);          \
-        LAGraph_Free((void **)&eps_rules, NULL);     \
-        LAGraph_Free((void **)&term_rules, NULL);    \
-        LAGraph_Free((void **)&bin_rules, NULL);     \
+#define LG_FREE_WORK              \
+    {                             \
+        GrB_free(&bottom_scalar); \
+        GrB_free(&IPI_set);       \
+        GrB_free(&IPI_mult);      \
+        GrB_free(&PI_set);        \
+        GrB_free(&PI_mult);       \
+        GrB_free(&PI_add);        \
+        GrB_free(&PI_semiring);   \
+        GrB_free(&Theta);         \
+        GrB_free(&PI_monoid);     \
     }
 
 #include "LG_internal.h"
 #include <LAGraphX.h>
-
-#define ERROR_RULE(msg, i)                                                  \
-    {                                                                       \
-        LG_ASSERT_MSGF(false, GrB_INVALID_VALUE,                            \
-                       "Rule with index %" PRId64 " is invalid. ", msg, i); \
-    }
-
-#define ADD_TO_MSG(...)                                                   \
-    {                                                                     \
-        if (msg_len == 0)                                                 \
-        {                                                                 \
-            msg_len +=                                                    \
-                snprintf(msg, LAGRAPH_MSG_LEN,                            \
-                         "LAGraph failure (file %s, line %d): ",          \
-                         __FILE__, __LINE__);                             \
-        }                                                                 \
-        if (msg_len < LAGRAPH_MSG_LEN)                                    \
-        {                                                                 \
-            msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
-                                __VA_ARGS__);                             \
-        }                                                                 \
-    }
-
-#define ADD_INDEX_TO_ERROR_RULE(rule, i)                     \
-    {                                                        \
-        rule.len_indexes_str += snprintf(                    \
-            rule.indexes_str + rule.len_indexes_str,         \
-            LAGRAPH_MSG_LEN - rule.len_indexes_str,          \
-            rule.count == 0 ? "%" PRId64 : ", %" PRId64, i); \
-        rule.count++;                                        \
-    }
 
 void add_path_index(PathIndex *z, const PathIndex *x, const PathIndex *y)
 {
@@ -175,15 +137,8 @@ GrB_Info LAGraph_CFL_single_path(
     char *msg                       // Message string for error reporting.
 )
 {
-    // Declare workspace
-    bool *t_empty_flags = NULL; // t_empty_flags[i] == true <=> outputs[i] is empty
-    uint64_t *nnzs = NULL;
-    LG_CLEAR_MSG;
-    size_t msg_len = 0; // For error formatting
-    GrB_Matrix identity_matrix = NULL;
-    GrB_Type PI_type = NULL; // Type PathIndex
-
     // Semiring components
+    GrB_Type PI_type = NULL; // Type PathIndex
     GrB_BinaryOp PI_add = NULL;
     GrB_Monoid PI_monoid = NULL;
     GxB_IndexBinaryOp IPI_mult = NULL;
@@ -191,73 +146,11 @@ GrB_Info LAGraph_CFL_single_path(
     GrB_Semiring PI_semiring = NULL;
     GxB_IndexBinaryOp IPI_set = NULL;
     GrB_BinaryOp PI_set = NULL;
-
     GrB_Scalar Theta = NULL;
-    GrB_Scalar true_scalar = NULL;
     GrB_Scalar bottom_scalar = NULL;
 
-    // Arrays for processing rules
-    size_t *eps_rules = NULL, eps_rules_count = 0;   // [Variable -> eps]
-    size_t *term_rules = NULL, term_rules_count = 0; // [Variable -> term]
-    size_t *bin_rules = NULL, bin_rules_count = 0;   // [Variable -> AB]
-
-    LG_TRY(LAGraph_Calloc((void **)&t_empty_flags, nonterms_count, sizeof(bool), msg));
-
-    LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
-                  "The number of terminals must be greater than zero.");
-    LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
-                  "The number of non-terminals must be greater than zero.");
-    LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
-                  "The number of rules must be greater than zero.");
-    LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
-    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
-    LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
-                  "The adjacency matrices array cannot be null.");
-
-    // Find null adjacency matrices
-    bool found_null = false;
-    for (int64_t i = 0; i < terms_count; i++)
-    {
-        if (adj_matrices[i] != NULL)
-            continue;
-
-        if (!found_null)
-        {
-            ADD_TO_MSG("Adjacency matrices with these indexes are null:");
-        }
-        ADD_TO_MSG(" %" PRId64, i);
-        found_null = true;
-    }
-
-    if (found_null)
-    {
-        LG_FREE_ALL;
-        return GrB_NULL_POINTER;
-    }
-
-    // Check that outputs are initialized correctly
-    found_null = false;
-    for (int64_t i = 0; i < nonterms_count; i++)
-    {
-        if (outputs[i] != NULL)
-            continue;
-
-        if (!found_null)
-        {
-            ADD_TO_MSG("Outputs matrices with these indexes are null:");
-        }
-        ADD_TO_MSG(" %" PRId64, i);
-
-        found_null = true;
-    }
-
-    if (found_null)
-    {
-        LG_FREE_ALL;
-        return GrB_NULL_POINTER;
-    }
-
-    GRB_TRY(GxB_Matrix_type(&PI_type, outputs[0]));
+    // GRB_TRY(GxB_Matrix_type(&PI_type, outputs[0]));
+    GRB_TRY(GrB_Type_new(&PI_type, sizeof(PathIndex)));
 
     // Theta cannot be NULL
     GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
@@ -266,9 +159,6 @@ GrB_Info LAGraph_CFL_single_path(
     PathIndex bottom = {0, 0};
     GRB_TRY(GrB_Scalar_new(&bottom_scalar, PI_type));
     GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
-
-    GRB_TRY(GrB_Scalar_new(&true_scalar, GrB_BOOL));
-    GRB_TRY(GrB_Scalar_setElement_BOOL(true_scalar, true));
 
     // Create semiring
     GRB_TRY(GrB_BinaryOp_new(
@@ -318,167 +208,13 @@ GrB_Info LAGraph_CFL_single_path(
         IPI_set,
         Theta));
 
-    LG_TRY(LAGraph_Calloc((void **)&eps_rules, rules_count, sizeof(size_t), msg));
-    LG_TRY(LAGraph_Calloc((void **)&term_rules, rules_count, sizeof(size_t), msg));
-    LG_TRY(LAGraph_Calloc((void **)&bin_rules, rules_count, sizeof(size_t), msg));
-
-    // Process rules
-    typedef struct
-    {
-        size_t count;
-        size_t len_indexes_str;
-        char indexes_str[LAGRAPH_MSG_LEN];
-    } rule_error_s;
-    rule_error_s term_err = {0};
-    rule_error_s nonterm_err = {0};
-    rule_error_s invalid_err = {0};
-    for (int64_t i = 0; i < rules_count; i++)
-    {
-        LAGraph_rule_WCNF rule = rules[i];
-
-        bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
-        bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
-        bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
-
-        // Check that all rules are well-formed
-        if (rule.nonterm < 0 || rule.nonterm >= nonterms_count)
-        {
-            ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-        }
-
-        // [Variable -> eps]
-        if (is_rule_eps)
-        {
-            eps_rules[eps_rules_count++] = i;
-
-            continue;
-        }
-
-        // [Variable -> term]
-        if (is_rule_term)
-        {
-            term_rules[term_rules_count++] = i;
-
-            if (rule.prod_A < -1 || rule.prod_A >= terms_count)
-            {
-                ADD_INDEX_TO_ERROR_RULE(term_err, i);
-            }
-
-            continue;
-        }
-
-        // [Variable -> A B]
-        if (is_rule_bin)
-        {
-            bin_rules[bin_rules_count++] = i;
-
-            if (rule.prod_A < -1 || rule.prod_A >= nonterms_count || rule.prod_B < -1 ||
-                rule.prod_B >= nonterms_count)
-            {
-                ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-            }
-
-            continue;
-        }
-
-        // [Variable -> _ B]
-        ADD_INDEX_TO_ERROR_RULE(invalid_err, i);
-    }
-    if (term_err.count + nonterm_err.count + invalid_err.count > 0)
-    {
-        ADD_TO_MSG("Count of invalid rules: %" PRId64 ".\n",
-                   (int64_t)(term_err.count + nonterm_err.count + invalid_err.count));
-
-        if (nonterm_err.count > 0)
-        {
-            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str);
-        }
-        if (term_err.count > 0)
-        {
-            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str);
-        }
-        if (invalid_err.count > 0)
-        {
-            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str);
-        }
-
-        LG_FREE_ALL;
-        return GrB_INVALID_VALUE;
-    }
-
-    // Rule [Variable -> term]
-    for (int64_t i = 0; i < term_rules_count; i++)
-    {
-        LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
-        GrB_Index adj_matrix_nnz = 0;
-        GRB_TRY(GrB_Matrix_nvals(&adj_matrix_nnz, adj_matrices[term_rule.prod_A]));
-
-        if (adj_matrix_nnz == 0)
-        {
-            continue;
-        }
-        GrB_BinaryOp acc_op = t_empty_flags[term_rule.nonterm] ? GrB_NULL : PI_add;
-        GxB_eWiseUnion(
-            outputs[term_rule.nonterm], GrB_NULL, acc_op, PI_set,
-            outputs[term_rule.nonterm], bottom_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL);
-
-        t_empty_flags[term_rule.nonterm] = false;
-    }
-
-    // Rule [Variable -> eps]
-    GrB_Index n;
-    GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
-    GrB_Vector v_diag;
-    GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
-    GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
-    GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
-    GRB_TRY(GrB_free(&v_diag));
-
-    for (int64_t i = 0; i < eps_rules_count; i++)
-    {
-        LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
-        GrB_BinaryOp acc_op = t_empty_flags[eps_rule.nonterm] ? GrB_NULL : PI_add;
-        GxB_eWiseUnion(
-            outputs[eps_rule.nonterm], GrB_NULL, acc_op, PI_set,
-            outputs[eps_rule.nonterm], bottom_scalar, identity_matrix, true_scalar, GrB_NULL);
-
-        t_empty_flags[eps_rule.nonterm] = false;
-    }
-
-    // Rule [Variable -> Variable1 Variable2]
-    LG_TRY(LAGraph_Calloc((void **)&nnzs, nonterms_count, sizeof(uint64_t), msg));
-    bool changed = true;
-    while (changed)
-    {
-        changed = false;
-        for (int64_t i = 0; i < bin_rules_count; i++)
-        {
-            LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
-
-            // If one of matrices is empty then their product will be empty
-            if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B])
-            {
-                continue;
-            }
-
-            GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : PI_add;
-            GRB_TRY(GrB_mxm(outputs[bin_rule.nonterm], GrB_NULL, acc_op,
-                            PI_semiring, outputs[bin_rule.prod_A], outputs[bin_rule.prod_B],
-                            GrB_NULL))
-
-            GrB_Index new_nnz;
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, outputs[bin_rule.nonterm]));
-            if (new_nnz != 0)
-                t_empty_flags[bin_rule.nonterm] = false;
-
-            changed = changed || (nnzs[bin_rule.nonterm] != new_nnz);
-            nnzs[bin_rule.nonterm] = new_nnz;
-        }
-    }
-
+    CFL_Semiring semiring = {.type = PI_type,
+                             .semiring = PI_semiring,
+                             .add = PI_add,
+                             .mult = PI_mult,
+                             .init_path = PI_set,
+                             .bottom_scalar = bottom_scalar};
+    LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
     LG_FREE_WORK;
     return GrB_SUCCESS;
 }
