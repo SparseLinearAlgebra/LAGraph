@@ -858,31 +858,31 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
 
 //****************************************************************************
 LAGRAPHX_PUBLIC
-int LAGraph_RSM_reachability
-(
+int LAGraph_RSM_reachability(
     // output:
-    GrB_Vector *reachable, // reachable(i) = true if node i is reachable
-                           // from one of the starting nodes by a path
-                           // satisfying regular constraints
+    GrB_Vector *reachable,
 
-    LAGraph_Graph *R,      // input recursive state machine's
-                           // adjacency matrix decomposition
-    size_t nl,             // total label count, # of matrices graph and
-                           // RSM adjacency matrix decomposition
-    const GrB_Index *QS,   // starting states in RSM
-    size_t nqs,            // number of starting states in RSM
-    const GrB_Index *QF,   // final states in RSM
-    size_t nqf,            // number of final states in RSM
+    // input:
+    size_t num_terminals, // # terminal labels
+    LAGraph_Graph *G_a,   // terminal transitions
+    LAGraph_Graph *N_a,   // terminal transitions
 
-    LAGraph_Graph *R_call, // recursive state machine's call/return nr*nr
-                           // matrix, where (i, j) = 1 if there is transition
-                           // from i state of one automata to j starting 
-                           // state of another automata
-    LAGraph_Graph *G,      // input graph adjacency matrix decomposition
-    const GrB_Index *S,    // source vertices to start searching paths
-    size_t ns,             // number of source vertices
-    char *msg              // LAGraph output message
-) ;
+    size_t num_nonterminals, // # nonterminal labels
+    LAGraph_Graph *N_S,      // nonterminal RSM transitions
+    LAGraph_Graph *Call_S,   // call transition matrix
+    LAGraph_Graph *Ret_S,    // return transition matrix
+
+    const GrB_Index *QS, // staring states in RSM
+    size_t nqs,          // # starting states
+    const GrB_Index *QF, // final states in RSM
+    size_t nqf,          // # final states
+
+    const GrB_Index *Source, // sources vertices
+    size_t ns,               // # source vertices
+
+    char *msg
+
+);
 
 //****************************************************************************
 LAGRAPHX_PUBLIC
