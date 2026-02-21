@@ -60,7 +60,7 @@ GrB_Info LAGraph_CFPQ_core(
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.
                          //
-                         // outputs[k]: (i, j) contains a _ if and only if there is a path
+                         // outputs[k]: (i, j) contains a corresponding semiring value if and only if there is a path
                          // from node i to node j whose edge labels form a word
                          // derivable from the non-terminal 'k' of the specified CFG.
     // Input
@@ -114,6 +114,8 @@ GrB_Info LAGraph_CFPQ_core(
     LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
+    LG_ASSERT_MSG(semiring != NULL, GrB_NULL_POINTER,
+                  "The semiring cannot be null.");
 
     // Find null adjacency matrices
     bool found_null = false;
