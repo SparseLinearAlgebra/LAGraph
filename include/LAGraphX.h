@@ -974,6 +974,16 @@ GrB_Info LAGraph_RPQMatrix_label
 LAGRAPHX_PUBLIC
 GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan) ;
 
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_reduce(
+    GrB_Index *res,
+    GrB_Matrix mat,
+    uint8_t reduce_type // reduce_type values:
+                        // 0 --- reduce by row
+                        // 1 --- reduce by col
+) ;
+
+
 //****************************************************************************
 LAGRAPHX_PUBLIC
 int LAGraph_VertexCentrality_Triangle       // vertex triangle-centrality

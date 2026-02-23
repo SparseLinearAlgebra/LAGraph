@@ -196,6 +196,23 @@ GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan)
 
 GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg) ;
 
+GrB_Info LAGraph_RPQMatrix_reduce(GrB_Index *res, GrB_Matrix mat, uint8_t reduce_type)
+{
+    GrB_Index nvals ;
+    GrB_Vector reduce ;
+    if (reduce_type == 0)
+    {
+        GrB_Matrix_reduce_Monoid(reduce,NULL,NULL,GxB_ANY_BOOL_MONOID,mat,NULL) ;
+    }
+    else if (reduce_type == 1)
+    {
+        GrB_Matrix_reduce_Monoid(reduce, NULL,NULL,GxB_ANY_BOOL_MONOID,mat,GrB_DESC_T0) ;
+    }
+    GrB_Vector_nvals(&nvals,reduce) ;
+    *res = nvals ;
+    return (GrB_SUCCESS) ;
+}
+
 static GrB_Info LAGraph_RPQMatrixLor(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
