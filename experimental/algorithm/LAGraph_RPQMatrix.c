@@ -111,16 +111,17 @@
 
 #include "LG_internal.h"
 #include "LAGraphX.h"
+#include <time.h>
 #include <assert.h>
 
 #define OK(s)                                           \
 {                                                       \
-    GrB_Info info = (s);                                \
+    GrB_Info info = (s) ;                               \
     if (info != GrB_SUCCESS)                            \
     {                                                   \
-        printf("Message: %s\n", msg);                   \
-        fprintf(stderr, "GraphBLAS error: %d (%s, %d)\n", info, __FILE__, __LINE__); \
-        return info;                                    \
+        printf("Message: %s\n", msg) ;                  \
+        fprintf(stderr, "GraphBLAS error: %d (%s, %d)\n", info, __FILE__, __LINE__) ; \
+        return info ;                                   \
     }                                                   \
 }
 
@@ -137,7 +138,7 @@ GrB_Info LAGraph_RPQMatrix_check(RPQMatrixPlan *plan, GrB_Index *dimension, char
     }
     if (plan->op == RPQ_MATRIX_OP_LABEL)
     {
-        LG_ASSERT(plan->mat != NULL, GrB_NULL_POINTER);
+        LG_ASSERT(plan->mat != NULL, GrB_NULL_POINTER) ;
         GrB_Index nrows, ncols ;
         OK(GrB_Matrix_nrows(&nrows, plan->mat)) ;
         OK(GrB_Matrix_ncols(&ncols, plan->mat)) ;
@@ -166,8 +167,8 @@ GrB_Info LAGraph_RPQMatrix_check(RPQMatrixPlan *plan, GrB_Index *dimension, char
     return GrB_SUCCESS ;
 }
 
-static GrB_Semiring sr ;
-static GrB_Monoid op ;
+static GrB_Semiring sr = GrB_NULL ;
+static GrB_Monoid op = GrB_NULL ;
 
 GrB_Info LAGraph_RPQMatrix_label(GrB_Matrix *mat, GrB_Index x, GrB_Index i, GrB_Index j)
 {
@@ -199,17 +200,30 @@ GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg) ;
 GrB_Info LAGraph_RPQMatrix_reduce(GrB_Index *res, GrB_Matrix mat, uint8_t reduce_type)
 {
     GrB_Index nvals ;
-    GrB_Vector reduce ;
+    GrB_Vector reduce = GrB_NULL ;
+
+    GrB_Index nrows ;
+    OK(GrB_Matrix_nrows(&nrows, mat)) ;
+    OK(GrB_Vector_new(&reduce, GrB_BOOL, nrows)) ;
+
     if (reduce_type == 0)
     {
-        GrB_Matrix_reduce_Monoid(reduce,NULL,NULL,GxB_ANY_BOOL_MONOID,mat,NULL) ;
+        OK(GrB_reduce(reduce, GrB_NULL, GrB_NULL, op, mat, GrB_NULL)) ;
     }
     else if (reduce_type == 1)
     {
-        GrB_Matrix_reduce_Monoid(reduce, NULL,NULL,GxB_ANY_BOOL_MONOID,mat,GrB_DESC_T0) ;
+        OK(GrB_reduce(reduce, GrB_NULL, GrB_NULL, op, mat, GrB_DESC_T0)) ;
     }
-    GrB_Vector_nvals(&nvals,reduce) ;
+    else
+    {
+        OK(GrB_Vector_free(&reduce)) ;
+        return GrB_INVALID_VALUE ;
+    }
+
+    OK(GrB_Vector_nvals(&nvals, reduce)) ;
     *res = nvals ;
+
+    OK(GrB_Vector_free(&reduce)) ;
     return (GrB_SUCCESS) ;
 }
 
@@ -239,11 +253,20 @@ static GrB_Info LAGraph_RPQMatrixLor(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix res ;
     GrB_Matrix_new(&res, GrB_BOOL, dimension, dimension) ;
     GRB_TRY(GrB_eWiseAdd(res, GrB_NULL, GrB_NULL,
-                         op, lhs_mat, rhs_mat, GrB_DESC_R)) ;
+                         GrB_LOR, lhs_mat, rhs_mat, GrB_DESC_R)) ;
     plan->res_mat = res ;
 
     return (GrB_SUCCESS) ;
 }
+
+#define abs(a) ((a) > 0.0f ? (a) : (-(a)))
+
+double error = 0.0 ;
+double error2 = 0.0 ;
+double c = 0.0 ;
+
+GrB_Info LAGraph_RPQMatrixEstimate_WanderJoin(GrB_Index *estimate, GrB_Matrix lhs, GrB_Matrix rhs) ;
+GrB_Info LAGraph_RPQMatrixEstimate_WanderJoin_Kleene(GrB_Index *estimate, GrB_Matrix rhs) ;
 
 static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
 {
@@ -271,6 +294,11 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
     GRB_TRY(GrB_mxm(res, GrB_NULL, GrB_NULL,
                     sr, lhs_mat, rhs_mat, GrB_DESC_R)) ;
     plan->res_mat = res ;
+
+    GrB_Vector ins ;
+    GrB_Vector_new(&ins, GrB_BOOL, dimension) ;
+    GrB_Vector outs ;
+    GrB_Vector_new(&outs, GrB_BOOL, dimension) ;
 
     return (GrB_SUCCESS) ;
 }
@@ -306,8 +334,6 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
 
     GRB_TRY(GrB_Matrix_diag(&S, v, 0)) ;
 
-    GRB_TRY(GrB_Vector_free(&v)) ;
-    
     bool changed = true ;
     GrB_Index nnz_S = n, nnz_Sold = 0 ;
 
@@ -408,7 +434,6 @@ static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
     plan->res_mat = S ;
     return GrB_SUCCESS ;
 }
-
 // this function need to handle special case where some optimization
 // are available.
 // consider following AST:
@@ -484,8 +509,6 @@ static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
     return GrB_SUCCESS ;
 }
 
-
-
 GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg)
 {
     if (plan->res_mat != NULL)
@@ -518,9 +541,14 @@ GrB_Info LAGraph_RPQMatrix_solver(RPQMatrixPlan *plan, char *msg)
 
 GrB_Info LAGraph_RPQMatrix_initialize(void)
 {
+    if (sr != GrB_NULL)
+    {
+        return GrB_SUCCESS ;
+    }
     sr = LAGraph_any_one_bool ;
     op = GxB_ANY_BOOL_MONOID ;
-    return GrB_SUCCESS;
+    srand(time(NULL)) ;
+    return GrB_SUCCESS ;
 }
 
 GrB_Info LAGraph_RPQMatrix(
@@ -560,3 +588,223 @@ GrB_Info LAGraph_RPQMatrix(
     GrB_Matrix_nvals(nnz, plan->res_mat) ;
     return GrB_SUCCESS ;
 }
+
+GrB_Info LAGraph_RPQMatrixOuts (GrB_Vector w, const GrB_Matrix A) {
+    return GrB_reduce (w, GrB_NULL, GrB_NULL, op, A, GrB_DESC_T0) ;
+}
+GrB_Info LAGraph_RPQMatrixIns (GrB_Vector w, const GrB_Matrix A) {
+    return GrB_reduce (w, GrB_NULL, GrB_NULL, op, A, GrB_NULL) ;
+}
+
+#define max(a, b) ((a) >= (b) ? (a) : (b))
+#define min(a, b) ((a) <= (b) ? (a) : (b))
+
+GrB_Info LAGraph_RPQMatrixEstimate (float *estimate,float *estimate2,  GrB_Vector outs, GrB_Vector ins) {
+    GrB_Index outc ;
+    GrB_Index inc ;
+
+    OK (GrB_Vector_nvals(&outc, outs)) ;
+    OK (GrB_Vector_nvals(&inc, ins)) ;
+    //printf ("OUTC INC: %llu %llu\n\n", outc, inc) ;
+
+    GrB_Index dimension ;
+    GrB_Vector_size(&dimension, ins) ;
+
+    GrB_Vector inter;
+    OK (GrB_Vector_new (&inter, GrB_BOOL, dimension)) ;
+    GrB_Index interc ;
+
+    OK (GrB_assign(inter, ins, GrB_NULL, outs, GrB_ALL, dimension, GrB_DESC_RS));
+    //GxB_print(inter, 2);
+
+    OK (GrB_Vector_nvals(&interc, inter)) ;
+
+    *estimate = ((float) interc) / ((float) max(outc, inc)) / ((float) min(outc, inc));
+    *estimate2 = 1 / ((float) max(outc, inc)) ;
+
+    return GrB_SUCCESS ;
+}
+
+#define WANDER_JOIN_FACTOR 8
+
+int compare( const void* a, const void* b)
+{
+     int int_a = * ( (int*) a );
+     int int_b = * ( (int*) b );
+     
+     if ( int_a == int_b ) return 0;
+     else if ( int_a < int_b ) return -1;
+     else return 1;
+}
+
+
+GrB_Info LAGraph_RPQMatrixEstimate_WanderJoin (GrB_Index *estimate, GrB_Matrix lhs, GrB_Matrix rhs) {
+    // TODO: check if square, of the same dimensions.
+
+    GrB_Index dim ;
+    GRB_TRY (GrB_Matrix_nrows(&dim, lhs)) ;
+    GrB_Index nvals ;
+    GRB_TRY (GrB_Matrix_nvals(&nvals, lhs)) ;
+
+    // nvals = n * n ~> join_factor = n
+    // nvals = big ~> join_factor = big
+    // nvals = small ~> join_factor = small
+    // nvals = 0 ~> join_factor = 1
+    GrB_Index join_factor = WANDER_JOIN_FACTOR ;
+
+    GrB_Index sdim = dim / join_factor ;
+    GrB_Matrix slhs ;
+    GrB_Matrix srhs ;
+    GRB_TRY (GrB_Matrix_new(&slhs, GrB_BOOL, sdim, sdim)) ;
+    GRB_TRY (GrB_Matrix_new(&srhs, GrB_BOOL, sdim, sdim)) ;
+
+    GrB_Index I[sdim] ;
+    for (size_t i = 0; i < sdim; i++) {
+        GrB_Index k ;
+        while (true) {
+            k = rand() % dim ;
+            for (size_t j = 0; j < i; j++) {
+                if (I[j] == k) {
+                    goto skip;
+                }
+            }
+            break;
+            skip:;
+        }
+        I[i] = k ;
+    }
+
+    GRB_TRY (GrB_extract(slhs, GrB_NULL, GrB_NULL, lhs, I, sdim, I, sdim, GrB_DESC_R)) ;
+    GRB_TRY (GrB_extract(srhs, GrB_NULL, GrB_NULL, rhs, I, sdim, I, sdim, GrB_DESC_R)) ;
+
+    GrB_Matrix sres ;
+    GRB_TRY (GrB_Matrix_new(&sres, GrB_BOOL, sdim, sdim)) ;
+
+    GRB_TRY (GrB_mxm(sres, GrB_NULL, GrB_NULL, sr, slhs, srhs, GrB_DESC_R)) ;
+
+    GrB_Index snv ;
+    GRB_TRY (GrB_Matrix_nvals(&snv, sres)) ;
+
+    *estimate = snv * join_factor * join_factor * join_factor ;
+
+    return GrB_SUCCESS ;
+}
+
+GrB_Info LAGraph_RPQMatrixEstimate_WanderJoin_Kleene (GrB_Index *estimate, GrB_Matrix rhs) {
+    // TODO: check if square, of the same dimensions.
+
+    GrB_Index dim ;
+
+    GRB_TRY (GrB_Matrix_nrows(&dim, rhs)) ;
+
+    GrB_Index sdim = dim / WANDER_JOIN_FACTOR ;
+    GrB_Matrix srhs ;
+    GRB_TRY (GrB_Matrix_new(&srhs, GrB_BOOL, sdim, sdim)) ;
+
+    GrB_Index I[sdim] ;
+    for (size_t i = 0; i < sdim; i++) {
+        GrB_Index k ;
+        while (true) {
+            k = rand() % dim ;
+            for (size_t j = 0; j < i; j++) {
+                if (I[j] == k) {
+                    goto skip;
+                }
+            }
+            break;
+            skip:;
+        }
+        I[i] = k ;
+    }
+
+    GRB_TRY (GrB_extract(srhs, GrB_NULL, GrB_NULL, rhs, I, sdim, I, sdim, GrB_DESC_R)) ;
+
+    GrB_Matrix S ;
+    GRB_TRY(GrB_Matrix_dup(&S, srhs)) ;
+    
+    bool changed = true ;
+    GrB_Index nnz_S = 0, nnz_Sold = 0 ;
+
+    while (changed)
+    {
+        // S <- S x (B + I)
+        GRB_TRY(GrB_mxm(S, S, GrB_NULL,
+                        sr, S, srhs, GrB_DESC_C)) ;
+
+        GRB_TRY(GrB_Matrix_nvals(&nnz_S, S)) ;
+        if (nnz_S != nnz_Sold)
+        {
+            changed = true ;
+            nnz_Sold = nnz_S ;
+        }
+        else
+        {
+            changed = false ;
+        }
+    }
+
+    GrB_Index snv ;
+    GRB_TRY (GrB_Matrix_nvals(&snv, S)) ;
+
+    *estimate = snv * WANDER_JOIN_FACTOR * WANDER_JOIN_FACTOR * WANDER_JOIN_FACTOR;
+
+    return GrB_SUCCESS ;
+}
+
+static GrB_Index *I = NULL;
+
+GrB_Info LAGraph_RPQMatrix_Alt (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals) {
+    GrB_Index sdim;
+    GRB_TRY (GrB_Matrix_nrows(&sdim, rhs)) ;
+
+    GRB_TRY (GrB_Matrix_new(res, GrB_BOOL, sdim, sdim)) ;
+
+    GRB_TRY(GrB_eWiseAdd(*res, GrB_NULL, GrB_NULL,
+                         op, lhs, rhs, GrB_DESC_R)) ;
+
+    GRB_TRY (GrB_Matrix_nvals(nvals, *res)) ;
+}
+GrB_Info LAGraph_RPQMatrix_Seq (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals) {
+    GrB_Index sdim;
+    GRB_TRY (GrB_Matrix_nrows(&sdim, rhs)) ;
+
+    GRB_TRY (GrB_Matrix_new(res, GrB_BOOL, sdim, sdim)) ;
+
+    GRB_TRY (GrB_mxm(*res, GrB_NULL, GrB_NULL, sr, lhs, rhs, GrB_DESC_R)) ;
+
+    GRB_TRY (GrB_Matrix_nvals(nvals, *res)) ;
+}
+GrB_Info LAGraph_RPQMatrix_ExtractRandom (GrB_Matrix rhs, GrB_Matrix *srhs, uint64_t seed) {
+    // TODO: check if square, of the same dimensions.
+    GrB_Index dim ;
+
+    GRB_TRY (GrB_Matrix_nrows(&dim, rhs)) ;
+
+    GrB_Index sdim = dim / WANDER_JOIN_FACTOR ;
+    GRB_TRY (GrB_Matrix_new(srhs, GrB_BOOL, sdim, sdim)) ;
+
+
+    if (I == NULL) {
+        srand(seed);
+        I = calloc(sizeof(GrB_Index), sdim);
+
+        for (size_t i = 0; i < sdim; i++) {
+            size_t u = rand();
+            size_t k = u % WANDER_JOIN_FACTOR + WANDER_JOIN_FACTOR * i;
+            I[i] = k ;
+        }
+    }
+
+    GRB_TRY (GrB_extract(*srhs, GrB_NULL, GrB_NULL, rhs, I, sdim, I, sdim, GrB_DESC_R)) ;
+    return GrB_SUCCESS ;
+}
+
+/*GrB_Info LAGraph_RPQMatrixEstimateSum(GrB_Index *estimate, RPQMatrix *lhs, RPQMatrix *rhs, char *msg) {
+    GrB_Index lhs_nvals, rhs_nvals ;
+    OK (GrB_Matrix_nvals(&lhs_nvals, lhs->m)) ;
+    OK (GrB_Matrix_nvals(&rhs_nvals, lhs->m)) ;
+
+    *estimate = lhs_nvals + rhs_nvals ;
+
+    return GrB_SUCCESS ;
+}*/

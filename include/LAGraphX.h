@@ -975,6 +975,24 @@ LAGRAPHX_PUBLIC
 GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan) ;
 
 LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrixOuts (GrB_Vector w, const GrB_Matrix A);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrixIns (GrB_Vector w, const GrB_Matrix A);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrixEstimate (float *estimate, float *estimate2, GrB_Vector outs, GrB_Vector ins);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_Alt (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_Seq (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_ExtractRandom (GrB_Matrix rhs, GrB_Matrix *srhs, uint64_t seed);
+
+LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrix_reduce(
     GrB_Index *res,
     GrB_Matrix mat,
