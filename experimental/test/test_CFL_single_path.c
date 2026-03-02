@@ -1,15 +1,3 @@
-//------------------------------------------------------------------------------
-// LAGraph/experimental/test/LAGraph_CFL_reachability.c: test cases for Context-Free
-// Language Reachability Matrix-Based Algorithm
-//------------------------------------------------------------------------------
-//
-// LAGraph, (c) 2019-2024 by The LAGraph Contributors, All Rights Reserved.
-// SPDX-License-Identifier: BSD-2-Clause
-
-// Contributed by Ilhom Kombaev, Semyon Grigoriev, St. Petersburg State University.
-
-//------------------------------------------------------------------------------
-
 #include <LAGraphX.h>
 #include <LAGraph_test.h>
 #include <LG_Xtest.h>
@@ -17,27 +5,28 @@
 #include <acutest.h>
 #include <stdio.h>
 
-#define run_algorithm()                                                                  \
-    LAGraph_CFL_reachability(outputs, adj_matrices, grammar.terms_count,                 \
-                             grammar.nonterms_count, grammar.rules, grammar.rules_count, \
-                             msg)
+#define run_algorithm()                                                                 \
+    LAGraph_CFL_single_path(outputs, adj_matrices, grammar.terms_count,                 \
+                            grammar.nonterms_count, grammar.rules, grammar.rules_count, \
+                            msg)
 
-#define check_error(error)                                                               \
-    {                                                                                    \
-        retval = run_algorithm();                                                        \
-        TEST_CHECK(retval == error);                                                     \
-        TEST_MSG("retval = %d (%s)", retval, msg);                                       \
+#define check_error(error)                         \
+    {                                              \
+        retval = run_algorithm();                  \
+        TEST_CHECK(retval == error);               \
+        TEST_MSG("retval = %d (%s)", retval, msg); \
     }
 
-#define check_result(result)                                                             \
-    {                                                                                    \
-        char *expected = output_to_str(0);                                               \
-        TEST_CHECK(strcmp(result, expected) == 0);                                       \
-        TEST_MSG("Wrong result. Actual: %s", expected);                                  \
-        LAGraph_Free ((void **) &expected, msg);                                         \
+#define check_result(result)                            \
+    {                                                   \
+        char *expected = output_to_str(0);              \
+        TEST_CHECK(strcmp(result, expected) == 0);      \
+        TEST_MSG("Wrong result. Actual: %s", expected); \
+        LAGraph_Free((void **)&expected, msg);          \
     }
 
-typedef struct {
+typedef struct
+{
     size_t nonterms_count;
     size_t terms_count;
     size_t rules_count;
@@ -45,61 +34,70 @@ typedef struct {
 } grammar_t;
 
 GrB_Matrix *adj_matrices = NULL;
-int n_adj_matrices = 0 ;
+int n_adj_matrices = 0;
 GrB_Matrix *outputs = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 char msg[LAGRAPH_MSG_LEN];
+// GrB_Type PI_type = NULL;
 
-void setup() { LAGraph_Init(msg); }
+void setup()
+{
+    LAGraph_Init(msg);
+    // GrB_Type_new(&PI_type, sizeof(PathIndex));
+}
 
 void teardown(void) { LAGraph_Finalize(msg); }
 
 void init_outputs()
 {
-    LAGraph_Calloc ((void **) &outputs, 
-        grammar.nonterms_count, sizeof(GrB_Matrix), msg) ;
+    LAGraph_Calloc((void **)&outputs,
+                   grammar.nonterms_count, sizeof(GrB_Matrix), msg);
 }
 
-char *output_to_str(size_t nonterm) {
+char *output_to_str(size_t nonterm)
+{
     GrB_Index nnz = 0;
     OK(GrB_Matrix_nvals(&nnz, outputs[nonterm]));
-    GrB_Index *row = NULL ;
-    GrB_Index *col = NULL ;
-    bool *val = NULL ;
-    LAGraph_Malloc ((void **) &row, nnz, sizeof (GrB_Index), msg) ;
-    LAGraph_Malloc ((void **) &col, nnz, sizeof (GrB_Index), msg) ;
-    LAGraph_Malloc ((void **) &val, nnz, sizeof (GrB_Index), msg) ;
+    GrB_Index *row = NULL;
+    GrB_Index *col = NULL;
+    PathIndex *val = NULL;
+    LAGraph_Malloc((void **)&row, nnz, sizeof(GrB_Index), msg);
+    LAGraph_Malloc((void **)&col, nnz, sizeof(GrB_Index), msg);
+    LAGraph_Malloc((void **)&val, nnz, sizeof(PathIndex), msg);
 
-    OK(GrB_Matrix_extractTuples(row, col, val, &nnz, outputs[nonterm]));
+    OK(GrB_Matrix_extractTuples_UDT(row, col, val, &nnz, outputs[nonterm]));
 
-    // 11 - size of " (%ld, %ld)"
-    char *result_str = NULL ;
-    LAGraph_Malloc ((void **) &result_str, 11*nnz, sizeof (char), msg) ;
-
+    char *result_str = NULL;
+    // 33 - size of "(%ld, %ld): middle=%ld height-%d "
+    LAGraph_Malloc((void **)&result_str, nnz * 33, sizeof(char), msg);
     result_str[0] = '\0';
-    for (size_t i = 0; i < nnz; i++) {
-        sprintf(result_str + strlen(result_str), i == 0 ?
-            "(%" PRIu64 ", %" PRIu64 ")" : " (%" PRIu64 ", %" PRIu64 ")",
-            row[i], col[i]);
+
+    for (size_t i = 0; i < nnz; i++)
+    {
+        sprintf(result_str + strlen(result_str), "(%" PRIu64 ", %" PRIu64 "): middle=%" PRIu64 " height=%" PRId32 " ",
+                row[i], col[i],
+                val[i].middle,
+                val[i].height);
     }
 
-    LAGraph_Free ((void **) &row, msg);
-    LAGraph_Free ((void **) &col, msg);
-    LAGraph_Free ((void **) &val, msg);
+    LAGraph_Free((void **)&row, msg);
+    LAGraph_Free((void **)&col, msg);
+    LAGraph_Free((void **)&val, msg);
 
     return result_str;
 }
 
-void free_workspace() {
+void free_workspace()
+{
 
     if (adj_matrices != NULL)
     {
-        for (size_t i = 0; i < n_adj_matrices ; i++)
+        for (size_t i = 0; i < n_adj_matrices; i++)
         {
             GrB_free(&adj_matrices[i]);
         }
     }
-    LAGraph_Free ((void **) &adj_matrices, msg);
+    LAGraph_Free((void **)&adj_matrices, msg);
 
     if (outputs != NULL)
     {
@@ -108,9 +106,9 @@ void free_workspace() {
             GrB_free(&outputs[i]);
         }
     }
-    LAGraph_Free ((void **) &outputs, msg);
+    LAGraph_Free((void **)&outputs, msg);
 
-    LAGraph_Free ((void **) &grammar.rules, msg);
+    LAGraph_Free((void **)&grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
 }
 
@@ -127,9 +125,10 @@ void free_workspace() {
 // C -> SB [3 0 2 0]
 // A -> a  [1 0 -1 0]
 // B -> b  [2 1 -1 0]
-void init_grammar_aSb() {
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 5, sizeof(LAGraph_rule_WCNF), msg);
+void init_grammar_aSb()
+{
+    LAGraph_rule_WCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 5, sizeof(LAGraph_rule_WCNF), msg);
 
     rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
@@ -148,9 +147,10 @@ void init_grammar_aSb() {
 // S -> SS [0 0 0 0]
 // S -> a  [0 0 -1 0]
 // S -> eps [0 -1 -1 0]
-void init_grammar_aS() {
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 3, sizeof(LAGraph_rule_WCNF), msg);
+void init_grammar_aS()
+{
+    LAGraph_rule_WCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 3, sizeof(LAGraph_rule_WCNF), msg);
 
     rules[0] = (LAGraph_rule_WCNF){0, 0, 0, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 0, -1, 0};
@@ -191,9 +191,10 @@ void init_grammar_aS() {
 // S21 -> b         [21 1 -1 0]
 // S23 -> b         [23 1 -1 0]
 // S24 -> b         [24 1 -1 0]
-void init_grammar_complex() {
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 26, sizeof(LAGraph_rule_WCNF), msg);
+void init_grammar_complex()
+{
+    LAGraph_rule_WCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 26, sizeof(LAGraph_rule_WCNF), msg);
 
     rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
     rules[1] = (LAGraph_rule_WCNF){0, 15, 16, 0};
@@ -237,9 +238,10 @@ void init_grammar_complex() {
 // 2 -a-> 0
 // 0 -b-> 3
 // 3 -b-> 0
-void init_graph_double_cycle() {
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 2 ;
+void init_graph_double_cycle()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 2, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4));
@@ -254,6 +256,36 @@ void init_graph_double_cycle() {
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 4, 4);
+    // }
+}
+
+// Graph:
+//
+// 0 -a-> 1
+// 1 -a-> 2
+// 2 -a-> 0
+void init_graph_one_cycle()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 1, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 1;
+
+    GrB_Matrix adj_matrix_a;
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
+
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
+    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
+
+    adj_matrices[0] = adj_matrix_a;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
+    // }
 }
 
 // Graph:
@@ -266,9 +298,10 @@ void init_graph_double_cycle() {
 // 4 -b-> 3
 // 5 -b-> 6
 // 6 -b-> 7
-void init_graph_1() {
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 2 ;
+void init_graph_1()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 2, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8));
@@ -286,6 +319,11 @@ void init_graph_1() {
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 8, 8);
+    // }
 }
 
 // Graph:
@@ -302,9 +340,10 @@ void init_graph_1() {
 // 5 -b-> 4
 // 6 -b-> 2
 // 6 -b-> 5
-void init_graph_tree() {
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 2 ;
+void init_graph_tree()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 2, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7));
@@ -326,36 +365,23 @@ void init_graph_tree() {
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 7, 7);
+    // }
 }
 
 // Graph:
 //
 // 0 -a-> 1
 // 1 -a-> 2
-// 2 -a-> 0
-void init_graph_one_cycle() {
-    LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 1 ;
-
-    GrB_Matrix adj_matrix_a;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
-
-    OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
-    OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
-    OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
-
-    adj_matrices[0] = adj_matrix_a;
-}
-
-// Graph:
-
-// 0 -a-> 1
-// 1 -a-> 2
 // 2 -b-> 3
 // 3 -b-> 4
-void init_graph_line() {
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 2 ;
+void init_graph_line()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 2, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5);
@@ -369,16 +395,22 @@ void init_graph_line() {
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 5, 5);
+    // }
 }
 
 // Graph:
-
+//
 // 0 -a-> 0
 // 0 -b-> 1
 // 1 -c-> 2
-void init_graph_2() {
-    LAGraph_Calloc ((void **) &adj_matrices, 3, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 3 ;
+void init_graph_2()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 3, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 3;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b, adj_matrix_c;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
@@ -392,16 +424,22 @@ void init_graph_2() {
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
     adj_matrices[2] = adj_matrix_c;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
+    // }
 }
 
 // Graph:
-
+//
 // 0 -a-> 1
 // 1 -a-> 0
 // 0 -b-> 0
-void init_graph_3() {
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 2 ;
+void init_graph_3()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 2, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 2, 2);
@@ -413,15 +451,21 @@ void init_graph_3() {
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
+    // }
 }
 
 // Graph:
-
+//
 // 0 -b-> 1
 // 1 -b-> 0
-void init_graph_4() {
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
-    n_adj_matrices = 2 ;
+void init_graph_4()
+{
+    LAGraph_Calloc((void **)&adj_matrices, 2, sizeof(GrB_Matrix), msg);
+    n_adj_matrices = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
     GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 2, 2);
@@ -432,143 +476,190 @@ void init_graph_4() {
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
+
+    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
+    // {
+    //     GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
+    // }
 }
 
 //====================
 // Tests with valid result
 //====================
 
-void test_CFL_reachability_cycle(void) {
+void test_CFL_single_path_cycle(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aS();
+    init_outputs();
     init_graph_one_cycle();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
+    check_result("(0, 0): middle=0 height=1 "
+                 "(0, 1): middle=0 height=1 "
+                 "(0, 2): middle=1 height=2 "
+                 "(1, 0): middle=2 height=2 "
+                 "(1, 1): middle=1 height=1 "
+                 "(1, 2): middle=1 height=1 "
+                 "(2, 0): middle=2 height=1 "
+                 "(2, 1): middle=0 height=2 "
+                 "(2, 2): middle=2 height=1 ");
 
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_two_cycle(void) {
+void test_CFL_single_path_two_cycle(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_double_cycle();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
+    check_result("(0, 0): middle=1 height=12 "
+                 "(0, 3): middle=1 height=6 "
+                 "(1, 0): middle=2 height=4 "
+                 "(1, 3): middle=2 height=10 "
+                 "(2, 0): middle=0 height=8 "
+                 "(2, 3): middle=0 height=2 ");
 
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_labels_more_than_nonterms(void) {
+void test_CFL_single_path_labels_more_than_nonterms(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_2();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 1)");
+    check_result("(0, 1): middle=0 height=2 ");
 
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_complex_grammar(void) {
+void test_CFL_single_path_complex_grammar(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_complex();
+    init_outputs();
     init_graph_1();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 7) (1, 6)");
+    check_result("(0, 7): middle=4 height=4 "
+                 "(1, 6): middle=2 height=5 ");
 
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_tree(void) {
+void test_CFL_single_path_tree(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_tree();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
-                 "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
-
+    check_result("(0, 0): middle=2 height=2 "
+                 "(0, 1): middle=2 height=2 "
+                 "(0, 3): middle=2 height=4 "
+                 "(0, 4): middle=2 height=4 "
+                 "(1, 0): middle=2 height=2 "
+                 "(1, 1): middle=2 height=2 "
+                 "(1, 3): middle=2 height=4 "
+                 "(1, 4): middle=2 height=4 "
+                 "(2, 2): middle=6 height=2 "
+                 "(2, 5): middle=6 height=2 "
+                 "(3, 0): middle=5 height=4 "
+                 "(3, 1): middle=5 height=4 "
+                 "(3, 3): middle=5 height=2 "
+                 "(3, 4): middle=5 height=2 "
+                 "(4, 0): middle=5 height=4 "
+                 "(4, 1): middle=5 height=4 "
+                 "(4, 3): middle=5 height=2 "
+                 "(4, 4): middle=5 height=2 "
+                 "(5, 2): middle=6 height=2 "
+                 "(5, 5): middle=6 height=2 ");
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_line(void) {
+void test_CFL_single_path_line(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_line();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 4) (1, 3)");
+    check_result("(0, 4): middle=1 height=4 "
+                 "(1, 3): middle=2 height=2 ");
 
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_two_nodes_cycle(void) {
+void test_CFL_single_path_two_nodes_cycle(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_3();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 0) (1, 0)");
+    check_result("(0, 0): middle=1 height=4 "
+                 "(1, 0): middle=0 height=2 ");
 
     free_workspace();
     teardown();
 #endif
 }
 
-void test_CFL_reachability_with_empty_adj_matrix(void) {
+void test_CFL_single_path_with_empty_adj_matrix(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aS();
+    init_outputs();
     init_graph_4();
-    init_outputs() ;
 
     OK(run_algorithm());
-    check_result("(0, 0) (1, 1)");
+    check_result("(0, 0): middle=0 height=1 "
+                 "(1, 1): middle=1 height=1 ");
 
     free_workspace();
     teardown();
@@ -579,14 +670,15 @@ void test_CFL_reachability_with_empty_adj_matrix(void) {
 // Tests with invalid result
 //====================
 
-void test_CFL_reachability_invalid_rules(void) {
+void test_CFL_single_path_invalid_rules(void)
+{
 #if LAGRAPH_SUITESPARSE
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_double_cycle();
-    init_outputs() ;
 
     // Rule [Variable -> _ B]
     grammar.rules[0] =
@@ -618,43 +710,53 @@ void test_CFL_reachability_invalid_rules(void) {
 #endif
 }
 
-void test_CFL_reachability_null_pointers(void) {
+void test_CFL_single_path_null_pointers(void)
+{
 #if LAGRAPH_SUITESPARSE
 
     setup();
     GrB_Info retval;
 
     init_grammar_aSb();
+    init_outputs();
     init_graph_double_cycle();
-    init_outputs() ;
 
-//  adj_matrices[0] = NULL;
-//  adj_matrices[1] = NULL;
+    //  adj_matrices[0] = NULL;
+    //  adj_matrices[1] = NULL;
     GrB_free(&adj_matrices[0]);
     GrB_free(&adj_matrices[1]);
 
     check_error(GrB_NULL_POINTER);
 
-//  adj_matrices = NULL;
-    LAGraph_Free ((void **) &adj_matrices, msg);
+    //  adj_matrices = NULL;
+    LAGraph_Free((void **)&adj_matrices, msg);
     check_error(GrB_NULL_POINTER);
 
     free_workspace();
     init_grammar_aSb();
+    init_outputs();
     init_graph_double_cycle();
-    init_outputs() ;
 
-//  outputs = NULL;
-    LAGraph_Free ((void **) &outputs, msg);
+    //  outputs = NULL;
+    if (outputs != NULL)
+    {
+        for (size_t i = 0; i < grammar.nonterms_count; i++)
+        {
+            GrB_free(&outputs[i]);
+        }
+    }
+    // check_error(GrB_NULL_POINTER);
+
+    LAGraph_Free((void **)&outputs, msg);
     check_error(GrB_NULL_POINTER);
 
     free_workspace();
     init_grammar_aSb();
+    init_outputs();
     init_graph_double_cycle();
-    init_outputs() ;
 
-//  grammar.rules = NULL;
-    LAGraph_Free ((void **) &grammar.rules, msg);
+    //  grammar.rules = NULL;
+    LAGraph_Free((void **)&grammar.rules, msg);
     check_error(GrB_NULL_POINTER);
 
     free_workspace();
@@ -662,18 +764,15 @@ void test_CFL_reachability_null_pointers(void) {
 #endif
 }
 
-TEST_LIST = {{"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
-             {"CFL_reachability_cycle", test_CFL_reachability_cycle},
-             {"CFL_reachability_two_cycle", test_CFL_reachability_two_cycle},
-             {"CFL_reachability_labels_more_than_nonterms",
-              test_CFL_reachability_labels_more_than_nonterms},
-             {"CFL_reachability_tree", test_CFL_reachability_tree},
-             {"CFL_reachability_line", test_CFL_reachability_line},
-             {"CFL_reachability_two_nodes_cycle", test_CFL_reachability_two_nodes_cycle},
-             {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
-             {"test_CFL_reachability_with_empty_adj_matrix", test_CFL_reachability_with_empty_adj_matrix},
-             #if !defined ( GRAPHBLAS_HAS_CUDA )
-             {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
-             #endif
-             {NULL, NULL}};
-
+TEST_LIST = {
+    {"CFL_reachability_cycle", test_CFL_single_path_cycle},
+    {"CFL_path_two_cycle", test_CFL_single_path_two_cycle},
+    {"CFL_single_path_labels_more_than_nonterms", test_CFL_single_path_labels_more_than_nonterms},
+    {"CFL_single_path_complex_grammar", test_CFL_single_path_complex_grammar},
+    {"CFL_single_path_tree", test_CFL_single_path_tree},
+    {"CFL_single_path_line", test_CFL_single_path_line},
+    {"CFL_single_path_two_nodes_cycle", test_CFL_single_path_two_nodes_cycle},
+    {"CFL_single_path_with_empty_adj_matrix", test_CFL_single_path_with_empty_adj_matrix},
+    {"CFL_single_path_invalid_rules", test_CFL_single_path_invalid_rules},
+    {"CFL_single_path_null_pointers", test_CFL_single_path_null_pointers},
+    {NULL, NULL}};
