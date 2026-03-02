@@ -210,6 +210,7 @@ GrB_Info LAGraph_CFL_single_path(
   CFL_Semiring semiring = {.type = PI_type,
                            .semiring = PI_semiring,
                            .add = PI_add,
+                           .add_eps = PI_add,
                            .mult = PI_mult,
                            .init_path = PI_set,
                            .bottom_scalar = bottom_scalar};
