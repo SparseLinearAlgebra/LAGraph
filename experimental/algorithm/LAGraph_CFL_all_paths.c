@@ -6,6 +6,7 @@
     GrB_free(&AllPaths_set);        \
     GrB_free(&AllPaths_mult);       \
     GrB_free(&AllPaths_add);        \
+    GrB_free(&AllPaths_add_free);        \
     GrB_free(&AllPaths_semiring);   \
     GrB_free(&Theta);         \
     GrB_free(&AllPaths_monoid);     \
@@ -14,56 +15,59 @@
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
-GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Index na, const void* right, const GrB_Index nb){
-    GrB_Index* a = (GrB_Index*) left;
-    GrB_Index* b = (GrB_Index*) right;
-
-    LG_TRY(LAGraph_Malloc((void**)&tmp, na+nb, sizeof(GrB_Index), msg));
-    
-    GrB_Index ia = 0, ib = 0, outn = 0;
-    while (ia < na && ib < nb) {
-        GrB_Index va = a[ia];
-        GrB_Index vb = b[ib];
-        if (va < vb) {
-            if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
-            ia++;
-        } else if (vb < va) {
-            if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
-            ib++;
-        } else {
-            if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
-            ia++; ib++;
-        }
+static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Index na, const void* right, const GrB_Index nb){
+  GrB_Index* a = (GrB_Index*) left;
+  GrB_Index* b = (GrB_Index*) right;
+  GrB_Index *tmp = malloc((na + nb) * sizeof(GrB_Index));
+  //    LG_TRY(LAGraph_Malloc((void**)&tmp, na+nb, sizeof(GrB_Index), msg));
+  
+  GrB_Index ia = 0, ib = 0, outn = 0;
+  while (ia < na && ib < nb) {
+    GrB_Index va = a[ia];
+    GrB_Index vb = b[ib];
+    if (va < vb) {
+      if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
+      ia++;
+    } else if (vb < va) {
+      if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
+      ib++;
+    } else {
+      if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
+      ia++; ib++;
     }
-    while (ia < na) {
-        GrB_Index va = a[ia++];
-        if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
-    }
-    while (ib < nb) {
-        GrB_Index vb = b[ib++];
-        if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
-    }
-    
-    LAGraph_Realloc((void**)&tmp, outn, na+nb, sizeof(GrB_Index), msg);
-    
-    *n = outn;
-    return tmp;
+  }
+  while (ia < na) {
+    GrB_Index va = a[ia++];
+    if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
+  }
+  while (ib < nb) {
+    GrB_Index vb = b[ib++];
+    if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
+  }
+  
+  //    LG_TRY(LAGraph_Realloc((void**)&tmp, outn, na+nb, sizeof(GrB_Index), msg));
+  GrB_Index *sh = realloc(tmp, outn * sizeof(GrB_Index));
+  if (sh) tmp = sh;
+  
+  *n = outn;
+  return tmp;
 }
 
 void clear_all_paths_vex(AllPathsVex *z){
-  if(z->middle) LG_TRY(LAGraph_Free((void**) z->middle, msg));
+//  if(z->middle) LG_TRY(LAGraph_Free((void**) z->middle, msg));
+  if(z->middle){
+    free(z->middle);
+    z->middle=NULL;
+  }
   z->n = 0;
-  z->exist = 0;
 }
 
 void add_all_paths_index(AllPathsVex *z, const AllPathsVex *x, const AllPathsVex *y)
 {
   AllPathsVex v_temp;
   AllPathsVex* temp = &v_temp;
-  temp->exist = 0;
   temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
   clear_all_paths_vex(z);
-  z->exist = 1;
   z->middle = temp->middle;
   z->n = temp->n;
 }
@@ -72,12 +76,10 @@ void add_all_paths_free_index(AllPathsVex *z, AllPathsVex *x, AllPathsVex *y)
 {
   AllPathsVex v_temp;
   AllPathsVex* temp = &v_temp;
-  temp->exist = 0;
   temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
   clear_all_paths_vex(x);
   clear_all_paths_vex(y);
   clear_all_paths_vex(z);
-  z->exist = 1;
   z->middle = temp->middle;
   z->n = temp->n;
 }
@@ -88,12 +90,10 @@ void mult_all_paths_index(AllPathsVex *z,
                      const void *theta)
 {
   clear_all_paths_vex(z);
-  if(x->exist && y->exist){
-    LG_TRY(LAGraph_Malloc((void**) &z->middle, 1, size_of(GrB_Index), msg));
-    z->middle[0] = jx;
-    z->n = 1;
-    z->exist = 1;
-  }
+//  LG_TRY(LAGraph_Malloc((void**) &z->middle, 1, size_of(GrB_Index), msg));
+  z->middle = malloc(sizeof(GrB_Index));
+  z->middle[0] = jx;
+  z->n = 1;
 }
 
 void set_all_paths_index(AllPathsVex *z,
@@ -101,7 +101,6 @@ void set_all_paths_index(AllPathsVex *z,
                     const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,
                     const void *theta)
 {
-  z->exist = *edge_exist;
   z->middle = NULL;
   z->n = 0;
 }
@@ -188,7 +187,7 @@ GrB_Info LAGraph_CFL_single_path(
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
 
-  AllPathsVex bottom = {0, 0, NULL};
+  AllPathsVex bottom = {0, NULL};
   GRB_TRY(GrB_Scalar_new(&bottom_scalar, AllPaths_type));
   GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
 
@@ -274,7 +273,6 @@ GrB_Info LAGraph_CFL_single_path(
 //                           .init_path = AllPaths_set,
 //                           .bottom_scalar = bottom_scalar};
   
-  // free operands version or like this?
   CFL_Semiring semiring = {.type = AllPaths_type,
                            .semiring = AllPaths_semiring_free,
                            .add = AllPaths_add_free,

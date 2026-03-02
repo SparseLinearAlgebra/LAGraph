@@ -1131,7 +1131,6 @@ typedef struct
 
 typedef struct
 {
-    bool exist;
     GrB_Index n;
     GrB_Index* middle;
 } AllPathsVex
