@@ -1,5 +1,7 @@
 #define LG_FREE_WORK          \
   {                           \
+    GrB_free(&AllPaths_semiring_free);   \
+    GrB_free(&AllPaths_monoid_free);     \
     GrB_free(&bottom_scalar); \
     GrB_free(&IAllPaths_set);       \
     GrB_free(&IAllPaths_mult);      \
@@ -7,9 +9,7 @@
     GrB_free(&AllPaths_mult);       \
     GrB_free(&AllPaths_add);        \
     GrB_free(&AllPaths_add_free);        \
-    GrB_free(&AllPaths_semiring);   \
     GrB_free(&Theta);         \
-    GrB_free(&AllPaths_monoid);     \
   }
 
 #include "LG_internal.h"
@@ -188,9 +188,8 @@ GrB_Info LAGraph_CFL_single_path(
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
 
-  GRB_TRY(GrB_Type_new(&AllPaths_type, sizeof(AllPathsVex))); // the memory is not being freed yet
+  GRB_TRY(GrB_Type_new(&AllPaths_type, sizeof(AllPathsVex)));
 
-  // Theta cannot be NULL
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
 
@@ -198,7 +197,6 @@ GrB_Info LAGraph_CFL_single_path(
   GRB_TRY(GrB_Scalar_new(&bottom_scalar, AllPaths_type));
   GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
 
-  // Create semiring
   GRB_TRY(GrB_BinaryOp_new(
       &AllPaths_add,
       (void *)add_all_paths_index,
@@ -206,24 +204,17 @@ GrB_Info LAGraph_CFL_single_path(
       AllPaths_type,
       AllPaths_type));
   
-// free operands version
   GRB_TRY(GrB_BinaryOp_new(
       &AllPaths_add_free,
       (void *)add_all_paths_free_index,
       AllPaths_type,
       AllPaths_type,
       AllPaths_type));
-  
-  GRB_TRY(GrB_Monoid_new(
-      &AllPaths_monoid,
-      AllPaths_add,
-      (void *)(&bottom))); // ⊥ - neutral element for the addition operation
 
-  // free operands version
   GRB_TRY(GrB_Monoid_new(
-      &AllPaths_free_monoid,
+      &AllPaths_monoid_free,
       AllPaths_add_free,
-      (void *)(&bottom))); // ⊥ - neutral element for the addition operation
+      (void *)(&bottom)));
   
   GRB_TRY(GxB_IndexBinaryOp_new(
       &IAllPaths_mult,
@@ -240,12 +231,6 @@ GrB_Info LAGraph_CFL_single_path(
       IAllPaths_mult,
       Theta));
 
-  GRB_TRY(GrB_Semiring_new(
-      &AllPaths_semiring,
-      AllPaths_monoid,
-      AllPaths_mult));
-
-  // free operands version
   GRB_TRY(GrB_Semiring_new(
       &AllPaths_semiring_free,
       AllPaths_monoid_free,
@@ -265,20 +250,6 @@ GrB_Info LAGraph_CFL_single_path(
       &AllPaths_set,
       IAllPaths_set,
       Theta));
-
-//  CFL_Semiring semiring = {.type = AllPaths_type,
-//                           .semiring = AllPaths_semiring,
-//                           .add = AllPaths_add,
-//                           .mult = AllPaths_mult,
-//                           .init_path = AllPaths_set,
-//                           .bottom_scalar = bottom_scalar};
-//  // free operands version
-//  CFL_Semiring semiring_free = {.type = AllPaths_type,
-//                           .semiring = AllPaths_semiring_free,
-//                           .add = AllPaths_add_free,
-//                           .mult = AllPaths_mult,
-//                           .init_path = AllPaths_set,
-//                           .bottom_scalar = bottom_scalar};
   
   CFL_Semiring semiring = {.type = AllPaths_type,
                            .semiring = AllPaths_semiring_free,
