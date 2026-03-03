@@ -101,8 +101,9 @@ void set_all_paths_index(AllPathsVex *z,
                     const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,
                     const void *theta)
 {
-  z->middle = NULL;
-  z->n = 0;
+  z->middle = malloc(sizeof(GrB_Index));
+  z->n = 1;
+  z->middle = GrB_INDEX_MAX;
 }
 
 #define SET_PATH_INDEX_DEFN                                                   \
