@@ -104,7 +104,7 @@ void set_all_paths_index(AllPathsVex *z,
   if(edge_exist){
     z->middle = malloc(sizeof(GrB_Index));
     z->n = 1;
-    z->middle = GrB_INDEX_MAX;
+    z->middle[0] = GrB_INDEX_MAX;
   }
   else{
     z->middle = NULL;
