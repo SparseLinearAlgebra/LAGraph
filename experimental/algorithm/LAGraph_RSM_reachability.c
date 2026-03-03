@@ -2,6 +2,118 @@
 // LAGraph_RSM_reachability.c
 //------------------------------------------------------------------------------
 
+/*
+Let:
+
+    Q = {0, …, Q-1}                — set of RSM states
+    V = {0, …, V-1}                — set of graph vertices
+    Σ                              — terminal alphabet
+    N                              — set of nonterminals
+
+Boolean matrices:
+
+    G_a ∈ {0,1}^{V×V}              — graph edges labeled by a ∈ Σ
+    N_a ∈ {0,1}^{Q×Q}              — RSM transitions labeled by a ∈ Σ
+    Call_S ∈ {0,1}^{Q×Q}           — call transitions for S ∈ N
+    Ret_S ∈ {0,1}^{Q×Q}            — return transitions for S ∈ N
+    N_S ∈ {0,1}^{Q×Q}              — internal nonterminal transitions
+    G_S ∈ {0,1}^{V×V}              — derived graph edges for S
+
+    M ∈ {0,1}^{Q×V}
+    P ∈ {0,1}^{Q×V}
+
+
+------------------------------------------------------------
+Phase 1: Saturation (computation of reachable configurations)
+------------------------------------------------------------
+
+Initialization:
+    M[q₀, v₀] = 1  for all q₀ ∈ start_states
+    P[q₀, v₀] = 1  for all q₀ ∈ start_states
+
+while M != 0:
+
+    Forward propagation:
+    M_new = 0
+    for all a ∈ Σ:
+        M_new ← M_new ∪ (N_aᵀ · M · G_a) ∧ ~P
+
+    For all S ∈ N:
+        M_new ← M_new ∪ (N_Sᵀ · M · G_S) ∧ ~P
+        M_new ← M_new ∪ (Call_Sᵀ · M) ∧ ~P
+
+    Backward propagation (summary edge construction):
+
+
+    For all S ∈ N:
+        M_ret = Ret_Sᵀ · M
+
+        if M_ret = 0: continue
+
+        Restore paths to matching call positions by computing
+        the least fixed point of:
+
+        X₀ = (Ret_S · M_ret) ∧ P
+        X_{i+1} =
+            ((⋁_{a∈Σ} N_a · X_i · G_aᵀ)
+          ∨ (⋁_{S1∈N} N_{S1} · X_i · G_{S1}ᵀ)) ∧ ~P
+
+        After reaching fixed point X:
+
+        X_call = (Call_S · X) ∧ P
+
+        if X_call = 0: continue
+
+        New summary edges:
+
+        G_S_new =
+            (X_callᵀ · N_S · M_ret) ∧ ~G_S
+
+        Update:
+        G_S ← G_S ∪ G_S_new
+        M_new = M_new ∪ M_ret
+
+    M = M_new
+    P = P ∪ M
+
+Iterate until no new configurations are added to P.
+
+------------------------------------------------------------
+Phase 2: Reachability restricted to valid CF paths
+------------------------------------------------------------
+
+M = 0
+
+Compute K ⊆ Q × V:
+    M[q₀, v₀] = 1
+    K[q₀, v₀] = 1  for start configurations
+
+while M != 0:
+
+    Forward propagation:
+    M_new = 0
+    for all a ∈ Σ:
+        M_new ← M_new ∪ (N_aᵀ · M · G_a)
+
+    For all S ∈ N:
+        M_new ← M_new ∪ (N_Sᵀ · M · G_S)
+
+    M = M_new
+    P = P ∪ M
+
+until fixed point.
+
+------------------------------------------------------------
+Result
+------------------------------------------------------------
+
+Let F ∈ {0,1}^{1×Q} be final-state selector.
+
+Output:
+    result = F · K
+
+*/
+
 #include <GraphBLAS.h>
 #include <stdbool.h>
 #include <stddef.h>
