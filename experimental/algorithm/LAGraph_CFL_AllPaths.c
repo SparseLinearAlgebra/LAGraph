@@ -100,15 +100,13 @@ void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist)
   AllPathsVex temp;
   temp.middle = NULL;
   temp.n = 0;
+  
   if (edge_exist && *edge_exist){
     temp.middle = malloc(sizeof(GrB_Index));
     temp.n = 1;
     temp.middle[0] = GrB_INDEX_MAX;
   }
-  else{
-    temp.middle = NULL;
-    temp.n = 0;
-  }
+  
   z->middle = merge_all_paths(&z->n, x->middle, x->n, temp.middle, temp.n);
   clear_all_paths_vex(&temp);
 }
@@ -139,17 +137,13 @@ GrB_Info all_paths_get_nvals(GrB_Index *nvals, const GrB_Matrix A){
   }
   
   val_void = malloc(nnz * sizeof(AllPathsVex));
-
   GrB_Matrix_extractTuples(NULL, NULL, val_void, &nnz, A);
-  
   AllPathsVex *val = (AllPathsVex *) val_void;
   
   size_t end = nnz;
-  
   for (size_t start = 0; start < end; ++start){
     accum+=val[start].n;
   }
-  
   *nvals = accum;
   
   free(val_void);
@@ -189,7 +183,6 @@ GrB_Info LAGraph_CFL_AllPaths(
   GxB_IndexBinaryOp IAllPaths_mult = NULL;
   GrB_BinaryOp AllPaths_mult = NULL;
   GrB_Semiring AllPaths_semiring_free = NULL;
-//  GxB_IndexBinaryOp IAllPaths_set = NULL;
   GrB_BinaryOp AllPaths_set = NULL;
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
@@ -248,21 +241,6 @@ GrB_Info LAGraph_CFL_AllPaths(
                             AllPaths_type,
                             AllPaths_type,
                             GrB_BOOL));
-  
-//  GRB_TRY(GxB_IndexBinaryOp_new(
-//      &IAllPaths_set,
-//      (void *)set_all_paths_index,
-//      AllPaths_type,
-//      AllPaths_type,
-//      GrB_BOOL,
-//      GrB_BOOL,
-//      "set_all_paths_index",
-//      SET_PATH_INDEX_DEFN));
-
-//  GRB_TRY(GxB_BinaryOp_new_IndexOp(
-//      &AllPaths_set,
-//      IAllPaths_set,
-//      Theta));
   
   CFL_Semiring semiring = {.type = AllPaths_type,
       .semiring = AllPaths_semiring_free,
