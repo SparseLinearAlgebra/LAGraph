@@ -1140,31 +1140,6 @@ GrB_Info LAGraph_CFPQ_core
     char *msg // Message string for error reporting.
 );
 
-GrB_Info LAGraph_CFL_single_path
-(
-    // Output
-    GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to nonterms_count.
-                         //
-                         // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
-                         // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
-    // Input
-    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
-                                    // The length of this array is equal to the count of
-                                    // terminals (terms_count).
-                                    //
-                                    // adj_matrices[t]: (i, j) == 1 if and only if there
-                                    // is an edge between nodes i and j with the label of
-                                    // the terminal corresponding to index 't' (where t is
-                                    // in the range [0, terms_count - 1]).
-    int64_t terms_count,            // The total number of terminal symbols in the CFG.
-    int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
-    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
-    int64_t rules_count,            // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
-);
-
 GrB_Info LAGraph_CFL_AllPaths(
     GrB_Matrix *outputs,
     const GrB_Matrix *adj_matrices,
