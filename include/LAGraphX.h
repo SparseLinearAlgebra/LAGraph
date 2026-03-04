@@ -1193,6 +1193,15 @@ GrB_Info LAGraph_CFL_single_path
     char *msg                       // Message string for error reporting.
 );
 
+GrB_Info LAGraph_CFL_AllPaths(
+    GrB_Matrix *outputs,
+    const GrB_Matrix *adj_matrices,
+    int64_t terms_count,
+    int64_t nonterms_count,
+    const LAGraph_rule_WCNF *rules,
+    int64_t rules_count,
+    char *msg);
+
 GrB_Info LAGraph_CFL_extract_single_path(
     // Output
     PathArray *output,

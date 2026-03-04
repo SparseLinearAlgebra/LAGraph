@@ -113,44 +113,33 @@ void set_all_paths_index(AllPathsVex *z,
 }
 
 #define SET_PATH_INDEX_DEFN                                                   \
-  "void set_all_paths_index(                                                   \n" \
-  "    AllPathsVex *z,                                                      \n" \
-  "    const AllPathsVex *x, GrB_Index ix, GrB_Index jx,                    \n" \
-  "    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,        \n" \
-  "    const void *theta)                                                 \n" \
-  "{                                                                      \n" \
-  "    if (*edge_exist)                                                   \n" \
-  "    {                                                                  \n" \
-  "        z->middle = ix;                                                \n" \
-  "        z->height = 1;                                                 \n" \
-  "    }                                                                  \n" \
-  "    else                                                               \n" \
-  "    {                                                                  \n" \
-  "        z->middle = 0;                                                 \n" \
-  "        z->height = 0;                                                 \n" \
-  "    }                                                                  \n" \
-  "}"
+"void set_all_paths_index(AllPathsVex *z,       \n"                           \
+"                    const AllPathsVex *x, GrB_Index ix, GrB_Index jx,\n"      \
+"                    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge, \n"      \
+"                    const void *theta) \n"      \
+"{ \n"      \
+"  if(edge_exist){ \n"      \
+"    z->middle = malloc(sizeof(GrB_Index)); \n"      \
+"    z->n = 1; \n"      \
+"    z->middle[0] = GrB_INDEX_MAX; \n"      \
+"  } \n"      \
+"  else{ \n"      \
+"    z->middle = NULL; \n"      \
+"   z->n = 0; \n"      \
+"  } \n"      \
+"}"
 
 #define MULT_PATH_INDEX_DEFN                                                   \
-  "void mult_all_paths_index(                                                  \n"  \
-  "    AllPathsVex *z,                                                      \n"  \
-  "    const AllPathsVex *x, GrB_Index ix, GrB_Index jx,                    \n"  \
-  "    const AllPathsVex *y, GrB_Index iy, GrB_Index jy,                    \n"  \
-  "    const void *theta)                                                 \n"  \
-  "{                                                                      \n"  \
-  "    if ((x->height == 0 && x->middle == 0) ||                           \n" \
-  "        (y->height == 0 && y->middle == 0))                             \n" \
-  "    {                                                                  \n"  \
-  "        z->height = 0;                                                 \n"  \
-  "        z->middle = 0;                                                 \n"  \
-  "    }                                                                  \n"  \
-  "    else                                                               \n"  \
-  "    {                                                                  \n"  \
-  "        z->middle = jx;                                                \n"  \
-  "        z->height = (x->height > y->height ?                           \n"  \
-  "                     x->height : y->height) + 1;                       \n"  \
-  "    }                                                                  \n"  \
-  "}"
+"void mult_all_paths_index(AllPathsVex *z, \n"      \
+"                     const AllPathsVex *x, GrB_Index ix, GrB_Index jx, \n"      \
+"                     const AllPathsVex *y, GrB_Index iy, GrB_Index jy, \n"      \
+"                     const void *theta) \n"      \
+"{ \n"      \
+"  clear_all_paths_vex(z); \n"      \
+"  z->middle = malloc(sizeof(GrB_Index)); \n"      \
+"  z->middle[0] = jx; \n"      \
+"  z->n = 1; \n"      \
+"}"
 
 GrB_Info LAGraph_CFL_AllPaths(
     // Output
