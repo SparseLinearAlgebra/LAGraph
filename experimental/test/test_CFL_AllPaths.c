@@ -504,30 +504,47 @@ void init_graph_4() {
     adj_matrices[1] = adj_matrix_b;
 }
 
-//====================
-// Tests with valid result
-//====================
 
 void test_CFL_AllPaths_cycle(void) {
 #if LAGRAPH_SUITESPARSE
-    setup();
-    GrB_Info retval;
-
-    init_grammar_aS();
-    init_graph_one_cycle();
-    init_outputs() ;
-
-    OK(run_algorithm());
+  setup();
+  GrB_Info retval;
+  
+  init_grammar_aS();
+  init_graph_one_cycle();
+  init_outputs() ;
+  
+  OK(run_algorithm());
   printf("\nMatrices:\n");
   print_outputs();
-//    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
-
-//    free_workspace();
-    teardown();
+  //    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
+  
+  //    free_workspace();
+  teardown();
 #endif
 }
 
+void test_CFL_AllPaths_two_nodes_cycle(void) {
+#if LAGRAPH_SUITESPARSE
+  setup();
+  GrB_Info retval;
+  
+  init_grammar_aSb();
+  init_graph_3();
+  init_outputs() ;
+  
+  OK(run_algorithm());
+  printf("\nMatrices:\n");
+  print_outputs();
+  //      check_result("(0, 0) (1, 0)");
+  
+//  free_workspace();
+  teardown();
+#endif
+}
+  
 TEST_LIST = {
+             {"CFL_AllPaths_two_nodes_cycle", test_CFL_AllPaths_two_nodes_cycle},
              {"CFL_AllPaths_cycle", test_CFL_AllPaths_cycle},
              {NULL, NULL}};
 
