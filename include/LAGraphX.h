@@ -1096,6 +1096,8 @@ GrB_Info LAGraph_CFL_reachability
     char *msg                       // Message string for error reporting.
 ) ;
 
+typedef GrB_Info (*CFPQ_get_nvals)(GrB_Index *nvals, const GrB_Matrix A);
+
 typedef struct
 {
     GrB_Type type;
@@ -1105,6 +1107,7 @@ typedef struct
     GrB_BinaryOp mult;
     GrB_BinaryOp init_path; // Function for defining elements used to describe information about paths of length 0 and 1.
                             // Depends on the specific task, therefore it is included in this structure.
+    CFPQ_get_nvals get_nvals;
     GrB_Scalar bottom_scalar;
 } CFL_Semiring;
 

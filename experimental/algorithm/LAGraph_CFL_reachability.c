@@ -92,13 +92,14 @@ GrB_Info LAGraph_CFL_reachability(
     GrB_Scalar false_scalar;
     GRB_TRY(GrB_Scalar_new(&false_scalar, GrB_BOOL));
     GRB_TRY(GrB_Scalar_setElement_BOOL(false_scalar, false));
-    CFL_Semiring semiring = {.type = GrB_BOOL,
-                             .semiring = GxB_ANY_PAIR_BOOL,
-                             .add = GxB_ANY_BOOL,
-                             .add_eps = GxB_ANY_BOOL,
-                             .mult = GxB_PAIR_BOOL,
-                             .init_path = GxB_PAIR_BOOL,
-                             .bottom_scalar = false_scalar};
+  CFL_Semiring semiring = {.type = GrB_BOOL,
+      .semiring = GxB_ANY_PAIR_BOOL,
+      .add = GxB_ANY_BOOL,
+      .add_eps = GxB_ANY_BOOL,
+      .mult = GxB_PAIR_BOOL,
+      .init_path = GxB_PAIR_BOOL,
+      .bottom_scalar = false_scalar,
+      .get_nvals = GrB_Matrix_nvals};
     LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
     LG_FREE_WORK;
     return GrB_SUCCESS;

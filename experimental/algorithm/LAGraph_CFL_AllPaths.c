@@ -125,6 +125,38 @@ void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist)
 "  z->n = 1; \n"      \
 "}"
 
+//A function that replaces GrB_Matrix_nvals for counting non-zero elements
+GrB_Info all_paths_get_nvals(GrB_Index *nvals, const GrB_Matrix A){
+  GrB_Index nnz = 0;
+  GrB_Index accum = 0;
+  GrB_Matrix_nvals(&nnz, A);
+  *nvals = 0;
+  void *val_void = NULL;
+  
+  if(nnz==0){
+    *nvals = 0;
+    return GrB_SUCCESS;
+  }
+  
+  val_void = malloc(nnz * sizeof(AllPathsVex));
+
+  GrB_Matrix_extractTuples(NULL, NULL, val_void, &nnz, A);
+  
+  AllPathsVex *val = (AllPathsVex *) val_void;
+  
+  size_t end = nnz;
+  
+  for (size_t start = 0; start < end; ++start){
+    accum+=val[start].n;
+  }
+  
+  *nvals = accum;
+  
+  free(val_void);
+  
+  return GrB_SUCCESS;
+}
+
 GrB_Info LAGraph_CFL_AllPaths(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
@@ -233,12 +265,13 @@ GrB_Info LAGraph_CFL_AllPaths(
 //      Theta));
   
   CFL_Semiring semiring = {.type = AllPaths_type,
-                           .semiring = AllPaths_semiring_free,
-                           .add = AllPaths_add_free,
-                           .add_eps = AllPaths_add,
-                           .mult = AllPaths_mult,
-                           .init_path = AllPaths_set,
-                           .bottom_scalar = bottom_scalar};
+      .semiring = AllPaths_semiring_free,
+      .add = AllPaths_add_free,
+      .add_eps = AllPaths_add,
+      .mult = AllPaths_mult,
+      .init_path = AllPaths_set,
+      .bottom_scalar = bottom_scalar,
+      .get_nvals = all_paths_get_nvals};
   
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   LG_FREE_WORK;
