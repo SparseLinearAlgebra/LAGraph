@@ -179,10 +179,11 @@ GrB_Info LAGraph_CFL_AllPaths(
   // Semiring components
   GrB_Type AllPaths_type = NULL;
   GrB_BinaryOp AllPaths_add = NULL;
-  GrB_Monoid AllPaths_monoid = NULL;
+  GrB_BinaryOp AllPaths_add_free = NULL;
+  GrB_Monoid AllPaths_monoid_free = NULL;
   GxB_IndexBinaryOp IAllPaths_mult = NULL;
   GrB_BinaryOp AllPaths_mult = NULL;
-  GrB_Semiring AllPaths_semiring = NULL;
+  GrB_Semiring AllPaths_semiring_free = NULL;
   GxB_IndexBinaryOp IAllPaths_set = NULL;
   GrB_BinaryOp AllPaths_set = NULL;
   GrB_Scalar Theta = NULL;
