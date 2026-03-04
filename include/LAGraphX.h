@@ -1101,6 +1101,7 @@ typedef struct
     GrB_Type type;
     GrB_Semiring semiring;
     GrB_BinaryOp add;
+    GrB_BinaryOp add_eps;
     GrB_BinaryOp mult;
     GrB_BinaryOp init_path; // Function for defining elements used to describe information about paths of length 0 and 1.
                             // Depends on the specific task, therefore it is included in this structure.
@@ -1127,6 +1128,12 @@ typedef struct
     size_t count;
     size_t capacity;
 } PathArray;
+
+typedef struct
+{
+    GrB_Index n;
+    GrB_Index* middle;
+} AllPathsVex;
 
 // Structure for storing single path information
 typedef struct
@@ -1185,6 +1192,15 @@ GrB_Info LAGraph_CFL_single_path
     int64_t rules_count,            // The total number of rules in the CFG.
     char *msg                       // Message string for error reporting.
 );
+
+GrB_Info LAGraph_CFL_AllPaths(
+    GrB_Matrix *outputs,
+    const GrB_Matrix *adj_matrices,
+    int64_t terms_count,
+    int64_t nonterms_count,
+    const LAGraph_rule_WCNF *rules,
+    int64_t rules_count,
+    char *msg);
 
 GrB_Info LAGraph_CFL_extract_single_path(
     // Output
