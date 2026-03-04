@@ -7,7 +7,7 @@
 
 #define LG_FREE_ALL                                 \
     {                                               \
-        LAGraph_Free((void **)&output->path, NULL); \
+        LAGraph_Free((void **)&output->edges, NULL); \
         output->len = 0;                            \
         LG_FREE_WORK;                               \
     }
@@ -39,7 +39,7 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
     GrB_Index end,
     int32_t nonterm,
     const GrB_Matrix *adj_matrices,
-    const GrB_Matrix *T,
+    const GrB_Matrix *path_index_matrices,
     int64_t terms_count,            // The total number of terminal symbols in the CFG.
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
@@ -50,7 +50,7 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     output->len = 0;
-    output->path = NULL;
+    output->edges = NULL;
     // Arrays for processing rules
     size_t *eps_rules = NULL, eps_rules_count = 0;   // [Variable -> eps]
     size_t *term_rules = NULL, term_rules_count = 0; // [Variable -> term]
@@ -94,7 +94,7 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
     }
 
     PathIndex index;
-    GrB_Info info = GrB_Matrix_extractElement_UDT(&index, T[nonterm], start, end);
+    GrB_Info info = GrB_Matrix_extractElement_UDT(&index, path_index_matrices[nonterm], start, end);
     if (info == GrB_SUCCESS) // Such a path exists
     {
         if (index.height == 1)
@@ -103,8 +103,8 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
             {
                 for (size_t i = 0; i < eps_rules_count; i++)
                 {
-                    LAGraph_rule_WCNF term_rule = rules[eps_rules[i]];
-                    if (term_rule.nonterm == nonterm)
+                    LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
+                    if (eps_rule.nonterm == nonterm)
                     {
                         LG_FREE_WORK;
                         return GrB_SUCCESS;
@@ -114,17 +114,17 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
             // Height = 1 and different vertices is a term-path
             for (int64_t i = 0; i < terms_count; i++)
             {
-                bool edge;
-                if (GrB_Matrix_extractElement_BOOL(&edge, adj_matrices[i], start, end) == GrB_SUCCESS)
+                bool edge_exist;
+                if (GrB_Matrix_extractElement_BOOL(&edge_exist, adj_matrices[i], start, end) == GrB_SUCCESS)
                 {
                     for (size_t j = 0; j < term_rules_count; j++)
                     {
                         LAGraph_rule_WCNF term_rule = rules[term_rules[j]];
                         if (term_rule.nonterm == nonterm && term_rule.prod_A == i)
                         {
-                            LG_TRY(LAGraph_Calloc((void **)&output->path, 1, sizeof(Edge), msg));
+                            LG_TRY(LAGraph_Calloc((void **)&output->edges, 1, sizeof(Edge), msg));
                             output->len = 1;
-                            output->path[0] = (Edge){start, i, end};
+                            output->edges[0] = (Edge){start, i, end};
                             LG_FREE_WORK;
                             return GrB_SUCCESS;
                         }
@@ -140,13 +140,13 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
         // Rules of the form Nonterm -> Nonterm * Nonterm are traversed recursively and merged
         for (size_t i = 0; i < bin_rules_count; i++)
         {
-            LAGraph_rule_WCNF term_rule = rules[bin_rules[i]];
-            if (term_rule.nonterm != nonterm)
+            LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+            if (bin_rule.nonterm != nonterm)
             {
                 continue;
             }
             PathIndex indexB, indexC;
-            if ((info = GrB_Matrix_extractElement_UDT(&indexB, T[term_rule.prod_A], start, index.middle)) != GrB_SUCCESS)
+            if ((info = GrB_Matrix_extractElement_UDT(&indexB, path_index_matrices[bin_rule.prod_A], start, index.middle)) != GrB_SUCCESS)
             {
                 // If haven't found such a piece of the path, then continue.
                 if (info != GrB_NO_VALUE)
@@ -157,7 +157,7 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
 
                 continue;
             }
-            if ((info = GrB_Matrix_extractElement_UDT(&indexC, T[term_rule.prod_B], index.middle, end)) != GrB_SUCCESS)
+            if ((info = GrB_Matrix_extractElement_UDT(&indexC, path_index_matrices[bin_rule.prod_B], index.middle, end)) != GrB_SUCCESS)
             {
                 if (info != GrB_NO_VALUE)
                 {
@@ -168,15 +168,15 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
             }
 
             // Height compliance check
-            int32_t maxH = (indexB.height > indexC.height ? indexB.height : indexC.height);
-            if (index.height != maxH + 1)
+            int32_t max_height = (indexB.height > indexC.height ? indexB.height : indexC.height);
+            if (index.height != max_height + 1)
             {
                 continue;
             }
 
             Path left, right;
             // If didn't find the path, try the other rules.
-            if ((info = LAGraph_CFL_extract_single_path_internal(&left, start, index.middle, term_rule.prod_A, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg)) != GrB_SUCCESS)
+            if ((info = LAGraph_CFL_extract_single_path_internal(&left, start, index.middle, bin_rule.prod_A, adj_matrices, path_index_matrices, terms_count, nonterms_count, rules, rules_count, msg)) != GrB_SUCCESS)
             {
                 if (info == GrB_NO_VALUE)
                 {
@@ -185,26 +185,26 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
                 LG_FREE_WORK;
                 return info;
             }
-            if ((info = LAGraph_CFL_extract_single_path_internal(&right, index.middle, end, term_rule.prod_B, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg)) != GrB_SUCCESS)
+            if ((info = LAGraph_CFL_extract_single_path_internal(&right, index.middle, end, bin_rule.prod_B, adj_matrices, path_index_matrices, terms_count, nonterms_count, rules, rules_count, msg)) != GrB_SUCCESS)
             {
                 if (info == GrB_NO_VALUE)
                 {
-                    LG_TRY(LAGraph_Free((void **)&left.path, msg));
+                    LG_TRY(LAGraph_Free((void **)&left.edges, msg));
                     continue;
                 }
-                LG_TRY(LAGraph_Free((void **)&left.path, msg));
+                LG_TRY(LAGraph_Free((void **)&left.edges, msg));
                 LG_FREE_WORK;
                 return info;
             }
 
             output->len = left.len + right.len;
 
-            LG_TRY(LAGraph_Calloc((void **)&output->path, output->len, sizeof(Edge), msg));
+            LG_TRY(LAGraph_Calloc((void **)&output->edges, output->len, sizeof(Edge), msg));
 
-            memcpy(output->path, left.path, left.len * sizeof(Edge));
-            memcpy(output->path + left.len, right.path, right.len * sizeof(Edge));
-            LG_TRY(LAGraph_Free((void **)&left.path, msg));
-            LG_TRY(LAGraph_Free((void **)&right.path, msg));
+            memcpy(output->edges, left.edges, left.len * sizeof(Edge));
+            memcpy(output->edges + left.len, right.edges, right.len * sizeof(Edge));
+            LG_TRY(LAGraph_Free((void **)&left.edges, msg));
+            LG_TRY(LAGraph_Free((void **)&right.edges, msg));
             LG_FREE_WORK;
             return GrB_SUCCESS;
         }

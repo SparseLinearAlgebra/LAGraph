@@ -41,7 +41,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
     GrB_Index *end,
     int32_t nonterm,
     const GrB_Matrix *adj_matrices,
-    const GrB_Matrix *T,
+    const GrB_Matrix *path_index_matrices,
     int64_t terms_count,            // The total number of terminal symbols in the CFG.
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
@@ -65,7 +65,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
                   "The number of rules must be greater than zero.");
     LG_ASSERT_MSG(nonterm < nonterms_count, GrB_INVALID_VALUE,
                   "The start non-terminal must be no greater than the number of non-terminals.");
-    LG_ASSERT_MSG(T != NULL, GrB_NULL_POINTER, "The T array cannot be null.");
+    LG_ASSERT_MSG(path_index_matrices != NULL, GrB_NULL_POINTER, "The path_index_matrices array cannot be null.");
     LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
@@ -91,16 +91,16 @@ GrB_Info LAGraph_CFL_extract_single_path(
         return GrB_NULL_POINTER;
     }
 
-    // Find null T matrices
+    // Find null path_index_matrices matrices
     found_null = false;
     for (int64_t i = 0; i < nonterms_count; i++)
     {
-        if (T[i] != NULL)
+        if (path_index_matrices[i] != NULL)
             continue;
 
         if (!found_null)
         {
-            ADD_TO_MSG("T matrices with these indexes are null:");
+            ADD_TO_MSG("path_index_matrices matrices with these indexes are null:");
         }
         ADD_TO_MSG(" %" PRId64, i);
 
@@ -203,7 +203,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
             Path path;
 
             // Function that extracts one path with fixed start and end
-            info = LAGraph_CFL_extract_single_path_internal(&path, st, en, nonterm, adj_matrices, T, terms_count, nonterms_count, rules, rules_count, msg);
+            info = LAGraph_CFL_extract_single_path_internal(&path, st, en, nonterm, adj_matrices, path_index_matrices, terms_count, nonterms_count, rules, rules_count, msg);
             if (info == GrB_SUCCESS)
             {
                 if (output->count == output->capacity)

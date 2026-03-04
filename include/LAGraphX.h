@@ -1117,7 +1117,7 @@ typedef struct
 
 typedef struct
 {
-    Edge *path;
+    Edge *edges;
     size_t len;
 } Path;
 
@@ -1186,7 +1186,8 @@ GrB_Info LAGraph_CFL_single_path
     char *msg                       // Message string for error reporting.
 );
 
-GrB_Info LAGraph_CFL_extract_single_path(
+GrB_Info LAGraph_CFL_extract_single_path
+(
     // Output
     PathArray *output,
     // Input
@@ -1195,8 +1196,19 @@ GrB_Info LAGraph_CFL_extract_single_path(
     GrB_Index *end,   // Destination vertex of a graph path.
                       // Pass NULL to get paths to all vertices of the graph.
     int32_t nonterm,
-    const GrB_Matrix *adj_matrices,
-    const GrB_Matrix *T,
+    const GrB_Matrix *adj_matrices,        // Array of adjacency matrices representing the graph.
+                                           // The length of this array is equal to the count of
+                                           // terminals (terms_count).
+                                           //
+                                           // adj_matrices[t]: (i, j) == 1 if and only if there
+                                           // is an edge between nodes i and j with the label of
+                                           // the terminal corresponding to index 't' (where t is
+                                           // in the range [0, terms_count - 1]).
+    const GrB_Matrix *path_index_matrices, // Matrices containing information about existing paths for each non-terminal
+                                           //
+                                           // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
+                                           // from node i to node j whose edge labels form a word
+                                           // derivable from the non-terminal 'k' of the specified CFG.
     int64_t terms_count,            // The total number of terminal symbols in the CFG.
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
@@ -1215,24 +1227,24 @@ GrB_Info LAGraph_CFL_extract_single_path_internal
     GrB_Index start, // Source vertex of a graph path.
     GrB_Index end,   // Destination vertex of a graph path.
     int32_t nonterm,
-    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
-                                    // The length of this array is equal to the count of
-                                    // terminals (terms_count).
-                                    //
-                                    // adj_matrices[t]: (i, j) == 1 if and only if there
-                                    // is an edge between nodes i and j with the label of
-                                    // the terminal corresponding to index 't' (where t is
-                                    // in the range [0, terms_count - 1]).
-    const GrB_Matrix *T,            // Matrices containing information about existing paths for each non-terminal
-                                    //
-                                    // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
-                                    // from node i to node j whose edge labels form a word
-                                    // derivable from the non-terminal 'k' of the specified CFG.
-    int64_t terms_count,            // The total number of terminal symbols in the CFG.
-    int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
-    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
-    int64_t rules_count,            // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    const GrB_Matrix *adj_matrices,        // Array of adjacency matrices representing the graph.
+                                           // The length of this array is equal to the count of
+                                           // terminals (terms_count).
+                                           //
+                                           // adj_matrices[t]: (i, j) == 1 if and only if there
+                                           // is an edge between nodes i and j with the label of
+                                           // the terminal corresponding to index 't' (where t is
+                                           // in the range [0, terms_count - 1]).
+    const GrB_Matrix *path_index_matrices, // Matrices containing information about existing paths for each non-terminal
+                                           //
+                                           // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
+                                           // from node i to node j whose edge labels form a word
+                                           // derivable from the non-terminal 'k' of the specified CFG.
+    int64_t terms_count,                   // The total number of terminal symbols in the CFG.
+    int64_t nonterms_count,                // The total number of non-terminal symbols in the CFG.
+    const LAGraph_rule_WCNF *rules,        // The rules of the CFG.
+    int64_t rules_count,                   // The total number of rules in the CFG.
+    char *msg                              // Message string for error reporting.
 );
 
 //------------------------------------------------------------------------------

@@ -1,14 +1,14 @@
 #define LG_FREE_WORK          \
   {                           \
     GrB_free(&bottom_scalar); \
-    GrB_free(&IPI_set);       \
-    GrB_free(&IPI_mult);      \
-    GrB_free(&PI_set);        \
-    GrB_free(&PI_mult);       \
-    GrB_free(&PI_add);        \
-    GrB_free(&PI_semiring);   \
+    GrB_free(&IPathIndex_set);       \
+    GrB_free(&IPathIndex_mult);      \
+    GrB_free(&PathIndex_set);        \
+    GrB_free(&PathIndex_mult);       \
+    GrB_free(&PathIndex_add);        \
+    GrB_free(&PathIndex_semiring);   \
     GrB_free(&Theta);         \
-    GrB_free(&PI_monoid);     \
+    GrB_free(&PathIndex_monoid);     \
   }
 
 #include "LG_internal.h"
@@ -138,80 +138,80 @@ GrB_Info LAGraph_CFL_single_path(
 )
 {
   // Semiring components
-  GrB_Type PI_type = NULL; // Type PathIndex
-  GrB_BinaryOp PI_add = NULL;
-  GrB_Monoid PI_monoid = NULL;
-  GxB_IndexBinaryOp IPI_mult = NULL;
-  GrB_BinaryOp PI_mult = NULL;
-  GrB_Semiring PI_semiring = NULL;
-  GxB_IndexBinaryOp IPI_set = NULL;
-  GrB_BinaryOp PI_set = NULL;
+  GrB_Type PathIndex_type = NULL;
+  GrB_BinaryOp PathIndex_add = NULL;
+  GrB_Monoid PathIndex_monoid = NULL;
+  GxB_IndexBinaryOp IPathIndex_mult = NULL;
+  GrB_BinaryOp PathIndex_mult = NULL;
+  GrB_Semiring PathIndex_semiring = NULL;
+  GxB_IndexBinaryOp IPathIndex_set = NULL;
+  GrB_BinaryOp PathIndex_set = NULL;
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
 
-  GRB_TRY(GrB_Type_new(&PI_type, sizeof(PathIndex))); // the memory is not being freed yet
+  GRB_TRY(GrB_Type_new(&PathIndex_type, sizeof(PathIndex))); // the memory is not being freed yet
 
   // Theta cannot be NULL
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
 
   PathIndex bottom = {0, 0};
-  GRB_TRY(GrB_Scalar_new(&bottom_scalar, PI_type));
+  GRB_TRY(GrB_Scalar_new(&bottom_scalar, PathIndex_type));
   GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
 
   // Create semiring
   GRB_TRY(GrB_BinaryOp_new(
-      &PI_add,
+      &PathIndex_add,
       (void *)add_path_index,
-      PI_type,
-      PI_type,
-      PI_type));
+      PathIndex_type,
+      PathIndex_type,
+      PathIndex_type));
 
   GRB_TRY(GrB_Monoid_new(
-      &PI_monoid,
-      PI_add,
+      &PathIndex_monoid,
+      PathIndex_add,
       (void *)(&bottom))); // ⊥ - neutral element for the addition operation
 
   GRB_TRY(GxB_IndexBinaryOp_new(
-      &IPI_mult,
+      &IPathIndex_mult,
       (void *)mult_path_index,
-      PI_type,
-      PI_type,
-      PI_type,
+      PathIndex_type,
+      PathIndex_type,
+      PathIndex_type,
       GrB_BOOL,
       "mult_path_index",
       MULT_PATH_INDEX_DEFN));
 
   GRB_TRY(GxB_BinaryOp_new_IndexOp(
-      &PI_mult,
-      IPI_mult,
+      &PathIndex_mult,
+      IPathIndex_mult,
       Theta));
 
   GRB_TRY(GrB_Semiring_new(
-      &PI_semiring,
-      PI_monoid,
-      PI_mult));
+      &PathIndex_semiring,
+      PathIndex_monoid,
+      PathIndex_mult));
 
   GRB_TRY(GxB_IndexBinaryOp_new(
-      &IPI_set,
+      &IPathIndex_set,
       (void *)set_path_index,
-      PI_type,
-      PI_type,
+      PathIndex_type,
+      PathIndex_type,
       GrB_BOOL,
       GrB_BOOL,
       "set_path_index",
       SET_PATH_INDEX_DEFN));
 
   GRB_TRY(GxB_BinaryOp_new_IndexOp(
-      &PI_set,
-      IPI_set,
+      &PathIndex_set,
+      IPathIndex_set,
       Theta));
 
-  CFL_Semiring semiring = {.type = PI_type,
-                           .semiring = PI_semiring,
-                           .add = PI_add,
-                           .mult = PI_mult,
-                           .init_path = PI_set,
+  CFL_Semiring semiring = {.type = PathIndex_type,
+                           .semiring = PathIndex_semiring,
+                           .add = PathIndex_add,
+                           .mult = PathIndex_mult,
+                           .init_path = PathIndex_set,
                            .bottom_scalar = bottom_scalar};
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   LG_FREE_WORK;
