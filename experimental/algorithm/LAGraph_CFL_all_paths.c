@@ -152,7 +152,7 @@ void set_all_paths_index(AllPathsVex *z,
   "    }                                                                  \n"  \
   "}"
 
-GrB_Info LAGraph_CFL_single_path(
+GrB_Info LAGraph_CFL_AllPaths(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.

@@ -1133,7 +1133,7 @@ typedef struct
 {
     GrB_Index n;
     GrB_Index* middle;
-} AllPathsVex
+} AllPathsVex;
 
 // Structure for storing single path information
 typedef struct
