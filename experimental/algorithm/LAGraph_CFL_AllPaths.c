@@ -73,7 +73,7 @@ void add_all_paths_index(AllPathsVex *z, const AllPathsVex *x, const AllPathsVex
   AllPathsVex v_temp;
   AllPathsVex* temp = &v_temp;
   temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
-  clear_all_paths_vex(z);
+//  clear_all_paths_vex(z);
   z->middle = temp->middle;
   z->n = temp->n;
 }
@@ -85,7 +85,7 @@ void add_all_paths_free_index(AllPathsVex *z, AllPathsVex *x, AllPathsVex *y)
   temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
   clear_all_paths_vex(x);
   clear_all_paths_vex(y);
-  clear_all_paths_vex(z);
+//  clear_all_paths_vex(z);
   z->middle = temp->middle;
   z->n = temp->n;
 }
