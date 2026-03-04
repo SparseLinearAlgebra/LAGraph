@@ -95,7 +95,7 @@ void mult_all_paths_index(AllPathsVex *z,
   z->n = 1;
 }
 
-void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist, const void *theta)
+void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist)
 {
   AllPathsVex temp;
   temp.middle = NULL;
