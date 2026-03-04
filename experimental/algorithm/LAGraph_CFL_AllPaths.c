@@ -101,7 +101,7 @@ void set_all_paths_index(AllPathsVex *z,
                     const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,
                     const void *theta)
 {
-  if(edge_exist){
+  if (edge_exist && *edge_exist){
     z->middle = malloc(sizeof(GrB_Index));
     z->n = 1;
     z->middle[0] = GrB_INDEX_MAX;
@@ -118,7 +118,7 @@ void set_all_paths_index(AllPathsVex *z,
 "                    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge, \n"      \
 "                    const void *theta) \n"      \
 "{ \n"      \
-"  if(edge_exist){ \n"      \
+"  if (edge_exist && *edge_exist){ \n"      \
 "    z->middle = malloc(sizeof(GrB_Index)); \n"      \
 "    z->n = 1; \n"      \
 "    z->middle[0] = GrB_INDEX_MAX; \n"      \
