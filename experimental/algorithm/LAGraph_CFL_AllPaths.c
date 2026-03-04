@@ -70,12 +70,7 @@ void clear_all_paths_vex(AllPathsVex *z){
 
 void add_all_paths_index(AllPathsVex *z, const AllPathsVex *x, const AllPathsVex *y)
 {
-  AllPathsVex v_temp;
-  AllPathsVex* temp = &v_temp;
-  temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
-//  clear_all_paths_vex(z);
-  z->middle = temp->middle;
-  z->n = temp->n;
+  z->middle = merge_all_paths(&z->n, x->middle, x->n, y->middle, y->n);
 }
 
 void add_all_paths_free_index(AllPathsVex *z, AllPathsVex *x, AllPathsVex *y)
@@ -140,7 +135,7 @@ void set_all_paths_index(AllPathsVex *z,
 "                     const AllPathsVex *y, GrB_Index iy, GrB_Index jy, \n"      \
 "                     const void *theta) \n"      \
 "{ \n"      \
-"  clear_all_paths_vex(z); \n"      \
+"  //clear_all_paths_vex(z); \n"      \
 "  z->middle = malloc(sizeof(GrB_Index)); \n"      \
 "  z->middle[0] = jx; \n"      \
 "  z->n = 1; \n"      \
