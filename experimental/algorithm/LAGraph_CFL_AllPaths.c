@@ -3,7 +3,6 @@
     GrB_free(&AllPaths_semiring_free);   \
     GrB_free(&AllPaths_monoid_free);     \
     GrB_free(&bottom_scalar); \
-    GrB_free(&IAllPaths_set);       \
     GrB_free(&IAllPaths_mult);      \
     GrB_free(&AllPaths_set);        \
     GrB_free(&AllPaths_mult);       \
@@ -68,12 +67,12 @@ void clear_all_paths_vex(AllPathsVex *z){
   z->n = 0;
 }
 
-void add_all_paths_index(AllPathsVex *z, const AllPathsVex *x, const AllPathsVex *y)
+void add_all_paths(AllPathsVex *z, const AllPathsVex *x, const AllPathsVex *y)
 {
   z->middle = merge_all_paths(&z->n, x->middle, x->n, y->middle, y->n);
 }
 
-void add_all_paths_free_index(AllPathsVex *z, AllPathsVex *x, AllPathsVex *y)
+void add_all_paths_free(AllPathsVex *z, AllPathsVex *x, AllPathsVex *y)
 {
   AllPathsVex v_temp;
   AllPathsVex* temp = &v_temp;
@@ -96,38 +95,23 @@ void mult_all_paths_index(AllPathsVex *z,
   z->n = 1;
 }
 
-void set_all_paths_index(AllPathsVex *z,
-                    const AllPathsVex *x, GrB_Index ix, GrB_Index jx,
-                    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge,
-                    const void *theta)
+void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist, const void *theta)
 {
+  AllPathsVex temp;
+  temp.middle = NULL;
+  temp.n = 0;
   if (edge_exist && *edge_exist){
-    z->middle = malloc(sizeof(GrB_Index));
-    z->n = 1;
-    z->middle[0] = GrB_INDEX_MAX;
+    temp.middle = malloc(sizeof(GrB_Index));
+    temp.n = 1;
+    temp.middle[0] = GrB_INDEX_MAX;
   }
   else{
-    z->middle = NULL;
-    z->n = 0;
+    temp.middle = NULL;
+    temp.n = 0;
   }
+  z->middle = merge_all_paths(&z->n, x->middle, x->n, temp.middle, temp.n);
+  clear_all_paths_vex(&temp);
 }
-
-#define SET_PATH_INDEX_DEFN                                                   \
-"void set_all_paths_index(AllPathsVex *z,       \n"                           \
-"                    const AllPathsVex *x, GrB_Index ix, GrB_Index jx,\n"      \
-"                    const bool *edge_exist, GrB_Index i_edge, GrB_Index j_edge, \n"      \
-"                    const void *theta) \n"      \
-"{ \n"      \
-"  if (edge_exist && *edge_exist){ \n"      \
-"    z->middle = malloc(sizeof(GrB_Index)); \n"      \
-"    z->n = 1; \n"      \
-"    z->middle[0] = GrB_INDEX_MAX; \n"      \
-"  } \n"      \
-"  else{ \n"      \
-"    z->middle = NULL; \n"      \
-"   z->n = 0; \n"      \
-"  } \n"      \
-"}"
 
 #define MULT_PATH_INDEX_DEFN                                                   \
 "void mult_all_paths_index(AllPathsVex *z, \n"      \
@@ -173,7 +157,7 @@ GrB_Info LAGraph_CFL_AllPaths(
   GxB_IndexBinaryOp IAllPaths_mult = NULL;
   GrB_BinaryOp AllPaths_mult = NULL;
   GrB_Semiring AllPaths_semiring_free = NULL;
-  GxB_IndexBinaryOp IAllPaths_set = NULL;
+//  GxB_IndexBinaryOp IAllPaths_set = NULL;
   GrB_BinaryOp AllPaths_set = NULL;
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
@@ -189,14 +173,14 @@ GrB_Info LAGraph_CFL_AllPaths(
 
   GRB_TRY(GrB_BinaryOp_new(
       &AllPaths_add,
-      (void *)add_all_paths_index,
+      (void *)add_all_paths,
       AllPaths_type,
       AllPaths_type,
       AllPaths_type));
   
   GRB_TRY(GrB_BinaryOp_new(
       &AllPaths_add_free,
-      (void *)add_all_paths_free_index,
+      (void *)add_all_paths_free,
       AllPaths_type,
       AllPaths_type,
       AllPaths_type));
@@ -226,20 +210,27 @@ GrB_Info LAGraph_CFL_AllPaths(
       AllPaths_monoid_free,
       AllPaths_mult));
   
-  GRB_TRY(GxB_IndexBinaryOp_new(
-      &IAllPaths_set,
-      (void *)set_all_paths_index,
-      AllPaths_type,
-      AllPaths_type,
-      GrB_BOOL,
-      GrB_BOOL,
-      "set_all_paths_index",
-      SET_PATH_INDEX_DEFN));
+  GRB_TRY(GrB_BinaryOp_new(
+                           &AllPaths_set,
+                           (void *)set_all_paths,
+                            AllPaths_type,
+                            AllPaths_type,
+                            GrB_BOOL));
+  
+//  GRB_TRY(GxB_IndexBinaryOp_new(
+//      &IAllPaths_set,
+//      (void *)set_all_paths_index,
+//      AllPaths_type,
+//      AllPaths_type,
+//      GrB_BOOL,
+//      GrB_BOOL,
+//      "set_all_paths_index",
+//      SET_PATH_INDEX_DEFN));
 
-  GRB_TRY(GxB_BinaryOp_new_IndexOp(
-      &AllPaths_set,
-      IAllPaths_set,
-      Theta));
+//  GRB_TRY(GxB_BinaryOp_new_IndexOp(
+//      &AllPaths_set,
+//      IAllPaths_set,
+//      Theta));
   
   CFL_Semiring semiring = {.type = AllPaths_type,
                            .semiring = AllPaths_semiring_free,
