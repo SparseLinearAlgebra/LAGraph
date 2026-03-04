@@ -18,6 +18,12 @@
 static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Index na, const void* right, const GrB_Index nb){
   GrB_Index* a = (GrB_Index*) left;
   GrB_Index* b = (GrB_Index*) right;
+  
+  if (na == 0 && nb == 0) {
+      *n = 0;
+      return NULL;
+  }
+  
   GrB_Index *tmp = malloc((na + nb) * sizeof(GrB_Index));
   //    LG_TRY(LAGraph_Malloc((void**)&tmp, na+nb, sizeof(GrB_Index), msg));
   
@@ -89,7 +95,6 @@ void mult_all_paths_index(AllPathsVex *z,
                      const AllPathsVex *y, GrB_Index iy, GrB_Index jy,
                      const void *theta)
 {
-  clear_all_paths_vex(z);
 //  LG_TRY(LAGraph_Malloc((void**) &z->middle, 1, size_of(GrB_Index), msg));
   z->middle = malloc(sizeof(GrB_Index));
   z->middle[0] = jx;
