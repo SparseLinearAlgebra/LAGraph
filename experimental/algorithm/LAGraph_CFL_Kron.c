@@ -1,7 +1,8 @@
 #include <LAGraphX.h>
 #include <GraphBLAS.h>
 #include <LAGraph.h>
-#include <stdio.h>
+#include <stdbool.h>
+#include <stdlib.h>
 
 typedef struct {
     GrB_Index state_count;
