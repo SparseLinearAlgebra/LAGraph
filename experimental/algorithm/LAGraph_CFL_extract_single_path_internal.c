@@ -99,7 +99,8 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
     {
         if (index.height == 1)
         {
-            if (start == end) // Height = 1 and start = end is an empty eps-path
+            // Check for eps-path first (height=1, start=end, shortest possible)
+            if (start == end)
             {
                 for (size_t i = 0; i < eps_rules_count; i++)
                 {
@@ -111,7 +112,7 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
                     }
                 }
             }
-            // Height = 1 and different vertices is a term-path
+            // Height = 1 and no eps-path found - check for a term-path
             for (int64_t i = 0; i < terms_count; i++)
             {
                 bool edge_exist;
