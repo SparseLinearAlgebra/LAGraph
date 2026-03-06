@@ -33,20 +33,83 @@
         rule.count++;                                        \
     }
 
+// LAGraph_CFL_extract_single_path: Context-Free Language Single Path Extraction Algorithm
+//
+// For a given pair of vertices (start, end) and a non-terminal symbol (nonterm),
+// this function extracts a single path corresponding to a string with the minimum derivation tree height.
+//
+// The vertex parameters are optional:
+//   - Passing NULL for start extracts paths from all possible start vertices
+//   - Passing NULL for end extracts paths to all possible end vertices
+//   - Passing NULL for both extracts one path for every pair of vertices in the graph
+// In all cases, results are returned as a PathArray containing one Path per pair.
+//
+// Terminals and non-terminals are enumerated by integers starting from zero.
+// The start non-terminal is the non-terminal with index 0.
+//
+// Note: This function must be called after LAGraph_CFL_single_path. The output
+// from that function (path_index_matrices) is used as the basis for path extraction.
+//
+// Example:
+//
+// Graph:
+// ┌───┐   ┌───┐   ┌───┐   ┌───┐   ┌───┐
+// │ 0 ├───► 1 ├───► 2 ├───► 3 ├───► 4 │
+// └───┘ a └─┬─┘ a └─▲─┘ b └───┘ b └───┘
+//           │       │
+//           │ ┌───┐ │
+//          a└─► 5 ├─┘b
+//             └───┘
+//
+// Grammar: S -> aSb | ab | eps
+//
+// For non-terminal S (index 0) with different start/end parameters, the function extracts the following paths:
+//
+// 1. Single path extraction (start = 0, end = 4):
+//    Returns path: 0 -a-> 1 -a-> 2 -b-> 3 -b-> 4 (word "aabb")
+//
+// 2. Epsilon path (start = end):
+//    For any vertex v, calling with start = v, end = v returns an empty path (word eps)
+//
+// 3. No path exists (start = 0, end = 5):
+//    A word formed in this way does not belong to the language - returns GrB_NO_VALUE
+//
+// 4. Multiple paths (start = NULL, end = 3):
+//    Returns PathArray containing all paths to vertex 3:
+//    - (0, 3): 0 -a-> 1 -a-> 5 -b-> 2 -b-> 3 (word "aabb")
+//    - (1, 3): 1 -a-> 2 -b-> 3 (word "ab")
+//    - (3, 3): empty path (word eps)
+
 GrB_Info LAGraph_CFL_extract_single_path(
     // Output
-    PathArray *output,
+    PathArray *output, // Array of extracted paths.
+                       // When both start and end are fixed (non-NULL),
+                       // the array contains at most one path.
+                       // When start or end is NULL (or both), the array may contain multiple paths — one for each valid pair.
     // Input
-    GrB_Index *start,
-    GrB_Index *end,
-    int32_t nonterm,
-    const GrB_Matrix *adj_matrices,
-    const GrB_Matrix *path_index_matrices,
-    int64_t terms_count,            // The total number of terminal symbols in the CFG.
-    int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
-    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
-    int64_t rules_count,            // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    GrB_Index *start,                      // Source vertex of a graph path.
+                                           // Pass NULL to get paths from all vertices of the graph.
+    GrB_Index *end,                        // Destination vertex of a graph path.
+                                           // Pass NULL to get paths to all vertices of the graph.
+    int32_t nonterm,                       // Non-terminal symbol to derive paths for.
+    const GrB_Matrix *adj_matrices,        // Array of adjacency matrices representing the graph.
+                                           // The length of this array is equal to the count of
+                                           // terminals (terms_count).
+                                           //
+                                           // adj_matrices[t]: (i, j) == 1 if and only if there
+                                           // is an edge between nodes i and j with the label of
+                                           // the terminal corresponding to index 't' (where t is
+                                           // in the range [0, terms_count - 1]).
+    const GrB_Matrix *path_index_matrices, // Matrices containing information about existing paths for each non-terminal
+                                           //
+                                           // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
+                                           // from node i to node j whose edge labels form a word
+                                           // derivable from the non-terminal 'k' of the specified CFG.
+    int64_t terms_count,                   // The total number of terminal symbols in the CFG.
+    int64_t nonterms_count,                // The total number of non-terminal symbols in the CFG.
+    const LAGraph_rule_WCNF *rules,        // The rules of the CFG.
+    int64_t rules_count,                   // The total number of rules in the CFG.
+    char *msg                              // Message string for error reporting.
 )
 {
     LG_CLEAR_MSG;
