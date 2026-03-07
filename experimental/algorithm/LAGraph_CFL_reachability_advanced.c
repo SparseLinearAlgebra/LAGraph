@@ -75,6 +75,8 @@
         rule.count++;                                                                    \
     }
 
+#define BENCH_CFL_REACHBILITY false
+
 #if BENCH_CFL_REACHBILITY
     #define IS_ISO(matrix, str)                                                          \
         {                                                                                \
