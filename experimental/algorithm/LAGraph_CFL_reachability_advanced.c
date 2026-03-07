@@ -17,23 +17,23 @@
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
-        TRY(CFL_matrix_free(&iden));                                                     \
-        TRY(LAGraph_Free((void **)&symbols, msg));                                       \
-        TRY(LAGraph_Free((void **)&new_rules, msg));                                     \
+        TRY_INNER(CFL_matrix_free(&iden));                                               \
+        TRY_INNER(LAGraph_Free((void **)&symbols, msg));                                 \
+        TRY_INNER(LAGraph_Free((void **)&new_rules, msg));                               \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
-            TRY(CFL_matrix_free(&temp_matrices[i]));                                     \
-            TRY(CFL_matrix_free(&delta_matrices[i]));                                    \
-            TRY(CFL_matrix_free(&matrices[i]));                                          \
+            TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                               \
+            TRY_INNER(CFL_matrix_free(&delta_matrices[i]));                              \
+            TRY_INNER(CFL_matrix_free(&matrices[i]));                                    \
             if (new_adj_matrices != adj_matrices) {                                      \
-                TRY(GrB_free(&new_adj_matrices[i]));                                     \
+                TRY_INNER(GrB_free(&new_adj_matrices[i]));                               \
             }                                                                            \
         }                                                                                \
         if (new_adj_matrices != adj_matrices) {                                          \
-            TRY(LAGraph_Free((void **)&new_adj_matrices, msg));                          \
+            TRY_INNER(LAGraph_Free((void **)&new_adj_matrices, msg));                    \
         }                                                                                \
-        TRY(LAGraph_Free((void **)&delta_matrices, msg));                                \
-        TRY(LAGraph_Free((void **)&matrices, msg));                                      \
-        TRY(LAGraph_Free((void **)&temp_matrices, msg));                                 \
+        TRY_INNER(LAGraph_Free((void **)&delta_matrices, msg));                          \
+        TRY_INNER(LAGraph_Free((void **)&matrices, msg));                                \
+        TRY_INNER(LAGraph_Free((void **)&temp_matrices, msg));                           \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -146,6 +146,32 @@
         if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
             fprintf(stderr, "LAGraph failure (file %s, line %d): \n", __FILE__,          \
                     __LINE__);                                                           \
+            LG_FREE_ALL;                                                                 \
+            return (LG_GrB_Info);                                                        \
+        }                                                                                \
+    }
+
+// Checks the return value of a GraphBLAS/LAGraph call inside a helper function.
+// On failure, logs the error location to stderr, invokes FREE_INNER() to release
+// any resources allocated within the current function, and returns the error code.
+//
+// FREE_INNER() must be defined by the caller before using this macro:
+//
+//   #define FREE_INNER()       \
+//       {                      \
+//           LAGraph_Free(&a)   \
+//           GrB_free(&M)       \
+//       }
+//
+// Note: use TRY() instead when the function is not a helper (i.e., it has
+// its own top-level FREE_ALL cleanup).
+#define TRY_INNER(GrB_method)                                                            \
+    {                                                                                    \
+        GrB_Info LG_GrB_Info = GrB_method;                                               \
+        if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
+            fprintf(stderr, "LAGraph failure (file %s, line %d): \n", __FILE__,          \
+                    __LINE__);                                                           \
+            FREE_INNER();                                                                \
             return (LG_GrB_Info);                                                        \
         }                                                                                \
     }
@@ -190,31 +216,31 @@ typedef struct {
 static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_count,
                                 size_t symbols_amount, CFL_Symbol **symbols, size_t *size,
                                 char *msg) {
+    *symbols = NULL;
     bool *checked = NULL;
-    int LG_status = 0;
 
-    LG_status = LAGraph_Calloc((void **)&checked, symbols_amount, sizeof(bool), msg);
-    if (LG_status < GrB_SUCCESS) {
-        free(checked);
-        fprintf(stderr, "Calloc error: (%d): file: %s, line: %d\n%s\n", LG_status,
-                __FILE__, __LINE__, msg);
-        return LG_status;
+#undef FREE_INNER_WORK
+#undef FREE_INNER
+
+#define FREE_INNER_WORK()                                                                \
+    {                                                                                    \
+        LAGraph_Free((void **)&checked, msg);                                            \
     };
 
+#define FREE_INNER()                                                                     \
+    {                                                                                    \
+        FREE_INNER_WORK();                                                               \
+        LAGraph_Free((void **)symbols, msg);                                             \
+    }
+
+    TRY_INNER(LAGraph_Calloc((void **)&checked, symbols_amount, sizeof(bool), msg));
     for (size_t i = 0; i < symbols_amount; i++) {
         checked[i] = false;
     }
 
     size_t capacity = 128;
     *size = 0;
-    LG_status = LAGraph_Calloc((void **)symbols, capacity, sizeof(CFL_Symbol), msg);
-    if (LG_status < GrB_SUCCESS) {
-        free(checked);
-        free(*symbols);
-        fprintf(stderr, "Calloc error: (%d): file: %s, line: %d\n%s\n", LG_status,
-                __FILE__, __LINE__, msg);
-        return LG_status;
-    }
+    TRY_INNER(LAGraph_Calloc((void **)symbols, capacity, sizeof(CFL_Symbol), msg));
 
     for (size_t i = 0; i < capacity; i++) {
         CFL_Symbol sym = {0};
@@ -249,20 +275,11 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
 
             if (*size == capacity) {
                 capacity *= 2;
-                LG_status = LAGraph_Realloc((void **)symbols, capacity, capacity / 2,
-                                            sizeof(CFL_Symbol), msg);
-                if (LG_status < GrB_SUCCESS) {
-                    free(checked);
-                    free(*symbols);
-                    fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
-                            LG_status, __FILE__, __LINE__, msg);
-                    return LG_status;
-                }
+                TRY_INNER(LAGraph_Realloc((void **)symbols, capacity, capacity / 2,
+                                          sizeof(CFL_Symbol), msg));
             }
 
             (*symbols)[(*size)++] = sym;
-
-            // printf("Inserted (%ld, %ld, %ld)\n", sym.index, sym.base_index, sym.count);
         }
     }
 
@@ -272,15 +289,8 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
 
         if (*size == capacity) {
             capacity *= 2;
-            LG_status = LAGraph_Realloc((void **)symbols, capacity, capacity / 2,
-                                        sizeof(CFL_Symbol), msg);
-            if (LG_status < GrB_SUCCESS) {
-                free(checked);
-                free(*symbols);
-                fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
-                        LG_status, __FILE__, __LINE__, msg);
-                return LG_status;
-            }
+            TRY_INNER(LAGraph_Realloc((void **)symbols, capacity, capacity / 2,
+                                      sizeof(CFL_Symbol), msg));
         }
 
         CFL_Symbol sym;
@@ -293,7 +303,8 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
         // printf("Inserted (%ld, %ld, %ld)\n", sym.index, sym.base_index, sym.count);
     }
 
-    free(checked);
+    FREE_INNER_WORK();
+
     return GrB_SUCCESS;
 }
 
@@ -310,32 +321,29 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
 static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_count,
                               LAGraph_rule_EWCNF **new_rules, size_t *new_rules_count,
                               char *msg) {
-    size_t new_rules_capacity = 128;
-    size_t new_rules_size = 0;
-    int LG_status = 0;
-    LG_status = LAGraph_Calloc((void **)new_rules, new_rules_capacity,
-                               sizeof(LAGraph_rule_EWCNF), msg);
-    if (LG_status < GrB_SUCCESS) {
-        free(*new_rules);
-        fprintf(stderr, "Calloc error: (%d): file: %s, line: %d\n%s\n", LG_status,
-                __FILE__, __LINE__, msg);
-        return LG_status;
+    *new_rules = NULL;
+
+#undef FREE_INNER
+
+#define FREE_INNER()                                                                     \
+    {                                                                                    \
+        LAGraph_Free((void **)new_rules, msg);                                           \
     }
+
+    size_t new_rules_size = 0;
+    size_t new_rules_capacity = 128;
+
+    TRY_INNER(LAGraph_Calloc((void **)new_rules, new_rules_capacity,
+                             sizeof(LAGraph_rule_EWCNF), msg));
 
     // explode rules
     for (size_t i_rule = 0; i_rule < rules_count; i_rule++) {
         LAGraph_rule_EWCNF rule = rules[i_rule];
 
         if (new_rules_size == new_rules_capacity) {
-            LG_status =
-                LAGraph_Realloc((void **)new_rules, new_rules_capacity * 2,
-                                new_rules_capacity, sizeof(LAGraph_rule_EWCNF), msg);
-            if (LG_status < GrB_SUCCESS) {
-                free(*new_rules);
-                fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
-                        LG_status, __FILE__, __LINE__, msg);
-                return LG_status;
-            }
+            TRY_INNER(LAGraph_Realloc((void **)new_rules, new_rules_capacity * 2,
+                                      new_rules_capacity, sizeof(LAGraph_rule_EWCNF),
+                                      msg));
             new_rules_capacity *= 2;
         }
 
@@ -343,15 +351,9 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
             (*new_rules)[new_rules_size++] = rule;
         } else {
             while (new_rules_size + rule.indexed_count >= new_rules_capacity) {
-                LG_status =
-                    LAGraph_Realloc((void **)new_rules, new_rules_capacity * 2,
-                                    new_rules_capacity, sizeof(LAGraph_rule_EWCNF), msg);
-                if (LG_status < GrB_SUCCESS) {
-                    free(*new_rules);
-                    fprintf(stderr, "Realloc error: (%d): file: %s, line: %d\n%s\n",
-                            LG_status, __FILE__, __LINE__, msg);
-                    return LG_status;
-                }
+                TRY_INNER(LAGraph_Realloc((void **)new_rules, new_rules_capacity * 2,
+                                          new_rules_capacity, sizeof(LAGraph_rule_EWCNF),
+                                          msg));
                 new_rules_capacity *= 2;
             }
 
@@ -461,6 +463,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
     char *msg,                       // Message string for error reporting.
     int8_t optimizations             // Optimizations flags
 ) {
+#undef FREE_INNER
+
+#define FREE_INNER()
+
     // Declare workspace and clear the msg string, if not NULL
     CFL_Matrix **delta_matrices, **matrices, **temp_matrices;
     CFL_Matrix *iden = NULL;
@@ -789,65 +795,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
     for (size_t i = 0; i < new_symbols_amount; i++) {
         if (optimizations & OPT_BLOCK) {
             CFL_Symbol sym = symbols[i];
-            bool is_indexed = sym.count != 0;
-            if (!is_indexed) {
-                // TODO: create method CFL_matrix -> &GrB_Matrix
-                CFL_Matrix *result;
-                TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
-                TRY(GrB_Matrix_dup(&outputs[sym.base_index], result->base));
-                TRY(CFL_matrix_free(&result));
-            } else {
-                GrB_Matrix matrix_to_split = NULL;
-                CFL_Matrix *result;
-                TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
-                TRY(GrB_Matrix_dup(&matrix_to_split, result->base));
-                TRY(CFL_matrix_free(&result));
-
-                GrB_Index *nrows, *ncols;
-                TRY(LAGraph_Calloc((void **)&nrows, sym.count, sizeof(GrB_Index), msg));
-                TRY(LAGraph_Calloc((void **)&ncols, 1, sizeof(GrB_Index), msg));
-
-                for (size_t row_i = 0; row_i < sym.count; row_i++) {
-                    nrows[row_i] = n;
-                }
-                ncols[0] = n;
-
-                GrB_Index m = sym.count;
-                GrB_Index n = 1;
-
-                GrB_Index matrix_to_split_nrows;
-                GrB_Index matrix_to_split_ncols;
-                TRY(GrB_Matrix_nrows(&matrix_to_split_nrows, matrix_to_split));
-                TRY(GrB_Matrix_ncols(&matrix_to_split_ncols, matrix_to_split));
-                // printf("%d %d\n", matrix_to_split_nrows, matrix_to_split_ncols);
-                if (matrix_to_split_ncols > matrix_to_split_nrows) {
-                    GrB_Index *temp;
-                    temp = nrows;
-                    nrows = ncols;
-                    ncols = temp;
-
-                    GrB_Index temp_n;
-                    temp_n = m;
-                    m = n;
-                    n = temp_n;
-                }
-
-                TRY(GxB_Matrix_split(outputs + sym.base_index, m, n, nrows, ncols,
-                                     matrix_to_split, GrB_NULL));
-                free(nrows);
-                free(ncols);
-                TRY(GrB_free(&matrix_to_split));
-            }
+            TRY(split_CFL_matrix(outputs + sym.base_index, matrices[i], optimizations));
         } else {
-            if (matrices[i]->base_matrices_count == 0) {
-                TRY(GrB_Matrix_dup(&outputs[i], matrices[i]->base));
-            } else {
-                CFL_Matrix *result;
-                TRY(CFL_matrix_to_base(&result, matrices[i], optimizations));
-                TRY(GrB_Matrix_dup(&outputs[i], result->base));
-                TRY(CFL_matrix_free(&result));
-            }
-            // outputs[i] = matrices[i].base;
+            TRY(split_CFL_matrix(outputs + i, matrices[i], optimizations));
         }
     }
 
