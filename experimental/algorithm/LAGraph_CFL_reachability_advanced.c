@@ -770,31 +770,22 @@ GrB_Info LAGraph_CFL_reachability_adv(
            mxm2, wise2, rsubt);
 #endif
 
+    // get outputs matrices
     for (size_t i = 0; i < new_symbols_amount; i++) {
         if (optimizations & OPT_BLOCK) {
             CFL_Symbol sym = symbols[i];
-            if (sym.count == 0) {
-                if (matrices[sym.index]->base_matrices_count == 0) {
-                    TRY(GrB_Matrix_free(&outputs[sym.base_index]));
-                    TRY(GrB_Matrix_dup(&outputs[sym.base_index],
-                                       matrices[sym.index]->base));
-                } else {
-                    // printf("RESULT");
-                    CFL_Matrix *result;
-                    TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
-                    TRY(GrB_Matrix_dup(&outputs[sym.base_index], result->base));
-                    TRY(CFL_matrix_free(&result));
-                }
+            bool is_indexed = sym.count != 0;
+            if (!is_indexed) {
+                CFL_Matrix *result;
+                TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
+                TRY(GrB_Matrix_dup(&outputs[sym.base_index], result->base));
+                TRY(CFL_matrix_free(&result));
             } else {
                 GrB_Matrix matrix_to_split = NULL;
-                if (matrices[sym.index]->base_matrices_count == 0) {
-                    TRY(GrB_Matrix_dup(&matrix_to_split, matrices[sym.index]->base));
-                } else {
-                    CFL_Matrix *result;
-                    TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
-                    TRY(GrB_Matrix_dup(&matrix_to_split, result->base));
-                    TRY(CFL_matrix_free(&result));
-                }
+                CFL_Matrix *result;
+                TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
+                TRY(GrB_Matrix_dup(&matrix_to_split, result->base));
+                TRY(CFL_matrix_free(&result));
 
                 GrB_Index *nrows;
                 TRY(LAGraph_Calloc((void **)&nrows, sym.count, sizeof(GrB_Index), msg));
