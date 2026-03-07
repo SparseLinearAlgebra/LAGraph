@@ -527,6 +527,53 @@ static GrB_Info get_new_adj_matrices(const GrB_Matrix *adj_matrices, CFL_Symbol 
     return GrB_SUCCESS;
 }
 
+// Remaps rule symbol indices according to the symbol mapping
+//
+// Parameters:
+//   new_rules       - [out] Allocated output rule array. Caller must free
+//   new_rules_count - [out] Number of rules written to new_rules
+static GrB_Info get_new_rules(const LAGraph_rule_EWCNF *rules, size_t rules_count,
+                       CFL_Symbol *map, size_t map_size, LAGraph_rule_EWCNF **new_rules,
+                       size_t *new_rules_count, char *msg, int8_t optimizations) {
+    *new_rules_count = 0;
+#undef FREE_INNER
+
+#define FREE_INNER()                                                                     \
+    {                                                                                    \
+        LAGraph_Free((void **)new_rules, msg);                                           \
+    }
+
+    if (!(optimizations & OPT_BLOCK)) {
+        TRY_INNER(explode_rules(rules, rules_count, new_rules, new_rules_count, msg));
+        return GrB_SUCCESS;
+    }
+
+    TRY_INNER(
+        LAGraph_Calloc((void **)new_rules, rules_count, sizeof(LAGraph_rule_EWCNF), msg));
+    for (size_t i = 0; i < rules_count; i++) {
+        LAGraph_rule_EWCNF rule = rules[i];
+        LAGraph_rule_EWCNF new_rule = rule;
+
+        for (size_t i_sym = 0; i_sym < map_size; i_sym++) {
+            CFL_Symbol sym = map[i_sym];
+
+            if (rule.nonterm != -1 && rule.nonterm == sym.base_index) {
+                new_rule.nonterm = sym.index;
+            }
+            if (rule.prod_A != -1 && rule.prod_A == sym.base_index) {
+                new_rule.prod_A = sym.index;
+            }
+            if (rule.prod_B != -1 && rule.prod_B == sym.base_index) {
+                new_rule.prod_B = sym.index;
+            }
+        }
+
+        (*new_rules)[(*new_rules_count)++] = new_rule;
+    }
+
+    return GrB_SUCCESS;
+}
+
 // LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based
 // Algorithm
 //
@@ -672,35 +719,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
                             &new_symbols_amount, msg, optimizations));
     TRY(get_new_adj_matrices(adj_matrices, to_new_symbols_map, new_symbols_amount,
                              &new_adj_matrices, msg, optimizations));
-
-    if (optimizations & OPT_BLOCK) {
-        TRY(LAGraph_Calloc((void **)&new_rules, rules_count, sizeof(LAGraph_rule_EWCNF),
-                           msg));
-        for (size_t i = 0; i < rules_count; i++) {
-            LAGraph_rule_EWCNF rule = rules[i];
-            LAGraph_rule_EWCNF new_rule = rule;
-            new_rule.indexed = rule.indexed;
-            new_rule.indexed_count = rule.indexed_count;
-
-            for (size_t i_sym = 0; i_sym < new_symbols_amount; i_sym++) {
-                CFL_Symbol sym = to_new_symbols_map[i_sym];
-
-                if (rule.nonterm != -1 && rule.nonterm == sym.base_index) {
-                    new_rule.nonterm = sym.index;
-                }
-                if (rule.prod_A != -1 && rule.prod_A == sym.base_index) {
-                    new_rule.prod_A = sym.index;
-                }
-                if (rule.prod_B != -1 && rule.prod_B == sym.base_index) {
-                    new_rule.prod_B = sym.index;
-                }
-            }
-
-            new_rules[new_rules_count++] = new_rule;
-        }
-    } else {
-        TRY(explode_rules(rules, rules_count, &new_rules, &new_rules_count, msg));
-    }
+    TRY(get_new_rules(rules, rules_count, to_new_symbols_map, new_symbols_amount,
+                      &new_rules, &new_rules_count, msg, optimizations));
 
     // Arrays for processing rules
     size_t eps_rules[new_rules_count], eps_rules_count = 0;   // [Variable -> eps]
