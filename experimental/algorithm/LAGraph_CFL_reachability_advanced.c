@@ -370,8 +370,6 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
     return GrB_SUCCESS;
 }
 
-void matrix_print_lazy(CFL_Matrix *A, int8_t optimizations);
-
 // LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
@@ -448,8 +446,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
     int8_t optimizations             // Optimizations flags
 ) {
     // Declare workspace and clear the msg string, if not NULL
-    CFL_Matrix *delta_matrices, *matrices, *temp_matrices;
-    CFL_Matrix iden = {0};
+    CFL_Matrix **delta_matrices, **matrices, **temp_matrices;
+    CFL_Matrix *iden = NULL;
     GrB_Matrix identity_matrix = NULL;
 
     // for OPT_BLOCK optimization
@@ -665,8 +663,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_EWCNF term_rule = new_rules[term_rules[i]];
-        CFL_Matrix *nonterm_matrix = &delta_matrices[term_rule.nonterm];
-        CFL_Matrix *term_matrix = &delta_matrices[term_rule.prod_A];
+        CFL_Matrix *nonterm_matrix = delta_matrices[term_rule.nonterm];
+        CFL_Matrix *term_matrix = delta_matrices[term_rule.prod_A];
 
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, term_matrix, true, optimizations));
 
@@ -686,6 +684,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
         LAGraph_rule_EWCNF eps_rule = new_rules[eps_rules[i]];
+        CFL_Matrix *nonterm_matrix = delta_matrices[eps_rule.nonterm];
 
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, iden, true, optimizations));
         // matrix_print_lazy(nonterm_matrix, optimizations);
@@ -724,9 +723,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START();
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
-            CFL_Matrix *A = &matrices[bin_rule.prod_A];
-            CFL_Matrix *B = &delta_matrices[bin_rule.prod_B];
-            CFL_Matrix *C = &temp_matrices[bin_rule.nonterm];
+            CFL_Matrix *A = matrices[bin_rule.prod_A];
+            CFL_Matrix *B = delta_matrices[bin_rule.prod_B];
+            CFL_Matrix *C = temp_matrices[bin_rule.nonterm];
 
             // printf("MXM 1 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A, optimizations);
@@ -742,8 +741,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TIMER_START()
         for (size_t i = 0; i < new_symbols_amount; i++) {
-            CFL_Matrix *A = &delta_matrices[i];
-            CFL_Matrix *C = &matrices[i];
+            CFL_Matrix *A = delta_matrices[i];
+            CFL_Matrix *C = matrices[i];
 
             // printf("WISE 1 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A, optimizations);
@@ -759,9 +758,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_START()
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
-            CFL_Matrix *A = &matrices[bin_rule.prod_B];
-            CFL_Matrix *B = &delta_matrices[bin_rule.prod_A];
-            CFL_Matrix *C = &temp_matrices[bin_rule.nonterm];
+            CFL_Matrix *A = matrices[bin_rule.prod_B];
+            CFL_Matrix *B = delta_matrices[bin_rule.prod_A];
+            CFL_Matrix *C = temp_matrices[bin_rule.nonterm];
 
             // printf("MXM 2 iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A, optimizations);
@@ -771,15 +770,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
             // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("MXM 2", &mxm2);
-        // print_graph_info(matrices, symbols_amount);
-        // print_graph_info(delta_matrices, symbols_amount);
-        // print_graph_info(temp_matrices, symbols_amount);
+        // print_graph_info(matrices, new_symbols_amount);
+        // print_graph_info(delta_matrices, new_symbols_amount);
+        // print_graph_info(temp_matrices, new_symbols_amount);
 
         // Rule [Variable -> term]
         for (size_t i = 0; i < term_rules_count; i++) {
             LAGraph_rule_EWCNF term_rule = new_rules[term_rules[i]];
-            CFL_Matrix *A = &temp_matrices[term_rule.nonterm];
-            CFL_Matrix *B = &delta_matrices[term_rule.prod_A];
+            CFL_Matrix *A = temp_matrices[term_rule.nonterm];
+            CFL_Matrix *B = delta_matrices[term_rule.prod_A];
 
             // printf("Simple rules iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A, optimizations);
@@ -797,14 +796,14 @@ GrB_Info LAGraph_CFL_reachability_adv(
             TRY_I(CFL_dup(delta_matrices[i], temp_matrices[i], optimizations));
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
-        // print_graph_info(matrices, symbols_amount);
-        // print_graph_info(delta_matrices, symbols_amount);
-        // print_graph_info(temp_matrices, symbols_amount);
+        // print_graph_info(matrices, new_symbols_amount);
+        // print_graph_info(delta_matrices, new_symbols_amount);
+        // print_graph_info(temp_matrices, new_symbols_amount);
 
         TIMER_START();
         for (size_t i = 0; i < new_symbols_amount; i++) {
-            CFL_Matrix *A = &matrices[i];
-            CFL_Matrix *C = &delta_matrices[i];
+            CFL_Matrix *A = matrices[i];
+            CFL_Matrix *C = delta_matrices[i];
 
             // printf("RSUB iteration: %ld i: %ld\n", iteration, i);
             // matrix_print_lazy(A, optimizations);
@@ -813,9 +812,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
             // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
-        // print_graph_info(matrices, symbols_amount);
-        // print_graph_info(delta_matrices, symbols_amount);
-        // print_graph_info(temp_matrices, symbols_amount);
+        // print_graph_info(matrices, new_symbols_amount);
+        // print_graph_info(delta_matrices, new_symbols_amount);
+        // print_graph_info(temp_matrices, new_symbols_amount);
 
         size_t new_nnz = 0;
         for (size_t i = 0; i < new_symbols_amount; i++) {
