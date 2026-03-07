@@ -238,7 +238,7 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
         checked[i] = false;
     }
 
-    size_t capacity = 128;
+    size_t capacity = 1;
     *size = 0;
     TRY_INNER(LAGraph_Calloc((void **)symbols, capacity, sizeof(CFL_Symbol), msg));
 
@@ -331,7 +331,7 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
     }
 
     size_t new_rules_size = 0;
-    size_t new_rules_capacity = 128;
+    size_t new_rules_capacity = 1;
 
     TRY_INNER(LAGraph_Calloc((void **)new_rules, new_rules_capacity,
                              sizeof(LAGraph_rule_EWCNF), msg));
