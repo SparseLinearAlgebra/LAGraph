@@ -495,20 +495,20 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
 // (0, 3) - because there exists a path (0-1-5-2-3) that forms the word "aabb"
 GrB_Info LAGraph_CFL_reachability_adv(
     // Output
-    GrB_Matrix
-        *outputs, // Array of matrices containing results.
-                  // The size of the array must be equal to the count
-                  // of symbols (symbols_amount).
-                  //
-                  // Each matrix is square, with size equal to the number of vertices in
-                  // the graph. Matrices are allocated by the caller, not by this method.
-                  //
-                  // outputs[k]: (i, j) = true if and only if there is a path
-                  // from node i to node j whose edge labels form a word
-                  // derivable from the symbol 'k' of the specified CFG.
-                  //
-                  // Note: output[t], where t is the index of a terminal, will be
-                  // an exact copy of adj_matrices[t].
+    GrB_Matrix *outputs, // Array of matrices containing results.
+                         // The size of the array must be equal to the count
+                         // of symbols (symbols_amount).
+                         //
+                         // Each matrix is square, with size equal to the number of
+                         // vertices in the graph. Matrices are allocated by the
+                         // caller, not by this method.
+                         //
+                         // outputs[k]: (i, j) = true if and only if there is a path
+                         // from node i to node j whose edge labels form a word
+                         // derivable from the symbol 'k' of the specified CFG.
+                         //
+                         // Note: output[t], where t is the index of a terminal, will
+                         // be an exact copy of adj_matrices[t].
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -527,8 +527,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
                                     // matrix of size symbols_amount.
     size_t symbols_amount,          // Count of terminal and nonterminals
     const LAGraph_rule_EWCNF *rules, // The rules of the CFG.
-                                     // Warning: now not ready for N -> A rules, where is
-                                     // N and A are nonterminals.
+                                     // Warning: now not ready for N -> A rules, where
+                                     // is N and A are nonterminals.
     size_t rules_count,              // The total number of rules in the CFG.
     char *msg,                       // Message string for error reporting.
     int8_t optimizations             // Optimizations flags
