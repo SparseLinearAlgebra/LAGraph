@@ -18,7 +18,7 @@
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         TRY(CFL_matrix_free(&iden));                                                     \
-        TRY(LAGraph_Free((void **)symbols, msg));                                        \
+        TRY(LAGraph_Free((void **)&symbols, msg));                                       \
         TRY(LAGraph_Free((void **)&new_rules, msg));                                     \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             TRY(CFL_matrix_free(&temp_matrices[i]));                                     \
@@ -513,8 +513,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
         for (size_t i = 0; i < new_symbols_amount; i++) {
             CFL_Symbol sym = symbols[i];
             if (sym.count == 0) {
-                TRY(
-                    GrB_Matrix_dup(&new_adj_matrices[i], adj_matrices[sym.base_index]));
+                TRY(GrB_Matrix_dup(&new_adj_matrices[i], adj_matrices[sym.base_index]));
             } else {
                 GrB_Matrix new_col_matrix;
                 TRY(GrB_Matrix_new(&new_col_matrix, GrB_BOOL, n * sym.count, n));
