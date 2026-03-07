@@ -167,23 +167,26 @@ typedef struct {
     int32_t count;
 } CFL_Symbol;
 
-// If we use OPT_BLOCK optimization we must group indexed symbols together
-// After that we get mapping [old_num -> (index, base_index, count_indexed)]
-// Where index is new index, base_index is old index and count_indexed count of indexed
-// symbols
+// When using the OPT_BLOCK optimization, indexed symbols must be grouped together.
+// This produces a mapping: [old_index -> (new_index, base_index, indexed_count)]
+//   - new_index:     the index of the symbol in the new numeration
+//   - base_index:    the original index of the first symbol in the indexed group
+//   - indexed_count: the number of indexed symbols in the group (0 if not indexed)
 //
-// Example
-// (0) S -> (0, 0, 0)
-// (1) A_0 -> (1, 1, 3)
-// (2) A_1 ->
-// (3) A_2 ->
-// (4) B_0 -> (2, 4, 2)
-// (5) B_1 ->
-// (6) C -> (3, 6, 0)
-// (7) a -> (4, 7, 0)
+// Example:
+//   (0) S   -> (0, 0, 0)  - non-indexed symbol
+//   (1) A_0 -> (1, 1, 3)  - indexed group of 3, starting at old index 1
+//   (2) A_1 ->              }
+//   (3) A_2 ->              } members of the A group
+//   (4) B_0 -> (2, 4, 2)  - indexed group of 2, starting at old index 4
+//   (5) B_1 ->             } member of the B group
+//   (6) C   -> (3, 6, 0)  - non-indexed symbol
+//   (7) a   -> (4, 7, 0)  - non-indexed symbol
 //
-// This helps us to create new compact array of matrices or explode rules without
-// OPT_BLOCK optimization
+// This mapping is used to build a compact matrix array and to expand
+// production rules, both with and without the OPT_BLOCK optimization.
+//
+// Output: CFL_Symbol **symbols and size_t *size
 static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_count,
                                 size_t symbols_amount, CFL_Symbol **symbols, size_t *size,
                                 char *msg) {
@@ -294,10 +297,16 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
     return GrB_SUCCESS;
 }
 
-// before: Homka_i
-// after: Homka_1
-//        Homka_2
-//        Homka_3
+// Expands indexed grammar rules into a set of concrete rules.
+//
+//   Before: A_i -> B_i C     (indexed_count = 3)
+//           D   -> E F
+//   After:  A_0 -> B_0 C
+//           A_1 -> B_1 C
+//           A_2 -> B_2 C
+//           D   -> E F
+//
+// Output: LAGraph_rule_EWCNF **new_rules and size_t *new_rules_count
 static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_count,
                               LAGraph_rule_EWCNF **new_rules, size_t *new_rules_count,
                               char *msg) {
@@ -414,30 +423,37 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
 // (0, 3) - because there exists a path (0-1-5-2-3) that forms the word "aabb"
 GrB_Info LAGraph_CFL_reachability_adv(
     // Output
-    GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to the count
-                         // of symbols (symbols_amount).
-                         //
-                         // outputs[k]: (i, j) = true if and only if there is a path
-                         // from node i to node j whose edge labels form a word
-                         // derivable from the symbol 'k' of the specified CFG.
-                         //
-                         // Note: output[t] where t is index of terminal will be just full
-                         // copy of adj_matrices[t]
+    GrB_Matrix
+        *outputs, // Array of matrices containing results.
+                  // The size of the array must be equal to the count
+                  // of symbols (symbols_amount).
+                  //
+                  // Each matrix is square, with size equal to the number of vertices in
+                  // the graph. Matrices are allocated by the caller, not by this method.
+                  //
+                  // outputs[k]: (i, j) = true if and only if there is a path
+                  // from node i to node j whose edge labels form a word
+                  // derivable from the symbol 'k' of the specified CFG.
+                  //
+                  // Note: output[t], where t is the index of a terminal, will be
+                  // an exact copy of adj_matrices[t].
     // Input
-    const GrB_Matrix
-        *adj_matrices, // Array of adjacency matrices representing the graph.
-                       // The length of this array is equal to the count of
-                       // symbols (symbols_amount).
-                       //
-                       // adj_matrices[i]: (i, j) == 1 if and only if there
-                       // is an edge between nodes i and j with the label of
-                       // the symbol corresponding to index 'i' (where i is
-                       // in the range [0, symbols_amount - 1]).
-                       //
-                       // Note: adj_matrices[N] where N is index of nonterminal doesn't
-                       // used for algorithms and may be NULL
-    size_t symbols_amount,           // Count of terminal and nonterminals
+    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
+                                    // The length of this array is equal to the count of
+                                    // symbols (symbols_amount).
+                                    //
+                                    // Each matrix is square, with size equal to the
+                                    // number of vertices in the graph.
+                                    //
+                                    // adj_matrices[i]: (i, j) == 1 if and only if there
+                                    // is an edge between nodes i and j with the label of
+                                    // the symbol corresponding to index 'i' (where i is
+                                    // in the range [0, symbols_amount - 1]).
+                                    //
+                                    // Note: adj_matrices[N], where N is the index of a
+                                    // nonterminal, must be initialized as an empty square
+                                    // matrix of size symbols_amount.
+    size_t symbols_amount,          // Count of terminal and nonterminals
     const LAGraph_rule_EWCNF *rules, // The rules of the CFG.
                                      // Warning: now not ready for N -> A rules, where is
                                      // N and A are nonterminals.
@@ -673,7 +689,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         CFL_Matrix *nonterm_matrix = delta_matrices[eps_rule.nonterm];
 
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, iden, true, optimizations));
-        // matrix_print_lazy(nonterm_matrix, optimizations);
     }
 
     // Rule [Variable -> Variable1 Variable2]
@@ -776,6 +791,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Symbol sym = symbols[i];
             bool is_indexed = sym.count != 0;
             if (!is_indexed) {
+                // TODO: create method CFL_matrix -> &GrB_Matrix
                 CFL_Matrix *result;
                 TRY(CFL_matrix_to_base(&result, matrices[sym.index], optimizations));
                 TRY(GrB_Matrix_dup(&outputs[sym.base_index], result->base));
@@ -787,13 +803,13 @@ GrB_Info LAGraph_CFL_reachability_adv(
                 TRY(GrB_Matrix_dup(&matrix_to_split, result->base));
                 TRY(CFL_matrix_free(&result));
 
-                GrB_Index *nrows;
+                GrB_Index *nrows, *ncols;
                 TRY(LAGraph_Calloc((void **)&nrows, sym.count, sizeof(GrB_Index), msg));
+                TRY(LAGraph_Calloc((void **)&ncols, 1, sizeof(GrB_Index), msg));
+
                 for (size_t row_i = 0; row_i < sym.count; row_i++) {
                     nrows[row_i] = n;
                 }
-                GrB_Index *ncols;
-                TRY(LAGraph_Calloc((void **)&ncols, 1, sizeof(GrB_Index), msg));
                 ncols[0] = n;
 
                 GrB_Index m = sym.count;
