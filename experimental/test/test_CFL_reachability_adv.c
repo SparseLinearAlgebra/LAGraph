@@ -152,6 +152,23 @@ void init_indexed_grammar() {
         .nonterms_count = 2, .terms_count = 3, .rules_count = 1, .rules = rules};
 }
 
+// Terms: [0 a_0] [1 a_1] [2 b_0] [3 b_1]
+// Nonterms: [4 S_0] [5 S_1]
+// S_i -> a_i b_i [4 0 2 2 LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_A |
+// LAGraph_EWNCF_INDEX_PROD_B]
+void init_indexed_grammar_2() {
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 1, sizeof(LAGraph_rule_EWCNF), msg);
+
+    rules[0] =
+        (LAGraph_rule_EWCNF){4, 0, 2, 2,
+                             LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_A |
+                                 LAGraph_EWNCF_INDEX_PROD_B};
+
+    grammar = (grammar_t){
+        .nonterms_count = 2, .terms_count = 4, .rules_count = 1, .rules = rules};
+}
+
 // Terms: [0 a_0] [1 a_1]
 // Nonterms: [2 S_0] [3 S_1]
 // S_i -> a_i [2 0 -1 2 LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_A]
@@ -544,6 +561,28 @@ void init_graph_6() {
     OK(GrB_Matrix_setElement(adj_matrices[1], true, 0, 1));
 }
 
+// 0 -a_0-> 1
+// 0 -a_0-> 2
+// 1 -a_0-> 2
+// 1 -b_0-> 0
+// 2 -b_0-> 1
+//
+// Terms: [0 a_0] [2 b_0]
+void init_graph_7() {
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 3;
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
+
+    OK(GrB_Matrix_setElement(adj_matrices[0], true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrices[0], true, 0, 2));
+    OK(GrB_Matrix_setElement(adj_matrices[0], true, 1, 2));
+    OK(GrB_Matrix_setElement(adj_matrices[2], true, 1, 0));
+    OK(GrB_Matrix_setElement(adj_matrices[2], true, 2, 1));
+}
+
 //====================
 // Tests with valid result
 //====================
@@ -563,6 +602,31 @@ void test_CFL_indexed(void) {
         TEST_MSG("MASK: %zx, ERROR: %s\n", mask, msg);
         char *expected = output_to_str(4);
         TEST_CHECK(strcmp("(0, 2)", expected) == 0);
+        TEST_MSG("Wrong result. Mask: %zx. Actual: %s", mask, expected);
+        LAGraph_Free((void **)&expected, msg);
+
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
+void test_CFL_indexed_2(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        GrB_Info retval;
+
+        init_indexed_grammar_2();
+        init_graph_7();
+        init_outputs();
+
+        OK(run_algorithm(mask));
+        TEST_MSG("MASK: %zx, ERROR: %s\n", mask, msg);
+        char *expected = output_to_str(4);
+        TEST_CHECK(strcmp("(0, 0) (0, 1) (1, 1)", expected) == 0);
         TEST_MSG("Wrong result. Mask: %zx. Actual: %s", mask, expected);
         LAGraph_Free((void **)&expected, msg);
 
@@ -919,6 +983,7 @@ void test_CFL_reachability_null_pointers(void) {
 
 TEST_LIST = {
     {"CFG_reachability_indexed", test_CFL_indexed},
+    {"CFG_reachability_indexed_2", test_CFL_indexed_2},
     {"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
     {"CFG_reachability_indexed_simple", test_CFL_indexed_simple},
     {"CFG_reachability_indexed_simple_exploded", test_CFL_indexed_simple_exploded},
