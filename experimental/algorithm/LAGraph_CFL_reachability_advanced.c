@@ -18,7 +18,7 @@
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         TRY_INNER(CFL_matrix_free(&iden));                                               \
-        TRY_INNER(LAGraph_Free((void **)&symbols, msg));                                 \
+        TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, msg));                      \
         TRY_INNER(LAGraph_Free((void **)&new_rules, msg));                               \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                               \
@@ -450,6 +450,38 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
     return GrB_SUCCESS;
 }
 
+// Builds the mapping [old_index -> (new_index, base_index, indexed_count)]
+// See get_new_symbols() for a detailed description of the mapping format
+//
+// Parameters:
+//   map           - [out] Allocated array of CFL_Symbol. Caller must free
+//   size          - [out] Number of entries in map
+static GrB_Info get_new_symbols_map(const LAGraph_rule_EWCNF *rules, size_t rules_count,
+                                    size_t symbols_amount, CFL_Symbol **map, size_t *size,
+                                    char *msg, int8_t optimizations) {
+#undef FREE_INNER
+
+#define FREE_INNER()                                                                     \
+    {                                                                                    \
+        LAGraph_Free((void **)map, msg);                                                 \
+    }
+
+    if (optimizations & OPT_BLOCK) {
+        TRY_INNER(get_new_symbols(rules, rules_count, symbols_amount, map, size, msg));
+    } else {
+        *size = symbols_amount;
+        TRY_INNER(LAGraph_Calloc((void **)map, symbols_amount, sizeof(CFL_Symbol), msg));
+        for (size_t i = 0; i < symbols_amount; i++) {
+            CFL_Symbol *sym = &(*map)[i];
+            sym->index = i;
+            sym->base_index = i;
+            sym->count = 0;
+        }
+    }
+
+    return GrB_SUCCESS;
+}
+
 // LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based
 // Algorithm
 //
@@ -547,7 +579,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GrB_Matrix *new_adj_matrices = NULL;
     LAGraph_rule_EWCNF *new_rules = NULL;
     size_t new_rules_count = 0;
-    CFL_Symbol *symbols = NULL;
+    CFL_Symbol *to_new_symbols_map = NULL;
 
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
@@ -591,15 +623,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
     GrB_Index n;
     TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
-    if (optimizations & OPT_BLOCK) {
-        TRY(get_new_symbols(rules, rules_count, symbols_amount, &symbols,
-                            &new_symbols_amount, msg));
+    TRY(get_new_symbols_map(rules, rules_count, symbols_amount, &to_new_symbols_map,
+                            &new_symbols_amount, msg, optimizations));
 
+    if (optimizations & OPT_BLOCK) {
         TRY(LAGraph_Calloc((void **)&new_adj_matrices, new_symbols_amount,
                            sizeof(GrB_Matrix), msg));
 
         for (size_t i = 0; i < new_symbols_amount; i++) {
-            CFL_Symbol sym = symbols[i];
+            CFL_Symbol sym = to_new_symbols_map[i];
             if (sym.count == 0) {
                 TRY(GrB_Matrix_dup(&new_adj_matrices[i], adj_matrices[sym.base_index]));
             } else {
@@ -620,7 +652,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
             new_rule.indexed_count = rule.indexed_count;
 
             for (size_t i_sym = 0; i_sym < new_symbols_amount; i_sym++) {
-                CFL_Symbol sym = symbols[i_sym];
+                CFL_Symbol sym = to_new_symbols_map[i_sym];
 
                 if (rule.nonterm != -1 && rule.nonterm == sym.base_index) {
                     new_rule.nonterm = sym.index;
@@ -636,7 +668,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
             new_rules[new_rules_count++] = new_rule;
         }
     } else {
-        new_symbols_amount = symbols_amount;
         new_adj_matrices = (GrB_Matrix *)adj_matrices;
         TRY(explode_rules(rules, rules_count, &new_rules, &new_rules_count, msg));
     }
@@ -863,12 +894,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // get outputs matrices
     for (size_t i = 0; i < new_symbols_amount; i++) {
-        if (optimizations & OPT_BLOCK) {
-            CFL_Symbol sym = symbols[i];
-            TRY(split_CFL_matrix(outputs + sym.base_index, matrices[i], optimizations));
-        } else {
-            TRY(split_CFL_matrix(outputs + i, matrices[i], optimizations));
-        }
+        CFL_Symbol sym = to_new_symbols_map[i];
+        TRY(split_CFL_matrix(outputs + sym.base_index, matrices[i], optimizations));
     }
 
     LG_FREE_WORK;
