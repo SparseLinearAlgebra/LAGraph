@@ -514,6 +514,36 @@ void init_graph_4() {
     }
 }
 
+// Graph:
+
+// 0 -a-> 1
+// 1 -b_1-> 2
+void init_graph_5() {
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 3;
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
+
+    OK(GrB_Matrix_setElement(adj_matrices[0], true, 0, 1));
+    OK(GrB_Matrix_setElement(adj_matrices[2], true, 1, 2));
+}
+
+// Graph:
+
+// 0 -a_1-> 1
+void init_graph_6() {
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 3;
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
+
+    OK(GrB_Matrix_setElement(adj_matrices[1], true, 0, 1));
+}
+
 //====================
 // Tests with valid result
 //====================
