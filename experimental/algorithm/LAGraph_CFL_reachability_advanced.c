@@ -642,16 +642,13 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
         TRY(CFL_matrix_from_base(&delta_matrices[i], new_adj_matrix));
 
-        GrB_Matrix matrix;
-        TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
         if (optimizations & OPT_LAZY) {
-            TRY(CFL_matrix_from_base_lazy(&matrices[i], matrix));
+            TRY(CFL_matrix_create_lazy(&matrices[i], nrows, ncols));
         } else {
-            TRY(CFL_matrix_from_base(&matrices[i], matrix));
+            TRY(CFL_matrix_create(&matrices[i], nrows, ncols));
         }
 
-        TRY(GrB_Matrix_new(&matrix, GrB_BOOL, nrows, ncols));
-        TRY(CFL_matrix_from_base(&temp_matrices[i], matrix));
+        TRY(CFL_matrix_create(&temp_matrices[i], nrows, ncols));
     }
 
     // Rule [Variable -> term]
