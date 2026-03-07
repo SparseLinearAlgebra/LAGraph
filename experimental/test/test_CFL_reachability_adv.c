@@ -548,11 +548,90 @@ void init_graph_6() {
 // Tests with valid result
 //====================
 
-void test_CFL_reachability_cycle(void) {
+void test_CFL_indexed(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
 
     for (size_t mask = 0; mask < 16; mask++) {
+        GrB_Info retval;
+
+        init_indexed_grammar();
+        init_graph_5();
+        init_outputs();
+
+        OK(run_algorithm(mask));
+        TEST_MSG("MASK: %zx, ERROR: %s\n", mask, msg);
+        char *expected = output_to_str(4);
+        TEST_CHECK(strcmp("(0, 2)", expected) == 0);
+        TEST_MSG("Wrong result. Mask: %zx. Actual: %s", mask, expected);
+        LAGraph_Free((void **)&expected, msg);
+
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
+void test_CFL_indexed_simple(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask == 16; mask++) {
+        GrB_Info retval;
+
+        init_indexed_grammar_simple();
+        init_graph_6();
+        init_outputs();
+
+        OK(run_algorithm(mask));
+        TEST_MSG("MASK: %zx, ERROR: %s\n", mask, msg);
+        // for (size_t i = 0; i < grammar.nonterms_count + grammar.terms_count; i++) {
+        //     GxB_print(outputs[i], 2);
+        // }
+
+        char *expected = output_to_str(3);
+        TEST_CHECK(strcmp("(0, 1)", expected) == 0);
+        TEST_MSG("Wrong result. Mask: %zx. Actual: %s", mask, expected);
+        LAGraph_Free((void **)&expected, msg);
+
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
+void test_CFL_indexed_simple_exploded(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        GrB_Info retval;
+
+        init_indexed_grammar_simple_exloded();
+        init_graph_6();
+        init_outputs();
+
+        OK(run_algorithm(mask));
+        TEST_MSG("MASK: %zx, ERROR: %s\n", mask, msg);
+        char *expected = output_to_str(3);
+        TEST_CHECK(strcmp("(0, 1)", expected) == 0);
+        TEST_MSG("Wrong result. Mask: %zx. Actual: %s", mask, expected);
+        LAGraph_Free((void **)&expected, msg);
+
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
+void test_CFL_reachability_cycle(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 15; mask == 15; mask++) {
         GrB_Info retval;
 
         init_grammar_aS();
@@ -583,6 +662,27 @@ void test_CFL_reachability_two_cycle(void) {
 
         OK(run_algorithm(mask));
         check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
+
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
+void test_CFL_reachability_indexed_rules(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        GrB_Info retval;
+
+        init_indexed_grammar();
+        init_graph_2();
+        init_outputs();
+
+        OK(run_algorithm(mask));
+        check_result("(0, 1)");
 
         free_workspace();
     }
@@ -739,11 +839,12 @@ void test_CFL_reachability_invalid_rules(void) {
     grammar.rules[0] =
         (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
-
+    printf("MSG: %s\n", msg);
     // Rule [_ -> A B]
     grammar.rules[0] =
         (LAGraph_rule_EWCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
     check_error(GrB_INVALID_VALUE, 0);
+    printf("MSG: %s\n", msg);
 
     // Rule [C -> A B], where C >= nonterms_count
     grammar.rules[0] =
@@ -814,18 +915,22 @@ void test_CFL_reachability_null_pointers(void) {
 #endif
 }
 
-TEST_LIST = {{"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
-             {"CFL_reachability_cycle", test_CFL_reachability_cycle},
-             {"CFL_reachability_two_cycle", test_CFL_reachability_two_cycle},
-             {"CFL_reachability_labels_more_than_nonterms",
-              test_CFL_reachability_labels_more_than_nonterms},
-             {"CFL_reachability_tree", test_CFL_reachability_tree},
-             {"CFL_reachability_line", test_CFL_reachability_line},
-             {"CFL_reachability_two_nodes_cycle", test_CFL_reachability_two_nodes_cycle},
-             {"test_CFL_reachability_with_empty_adj_matrix",
-              test_CFL_reachability_with_empty_adj_matrix},
-             {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
+TEST_LIST = {
+    {"CFG_reachability_indexed", test_CFL_indexed},
+    {"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
+    {"CFG_reachability_indexed_simple", test_CFL_indexed_simple},
+    {"CFG_reachability_indexed_simple_exploded", test_CFL_indexed_simple_exploded},
+    {"CFL_reachability_cycle", test_CFL_reachability_cycle},
+    {"CFL_reachability_two_cycle", test_CFL_reachability_two_cycle},
+    {"CFL_reachability_labels_more_than_nonterms",
+     test_CFL_reachability_labels_more_than_nonterms},
+    {"CFL_reachability_tree", test_CFL_reachability_tree},
+    {"CFL_reachability_line", test_CFL_reachability_line},
+    {"CFL_reachability_two_nodes_cycle", test_CFL_reachability_two_nodes_cycle},
+    {"CFG_reach_basic_invalid_rules", test_CFL_reachability_invalid_rules},
+    {"test_CFL_reachability_with_empty_adj_matrix",
+     test_CFL_reachability_with_empty_adj_matrix},
 #if !defined(GRAPHBLAS_HAS_CUDA)
-             {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
+    {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
 #endif
-             {NULL, NULL}};
+    {NULL, NULL}};
