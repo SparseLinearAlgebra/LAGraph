@@ -975,6 +975,9 @@ LAGRAPHX_PUBLIC
 GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan) ;
 
 LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_Free(GrB_Matrix *mat) ;
+
+LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrixOuts (GrB_Vector w, const GrB_Matrix A);
 
 LAGRAPHX_PUBLIC

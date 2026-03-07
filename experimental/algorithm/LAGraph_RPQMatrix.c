@@ -170,6 +170,11 @@ GrB_Info LAGraph_RPQMatrix_check(RPQMatrixPlan *plan, GrB_Index *dimension, char
 static GrB_Semiring sr = GrB_NULL ;
 static GrB_Monoid op = GrB_NULL ;
 
+GrB_Info LAGraph_RPQMatrix_Free(GrB_Matrix *mat) {
+    OK(GrB_Matrix_free(mat));
+    return GrB_SUCCESS ;
+}
+
 GrB_Info LAGraph_RPQMatrix_label(GrB_Matrix *mat, GrB_Index x, GrB_Index i, GrB_Index j)
 {
     OK(GrB_Matrix_new(mat, GrB_BOOL, i, j)) ;
