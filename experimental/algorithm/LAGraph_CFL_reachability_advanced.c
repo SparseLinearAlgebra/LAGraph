@@ -381,7 +381,77 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
     return GrB_SUCCESS;
 }
 
-// LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based Algorithm
+// Splits a CFL_Matrix into an array of GrB_Matrix matrices
+
+// If the matrix is not a horizontal or vertical block vector (i.e., its
+// block_type is CELL), the underlying GrB_Matrix is extracted and copied
+// into outputs[0]
+//
+// Otherwise, the matrix split into square sub-matrices of size (graph_size x graph_size)
+// Parameters:
+//   outputs       - [out] Caller-allocated array of GrB_Matrix to write results into
+//                         Must have enough space for all sub-matrices
+//   matrix        - [in]  Source CFL_Matrix to split
+static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
+                                 int8_t optimizations) {
+    char msg[LAGRAPH_MSG_LEN];
+    CFL_Matrix *base_matrix;
+    GrB_Index *nrows = NULL, *ncols = NULL;
+
+#undef FREE_INNER
+
+#define FREE_INNER()                                                                     \
+    {                                                                                    \
+        CFL_matrix_free(&base_matrix);                                                   \
+        LAGraph_Free((void **)&nrows, msg);                                              \
+        LAGraph_Free((void **)&ncols, msg);                                              \
+    }
+
+    if (matrix->block_type == CELL) {
+        CFL_Matrix *result;
+        TRY_INNER(CFL_matrix_to_base(&result, matrix, optimizations));
+        TRY_INNER(GrB_Matrix_dup(outputs, result->base));
+        TRY_INNER(CFL_matrix_free(&result));
+        return GrB_SUCCESS;
+    }
+
+    TRY_INNER(CFL_matrix_to_base(&base_matrix, matrix, optimizations));
+
+    // we can create nrows and ncols array with the same size, it will be mush easier than
+    // calculate size of each array :)
+    GrB_Index matrices_count = matrix->nrows > matrix->ncols
+                                   ? matrix->nrows / matrix->ncols
+                                   : matrix->ncols / matrix->nrows;
+
+    TRY_INNER(LAGraph_Calloc((void **)&nrows, matrices_count, sizeof(GrB_Index), msg));
+    TRY_INNER(LAGraph_Calloc((void **)&ncols, matrices_count, sizeof(GrB_Index), msg));
+
+    GrB_Index graph_size = matrix->nrows < matrix->ncols ? matrix->nrows : matrix->ncols;
+    for (size_t i = 0; i < matrices_count; i++) {
+        nrows[i] = graph_size;
+        ncols[i] = graph_size;
+    }
+
+    GrB_Index m = 0, n = 0;
+    if (matrix->block_type == VEC_VERT) {
+        m = matrices_count;
+        n = 1;
+    } else {
+        m = 1;
+        n = matrices_count;
+    }
+
+    TRY_INNER(GxB_Matrix_split(outputs, m, n, nrows, ncols, base_matrix->base, GrB_NULL));
+
+    TRY_INNER(LAGraph_Free((void **)&nrows, msg));
+    TRY_INNER(LAGraph_Free((void **)&ncols, msg));
+    TRY_INNER(CFL_matrix_free(&base_matrix));
+
+    return GrB_SUCCESS;
+}
+
+// LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based
+// Algorithm
 //
 // This function determines the set of vertex pairs (u, v) in a graph (represented by
 // adjacency matrices) such that there is a path from u to v, where the edge labels
