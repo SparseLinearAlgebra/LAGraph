@@ -142,9 +142,20 @@
     {                                                                                    \
         GrB_Info LG_GrB_Info = GrB_method;                                               \
         if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
-            fprintf(stderr, "LAGraph failure (file %s, line %d): ", __FILE__, __LINE__); \
-            fprintf(stderr, "\n%d %s", LG_GrB_Info, msg);                                \
-            exit(LG_GrB_Info);                                                           \
+            fprintf(stderr, "LAGraph failure (file %s, line %d): \n", __FILE__,          \
+                    __LINE__);                                                           \
+            return (LG_GrB_Info);                                                        \
+        }                                                                                \
+    }
+
+#define TRY_I(GrB_method)                                                                \
+    {                                                                                    \
+        GrB_Info LG_GrB_Info = GrB_method;                                               \
+        if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
+            fprintf(stderr,                                                              \
+                    "LAGraph failure (file %s, line %d) (Iteration: %d, i: %d): \n",     \
+                    __FILE__, __LINE__, iteration, i);                                   \
+            return (LG_GrB_Info);                                                        \
         }                                                                                \
     }
 
