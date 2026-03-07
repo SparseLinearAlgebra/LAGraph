@@ -294,12 +294,6 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
     GRB_TRY(GrB_mxm(res, GrB_NULL, GrB_NULL,
                     sr, lhs_mat, rhs_mat, GrB_DESC_R)) ;
     plan->res_mat = res ;
-
-    GrB_Vector ins ;
-    GrB_Vector_new(&ins, GrB_BOOL, dimension) ;
-    GrB_Vector outs ;
-    GrB_Vector_new(&outs, GrB_BOOL, dimension) ;
-
     return (GrB_SUCCESS) ;
 }
 
@@ -354,6 +348,7 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
             changed = false ;
         }
     }
+    GrB_Vector_free(&v) ;
     plan->res_mat = S ;
 
     // GRB_TRY(GrB_Matrix_free(&I)) ;
