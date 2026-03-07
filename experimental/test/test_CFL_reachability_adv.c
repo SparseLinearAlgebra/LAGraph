@@ -61,7 +61,9 @@ void init_outputs() {
 
 char *output_to_str(size_t nonterm) {
     GrB_Index nnz = 0;
-    OK(GrB_Matrix_nvals(&nnz, outputs[nonterm]));
+    GrB_Info info = GrB_Matrix_nvals(&nnz, outputs[nonterm]);
+    OK(info);
+    TEST_MSG("Error: %d\n", info);
     GrB_Index *row = NULL;
     GrB_Index *col = NULL;
     bool *val = NULL;
@@ -70,7 +72,7 @@ char *output_to_str(size_t nonterm) {
     LAGraph_Malloc((void **)&val, nnz, sizeof(GrB_Index), msg);
 
     GrB_set(outputs[nonterm], GrB_ROWMAJOR, GrB_STORAGE_ORIENTATION_HINT);
-    OK(GrB_Matrix_extractTuples(row, col, val, &nnz, outputs[nonterm]));
+    OK(GrB_Matrix_extractTuples_BOOL(row, col, val, &nnz, outputs[nonterm]));
 
     // 11 - size of " (%ld, %ld)"
     char *result_str = NULL;
@@ -91,7 +93,6 @@ char *output_to_str(size_t nonterm) {
 }
 
 void free_workspace() {
-
     if (adj_matrices != NULL) {
         for (size_t i = 0; i < n_adj_matrices; i++) {
             GrB_free(&adj_matrices[i]);
@@ -100,7 +101,7 @@ void free_workspace() {
     LAGraph_Free((void **)&adj_matrices, msg);
 
     if (outputs != NULL) {
-        for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        for (size_t i = 0; i < grammar.nonterms_count + grammar.terms_count; i++) {
             GrB_free(&outputs[i]);
         }
     }
@@ -135,6 +136,49 @@ void init_grammar_aSb() {
 
     grammar = (grammar_t){
         .nonterms_count = 4, .terms_count = 2, .rules_count = 5, .rules = rules};
+}
+
+// Terms: [0 a] [1 b_0]  [2 b_1]
+// Nonterms: [3 S_0] [4 S_1]
+// S_i -> a b_i [3 1 2 2 LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_B]
+void init_indexed_grammar() {
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 1, sizeof(LAGraph_rule_EWCNF), msg);
+
+    rules[0] = (LAGraph_rule_EWCNF){
+        3, 0, 1, 2, LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_B};
+
+    grammar = (grammar_t){
+        .nonterms_count = 2, .terms_count = 3, .rules_count = 1, .rules = rules};
+}
+
+// Terms: [0 a_0] [1 a_1]
+// Nonterms: [2 S_0] [3 S_1]
+// S_i -> a_i [2 0 -1 2 LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_A]
+void init_indexed_grammar_simple() {
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 1, sizeof(LAGraph_rule_EWCNF), msg);
+
+    rules[0] = (LAGraph_rule_EWCNF){
+        2, 0, -1, 2, LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_A};
+
+    grammar = (grammar_t){
+        .nonterms_count = 2, .terms_count = 2, .rules_count = 1, .rules = rules};
+}
+
+// Terms: [0 a_0] [1 a_1]
+// Nonterms: [2 S_0] [3 S_1]
+// S_0 -> a_0 [2 0 -1 0 0]
+// S_1 -> a_1 [3 1 -1 0 0]
+void init_indexed_grammar_simple_exloded() {
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 2, sizeof(LAGraph_rule_EWCNF), msg);
+
+    rules[0] = (LAGraph_rule_EWCNF){2, 0, -1, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){3, 1, -1, 0, 0};
+
+    grammar = (grammar_t){
+        .nonterms_count = 2, .terms_count = 2, .rules_count = 2, .rules = rules};
 }
 
 // S -> aS | a | eps in WCNF
