@@ -818,7 +818,7 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         size_t new_nnz = 0;
         for (size_t i = 0; i < new_symbols_amount; i++) {
-            TRY(CFL_matrix_update(&delta_matrices[i]));
+            TRY(CFL_matrix_update(delta_matrices[i]));
             new_nnz += delta_matrices[i]->nvals;
         }
 
