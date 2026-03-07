@@ -503,10 +503,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TRY(get_new_symbols(rules, rules_count, symbols_amount, &symbols,
                             &new_symbols_amount, msg));
 
-        // printf("symbols_amount: %ld new_symbols_amount: %ld\n", symbols_amount,
-        //        new_symbols_amount);
-        // fflush(stdout);
-
         TRY(LAGraph_Calloc((void **)&new_adj_matrices, new_symbols_amount,
                            sizeof(GrB_Matrix), msg));
 
@@ -551,7 +547,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         new_symbols_amount = symbols_amount;
         new_adj_matrices = (GrB_Matrix *)adj_matrices;
         TRY(explode_rules(rules, rules_count, &new_rules, &new_rules_count, msg));
-        // printf("new rules count %ld\n", new_rules_count);
     }
 
     // Arrays for processing rules
@@ -666,11 +661,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
         CFL_Matrix *term_matrix = delta_matrices[term_rule.prod_A];
 
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, term_matrix, true, optimizations));
-
-#ifdef DEBUG_CFL_REACHBILITY
-        // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
-        printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
-#endif
     }
 
     GrB_Vector v_diag;
@@ -687,10 +677,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, iden, true, optimizations));
         // matrix_print_lazy(nonterm_matrix, optimizations);
-#ifdef DEBUG_CFL_REACHBILITY
-        // GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
-        printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n", eps_rule.nonterm, iso_flag);
-#endif
     }
 
     // Rule [Variable -> Variable1 Variable2]
@@ -702,9 +688,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     double mxm2 = 0.0;
     double wise2 = 0.0;
     double rsubt = 0.0;
-    // print_graph_info(matrices, symbols_amount);
-    // print_graph_info(delta_matrices, symbols_amount);
-    // print_graph_info(temp_matrices, symbols_amount);
     while (changed) {
         iteration++;
         changed = false;
@@ -726,33 +709,18 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Matrix *B = delta_matrices[bin_rule.prod_B];
             CFL_Matrix *C = temp_matrices[bin_rule.nonterm];
 
-            // printf("MXM 1 iteration: %ld i: %ld\n", iteration, i);
-            // matrix_print_lazy(A, optimizations);
-            // matrix_print_lazy(B, optimizations);
-            // matrix_print_lazy(C, optimizations);
             TRY_I(CFL_mxm(C, A, B, true, false, optimizations));
-            // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("MXM 1", &mxm1);
-        // print_graph_info(matrices, symbols_amount);
-        // print_graph_info(delta_matrices, symbols_amount);
-        // print_graph_info(temp_matrices, symbols_amount);
 
         TIMER_START()
         for (size_t i = 0; i < new_symbols_amount; i++) {
             CFL_Matrix *A = delta_matrices[i];
             CFL_Matrix *C = matrices[i];
 
-            // printf("WISE 1 iteration: %ld i: %ld\n", iteration, i);
-            // matrix_print_lazy(A, optimizations);
-            // matrix_print_lazy(C, optimizations);
             TRY_I(CFL_wise(C, C, A, false, optimizations));
-            // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("WISE 1", &wise1);
-        // print_graph_info(matrices, symbols_amount);
-        // print_graph_info(delta_matrices, symbols_amount);
-        // print_graph_info(temp_matrices, symbols_amount);
 
         TIMER_START()
         for (size_t i = 0; i < bin_rules_count; i++) {
@@ -761,17 +729,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Matrix *B = delta_matrices[bin_rule.prod_A];
             CFL_Matrix *C = temp_matrices[bin_rule.nonterm];
 
-            // printf("MXM 2 iteration: %ld i: %ld\n", iteration, i);
-            // matrix_print_lazy(A, optimizations);
-            // matrix_print_lazy(B, optimizations);
-            // matrix_print_lazy(C, optimizations);
             TRY(CFL_mxm(C, A, B, true, true, optimizations));
-            // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("MXM 2", &mxm2);
-        // print_graph_info(matrices, new_symbols_amount);
-        // print_graph_info(delta_matrices, new_symbols_amount);
-        // print_graph_info(temp_matrices, new_symbols_amount);
 
         // Rule [Variable -> term]
         for (size_t i = 0; i < term_rules_count; i++) {
@@ -779,41 +739,23 @@ GrB_Info LAGraph_CFL_reachability_adv(
             CFL_Matrix *A = temp_matrices[term_rule.nonterm];
             CFL_Matrix *B = delta_matrices[term_rule.prod_A];
 
-            // printf("Simple rules iteration: %ld i: %ld\n", iteration, i);
-            // matrix_print_lazy(A, optimizations);
-            // matrix_print_lazy(B, optimizations);
             TRY_I(CFL_wise(A, A, B, true, optimizations));
-            // matrix_print_lazy(A, optimizations);
         }
-        // printf("Simple rules\n");
-        // print_graph_info(matrices, symbols_amount);
-        // print_graph_info(delta_matrices, symbols_amount);
-        // print_graph_info(temp_matrices, symbols_amount);
 
         TIMER_START();
         for (size_t i = 0; i < new_symbols_amount; i++) {
             TRY_I(CFL_dup(delta_matrices[i], temp_matrices[i], optimizations));
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
-        // print_graph_info(matrices, new_symbols_amount);
-        // print_graph_info(delta_matrices, new_symbols_amount);
-        // print_graph_info(temp_matrices, new_symbols_amount);
 
         TIMER_START();
         for (size_t i = 0; i < new_symbols_amount; i++) {
             CFL_Matrix *A = matrices[i];
             CFL_Matrix *C = delta_matrices[i];
 
-            // printf("RSUB iteration: %ld i: %ld\n", iteration, i);
-            // matrix_print_lazy(A, optimizations);
-            // matrix_print_lazy(C, optimizations);
             TRY_I(CFL_rsub(C, A, optimizations));
-            // matrix_print_lazy(C, optimizations);
         }
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
-        // print_graph_info(matrices, new_symbols_amount);
-        // print_graph_info(delta_matrices, new_symbols_amount);
-        // print_graph_info(temp_matrices, new_symbols_amount);
 
         size_t new_nnz = 0;
         for (size_t i = 0; i < new_symbols_amount; i++) {
@@ -824,31 +766,12 @@ GrB_Info LAGraph_CFL_reachability_adv(
         if (new_nnz != 0) {
             changed = true;
         }
-
-#ifdef DEBUG_CFL_REACHBILITY
-        // GxB_Matrix_iso(&iso_flag, T[bin_rule.nonterm]);
-        printf("[TERM1 TERM2] MULTIPLY, S: %d, A: %d, B: %d, "
-               "I: %ld (ISO: %d)\n",
-               bin_rule.nonterm, bin_rule.prod_A, bin_rule.prod_B, i, iso_flag);
-#endif
     }
 
 #if BENCH_CFL_REACHBILITY
     printf("MXM1: %.3f, wise1: %.3f, MXM2: %.3f, wise2: %.3f, rsub: %.3f", mxm1, wise1,
            mxm2, wise2, rsubt);
 #endif
-
-#ifdef DEBUG_CFL_REACHBILITY
-    for (int32_t i = 0; i < nonterms_count; i++) {
-        printf("MATRIX WITH INDEX %d:\n", i);
-        // GxB_print(T[i], GxB_SUMMARY);
-    }
-#endif
-
-    // printf("PRINTED:\n");
-    // for (size_t i = 0; i < new_symbols_amount; i++) {
-    //     matrix_print_lazy(&matrices[i], optimizations);
-    // }
 
     for (size_t i = 0; i < new_symbols_amount; i++) {
         if (optimizations & OPT_BLOCK) {
