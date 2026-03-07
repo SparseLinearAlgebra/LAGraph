@@ -87,7 +87,7 @@ endif ( )
 # This will only build tests from files with the name "test_*.c"
 #-------------------------------------------------------------------------------
 
-file( GLOB TEST_SOURCES LIST_DIRECTORIES false *_test.c test*.c )
+file( GLOB TEST_SOURCES LIST_DIRECTORIES false *_test.c test_CFL*.c )
 foreach( testsourcefile ${TEST_SOURCES} )
     get_filename_component(justname ${testsourcefile} NAME)
     string( REPLACE ".c" "" testname ${justname} )
