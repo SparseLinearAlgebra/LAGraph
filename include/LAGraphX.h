@@ -1028,6 +1028,179 @@ int LAGraph_SquareClustering
     int32_t index;   // For rules that can be grouped by index
  } LAGraph_rule_WCNF;
 
+// Structure for collecting rule check errors
+// Used by grammar check macros to accumulate error information
+typedef struct
+{
+    size_t count;
+    size_t len_indexes_str;
+    char indexes_str[LAGRAPH_MSG_LEN];
+} LAGraph_rule_error_s;
+
+#define ADD_INDEX_TO_ERROR_RULE(rule, i)                 \
+{                                                        \
+    rule.len_indexes_str += snprintf(                    \
+        rule.indexes_str + rule.len_indexes_str,         \
+        LAGRAPH_MSG_LEN - rule.len_indexes_str,          \
+        rule.count == 0 ? "%" PRId64 : ", %" PRId64, i); \
+    rule.count++;                                        \
+}
+
+// LG_CFL_CHECK_GRAMMAR_INPUTS: Checks the input CFL grammar
+//
+// Checks:
+//   - The rule array is not NULL
+//   - Valid number of terms/non-terms/rules (> 0)
+//   - Correctly formed grammar rules in WCNF format
+//
+// Parameters:
+//   - nonterms_count: number of non-terminal symbols
+//   - terms_count: number of terminal symbols
+//   - rules_count: number of rules in the grammar
+//   - rules: array of rules
+//
+// If an error occurs: adds a message using ADD_TO_MSG, calls LG_FREE_ALL,
+// returns the corresponding GrB_Info
+//
+// Note: rules are represented by the LAGraph_rule_WCNF structure
+
+#define LG_CFL_CHECK_GRAMMAR_INPUTS(terms_count, nonterms_count, rules_count, rules)   \
+{                                                                                      \
+    LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,                                  \
+                  "The number of terminals must be greater than zero.");               \
+    LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,                               \
+                  "The number of non-terminals must be greater than zero.");           \
+    LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,                                  \
+                  "The number of rules must be greater than zero.");                   \
+    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null."); \
+                                                                                       \
+    LAGraph_rule_error_s term_err = {0};                                               \
+    LAGraph_rule_error_s nonterm_err = {0};                                            \
+    LAGraph_rule_error_s invalid_err = {0};                                            \
+                                                                                       \
+    for (int64_t i = 0; i < rules_count; i++)                                          \
+    {                                                                                  \
+        LAGraph_rule_WCNF rule = rules[i];                                             \
+                                                                                       \
+        bool is_rule_eps = (rule.prod_A == -1 && rule.prod_B == -1);                   \
+        bool is_rule_term = (rule.prod_A != -1 && rule.prod_B == -1);                  \
+        bool is_rule_bin = (rule.prod_A != -1 && rule.prod_B != -1);                   \
+                                                                                       \
+        /* Check that all rules are well-formed */                                     \
+        if (rule.nonterm < 0 || rule.nonterm >= nonterms_count)                        \
+        {                                                                              \
+            ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);                                   \
+        }                                                                              \
+                                                                                       \
+        /* [Variable -> eps]  */                                                       \
+        if (is_rule_eps)                                                               \
+        {                                                                              \
+            continue;                                                                  \
+        }                                                                              \
+                                                                                       \
+        /* [Variable -> term] */                                                       \
+        if (is_rule_term)                                                              \
+        {                                                                              \
+            if (rule.prod_A < -1 || rule.prod_A >= terms_count)                        \
+            {                                                                          \
+                ADD_INDEX_TO_ERROR_RULE(term_err, i);                                  \
+            }                                                                          \
+            continue;                                                                  \
+        }                                                                              \
+                                                                                       \
+        /* [Variable -> A B] */                                                        \
+        if (is_rule_bin)                                                               \
+        {                                                                              \
+            if (rule.prod_A < -1 || rule.prod_A >= nonterms_count ||                   \
+                rule.prod_B < -1 || rule.prod_B >= nonterms_count)                     \
+            {                                                                          \
+                ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);                               \
+            }                                                                          \
+            continue;                                                                  \
+        }                                                                              \
+                                                                                       \
+        /* [Variable -> _ B] */                                                        \
+        ADD_INDEX_TO_ERROR_RULE(invalid_err, i);                                       \
+    }                                                                                  \
+                                                                                       \
+    if (term_err.count + nonterm_err.count + invalid_err.count > 0)                    \
+    {                                                                                  \
+        ADD_TO_MSG("Count of invalid rules: %" PRId64 ".\n",                           \
+                   (int64_t)(term_err.count + nonterm_err.count + invalid_err.count)); \
+                                                                                       \
+        if (nonterm_err.count > 0)                                                     \
+        {                                                                              \
+            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");        \
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str);     \
+        }                                                                              \
+        if (term_err.count > 0)                                                        \
+        {                                                                              \
+            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");           \
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str);        \
+        }                                                                              \
+        if (invalid_err.count > 0)                                                     \
+        {                                                                              \
+            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");          \
+            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str); \
+        }                                                                              \
+                                                                                       \
+        LG_FREE_ALL;                                                                   \
+        return GrB_INVALID_VALUE;                                                      \
+    }                                                                                  \
+}
+
+// LG_CFL_CHECK_GRAPH_INPUTS: Checks the input graph for CFL algorithms
+//
+// Checks:
+//   - The adjacency matrix array is not NULL
+//   - There are no entries equal to NULL in the adjacency matrix array
+//
+// Parameters:
+//   - adj_matrices: adjacency matrix array for terminals
+//   - terms_count: number of terminal symbols
+//
+// If an error occurs: adds a message using ADD_TO_MSG, calls LG_FREE_ALL,
+// returns GrB_NULL_POINTER from the surrounding function
+
+#define LG_CFL_CHECK_GRAPH_INPUTS(adj_matrices, terms_count)                \
+{                                                                           \
+    LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,                   \
+                  "The adjacency matrices array cannot be null.");          \
+                                                                            \
+    /* Find null adjacency matrices */                                      \
+    bool found_null = false;                                                \
+    for (int64_t i = 0; i < terms_count; i++)                               \
+    {                                                                       \
+        if (adj_matrices[i] != NULL)                                        \
+            continue;                                                       \
+                                                                            \
+        if (!found_null)                                                    \
+        {                                                                   \
+            ADD_TO_MSG("Adjacency matrices with these indexes are null: "); \
+            ADD_TO_MSG("%" PRId64, i);                                      \
+        }                                                                   \
+        else                                                                \
+        {                                                                   \
+            ADD_TO_MSG(" %" PRId64, i);                                     \
+        }                                                                   \
+                                                                            \
+        found_null = true;                                                  \
+    }                                                                       \
+                                                                            \
+    if (found_null)                                                         \
+    {                                                                       \
+        LG_FREE_ALL;                                                        \
+        return GrB_NULL_POINTER;                                            \
+    }                                                                       \
+}
+
+// LG_CFL_CHECK_BASE_INPUTS: Checks the input graph and CFL grammar for algorithms working with it
+// See LG_CFL_CHECK_GRAPH_INPUTS and LG_CFL_CHECK_GRAMMAR_INPUTS for details
+#define LG_CFL_CHECK_BASE_INPUTS(adj_matrices, terms_count, nonterms_count, rules_count, rules) \
+{                                                                                               \
+    LG_CFL_CHECK_GRAPH_INPUTS(adj_matrices, terms_count);                                       \
+    LG_CFL_CHECK_GRAMMAR_INPUTS(terms_count, nonterms_count, rules_count, rules);               \
+}
 
 // LAGraph_CFL_reachability: Context-Free Language Reachability Matrix-Based Algorithm
 //

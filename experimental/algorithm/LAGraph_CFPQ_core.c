@@ -24,12 +24,6 @@
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
-#define ERROR_RULE(msg, i)                                                  \
-    {                                                                       \
-        LG_ASSERT_MSGF(false, GrB_INVALID_VALUE,                            \
-                       "Rule with index %" PRId64 " is invalid. ", msg, i); \
-    }
-
 #define ADD_TO_MSG(...)                                                   \
     {                                                                     \
         if (msg_len == 0)                                                 \
@@ -44,15 +38,6 @@
             msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
                                 __VA_ARGS__);                             \
         }                                                                 \
-    }
-
-#define ADD_INDEX_TO_ERROR_RULE(rule, i)                     \
-    {                                                        \
-        rule.len_indexes_str += snprintf(                    \
-            rule.indexes_str + rule.len_indexes_str,         \
-            LAGRAPH_MSG_LEN - rule.len_indexes_str,          \
-            rule.count == 0 ? "%" PRId64 : ", %" PRId64, i); \
-        rule.count++;                                        \
     }
 
 GrB_Info LAGraph_CFPQ_core(
@@ -104,44 +89,10 @@ GrB_Info LAGraph_CFPQ_core(
     LG_TRY(LAGraph_Calloc((void **)&T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&t_empty_flags, nonterms_count, sizeof(bool), msg));
 
-    LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
-                  "The number of terminals must be greater than zero.");
-    LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
-                  "The number of non-terminals must be greater than zero.");
-    LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
-                  "The number of rules must be greater than zero.");
+    LG_CFL_CHECK_BASE_INPUTS(adj_matrices, terms_count, nonterms_count, rules_count, rules);
     LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
-    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
-    LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
-                  "The adjacency matrices array cannot be null.");
     LG_ASSERT_MSG(semiring != NULL, GrB_NULL_POINTER,
                   "The semiring cannot be null.");
-
-    // Find null adjacency matrices
-    bool found_null = false;
-    for (int64_t i = 0; i < terms_count; i++)
-    {
-        if (adj_matrices[i] != NULL)
-            continue;
-
-        if (!found_null)
-        {
-            ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
-            ADD_TO_MSG("%" PRId64, i);
-        }
-        else
-        {
-            ADD_TO_MSG(" %" PRId64, i);
-        }
-
-        found_null = true;
-    }
-
-    if (found_null)
-    {
-        LG_FREE_ALL;
-        return GrB_NULL_POINTER;
-    }
 
     GrB_Index n;
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
@@ -158,15 +109,6 @@ GrB_Info LAGraph_CFPQ_core(
     LG_TRY(LAGraph_Calloc((void **)&bin_rules, rules_count, sizeof(size_t), msg));
 
     // Process rules
-    typedef struct
-    {
-        size_t count;
-        size_t len_indexes_str;
-        char indexes_str[LAGRAPH_MSG_LEN];
-    } rule_error_s;
-    rule_error_s term_err = {0};
-    rule_error_s nonterm_err = {0};
-    rule_error_s invalid_err = {0};
     for (int64_t i = 0; i < rules_count; i++)
     {
         LAGraph_rule_WCNF rule = rules[i];
@@ -175,17 +117,10 @@ GrB_Info LAGraph_CFPQ_core(
         bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
         bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
 
-        // Check that all rules are well-formed
-        if (rule.nonterm < 0 || rule.nonterm >= nonterms_count)
-        {
-            ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-        }
-
         // [Variable -> eps]
         if (is_rule_eps)
         {
             eps_rules[eps_rules_count++] = i;
-
             continue;
         }
 
@@ -193,12 +128,6 @@ GrB_Info LAGraph_CFPQ_core(
         if (is_rule_term)
         {
             term_rules[term_rules_count++] = i;
-
-            if (rule.prod_A < -1 || rule.prod_A >= terms_count)
-            {
-                ADD_INDEX_TO_ERROR_RULE(term_err, i);
-            }
-
             continue;
         }
 
@@ -206,43 +135,8 @@ GrB_Info LAGraph_CFPQ_core(
         if (is_rule_bin)
         {
             bin_rules[bin_rules_count++] = i;
-
-            if (rule.prod_A < -1 || rule.prod_A >= nonterms_count || rule.prod_B < -1 ||
-                rule.prod_B >= nonterms_count)
-            {
-                ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-            }
-
             continue;
         }
-
-        // [Variable -> _ B]
-        ADD_INDEX_TO_ERROR_RULE(invalid_err, i);
-    }
-
-    if (term_err.count + nonterm_err.count + invalid_err.count > 0)
-    {
-        ADD_TO_MSG("Count of invalid rules: %" PRId64 ".\n",
-                   (int64_t)(term_err.count + nonterm_err.count + invalid_err.count));
-
-        if (nonterm_err.count > 0)
-        {
-            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str)
-        }
-        if (term_err.count > 0)
-        {
-            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str)
-        }
-        if (invalid_err.count > 0)
-        {
-            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str)
-        }
-
-        LG_FREE_ALL;
-        return GrB_INVALID_VALUE;
     }
 
     // Rule [Variable -> term]
