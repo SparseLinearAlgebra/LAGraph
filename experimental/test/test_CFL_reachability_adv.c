@@ -699,6 +699,7 @@ void test_CFL_reachability_labels_more_than_nonterms(void) {
         GrB_Info retval;
 
         init_grammar_aSb();
+        grammar.terms_count = 3;
         init_graph_2();
         init_outputs();
 
@@ -805,6 +806,7 @@ void test_CFL_reachability_with_empty_adj_matrix(void) {
         GrB_Info retval;
 
         init_grammar_aS();
+        grammar.terms_count = 2;
         init_graph_4();
         init_outputs();
 
@@ -871,10 +873,6 @@ void test_CFL_reachability_null_pointers(void) {
 
     setup();
 
-    for (size_t mask = 0; mask < 16; mask++) {
-        /* code */
-    }
-
     GrB_Info retval;
 
     init_grammar_aSb();
@@ -889,6 +887,10 @@ void test_CFL_reachability_null_pointers(void) {
     check_error(GrB_NULL_POINTER, 0);
 
     //  adj_matrices = NULL;
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        GrB_free(&adj_matrices[i]);
+    }
+
     LAGraph_Free((void **)&adj_matrices, msg);
     check_error(GrB_NULL_POINTER, 0);
 
