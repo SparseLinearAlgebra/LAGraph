@@ -1176,18 +1176,21 @@ typedef struct CFL_Matrix {
     int32_t format;
     bool is_both;
     // Fields of lazy addition optimization
-    struct CFL_Matrix *base_matrices;
+    struct CFL_Matrix **base_matrices;
     size_t base_matrices_count;
     bool is_lazy;
     // Fields of block optimization
     enum CFL_Matrix_block block_type;
 } CFL_Matrix;
 
-void CFL_matrix_update(CFL_Matrix *matrix);
-CFL_Matrix CFL_matrix_from_base(GrB_Matrix matrix);
-CFL_Matrix CFL_matrix_from_base_lazy(GrB_Matrix matrix);
-CFL_Matrix CFL_matrix_create(GrB_Index nrows, GrB_Index ncols);
-void CFL_matrix_free(CFL_Matrix *matrix);
+GrB_Info CFL_matrix_from_base(CFL_Matrix **matrix, GrB_Matrix base);
+GrB_Info CFL_matrix_from_base_lazy(CFL_Matrix **matrix, GrB_Matrix base);
+GrB_Info CFL_matrix_create(CFL_Matrix **matrix, GrB_Index nrows, GrB_Index ncols);
+GrB_Info CFL_matrix_create_lazy(CFL_Matrix **matrix, GrB_Index nrows, GrB_Index ncols);
+GrB_Info CFL_matrix_free(CFL_Matrix **matrix);
+
+GrB_Info CFL_matrix_update(CFL_Matrix *matrix);
+
 
 GrB_Info CFL_mxm(CFL_Matrix *output, CFL_Matrix *first, CFL_Matrix *second, bool accum,
                  bool swap, int8_t optimizations);
@@ -1200,13 +1203,16 @@ GrB_Info CFL_dup(CFL_Matrix *output, CFL_Matrix *input, int8_t optimizations);
 // all underlying base matrices. If the input matrix is not lazy, returns its copy.
 //
 // Parameters:
+//   matrix_p       - [out] Pointer that will be holds created matrix
 //   input          - [in]  Pointer to the source matrix (may be lazy).
 //   optimizations  - [in]  Bitmask specifying enabled optimizations.
 //
 // Returns:
-//   A new matrix representing the fully evaluated base form.
-CFL_Matrix CFL_matrix_to_base
+//   GrB_Info.
+GrB_Info CFL_matrix_to_base
 (
+    // output
+    CFL_Matrix **matrix_p,
     // input
     CFL_Matrix *matrix,
     int8_t optimizations
