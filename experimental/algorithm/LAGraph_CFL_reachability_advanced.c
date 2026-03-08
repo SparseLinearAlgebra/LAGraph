@@ -46,6 +46,7 @@
         LG_FREE_WORK;                                                                    \
     }
 
+#include "LAGraph_CFL_optimized_matrix_opt.h"
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -533,8 +534,9 @@ static GrB_Info get_new_adj_matrices(const GrB_Matrix *adj_matrices, CFL_Symbol 
 //   new_rules       - [out] Allocated output rule array. Caller must free
 //   new_rules_count - [out] Number of rules written to new_rules
 static GrB_Info get_new_rules(const LAGraph_rule_EWCNF *rules, size_t rules_count,
-                       CFL_Symbol *map, size_t map_size, LAGraph_rule_EWCNF **new_rules,
-                       size_t *new_rules_count, char *msg, int8_t optimizations) {
+                              CFL_Symbol *map, size_t map_size,
+                              LAGraph_rule_EWCNF **new_rules, size_t *new_rules_count,
+                              char *msg, int8_t optimizations) {
     *new_rules_count = 0;
 #undef FREE_INNER
 

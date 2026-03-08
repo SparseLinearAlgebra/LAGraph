@@ -18,6 +18,7 @@
 // https://github.com/FormalLanguageConstrainedPathQuerying/CFPQ_PyAlgo/tree/murav/optimize-matrix
 
 #include "LG_internal.h"
+#include "LAGraph_CFL_optimized_matrix_opt.h"
 #include <LAGraphX.h>
 
 #define BENCH_CFL_REACHBILITY false
