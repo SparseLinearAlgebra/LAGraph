@@ -94,7 +94,7 @@ GrB_Info LAGraph_CFPQ_core(
     LG_TRY(LAGraph_Calloc((void **)&T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&t_empty_flags, nonterms_count, sizeof(bool), msg));
 
-    LG_CFL_CHECK_BASE_INPUTS(adj_matrices, terms_count, nonterms_count, rules_count, rules);
+    LG_TRY(LAGraph_CFL_check_base_inputs(adj_matrices, terms_count, nonterms_count, rules_count, rules, msg, &msg_len));
     LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
     LG_ASSERT_MSG(semiring != NULL, GrB_NULL_POINTER,
                   "The semiring cannot be null.");

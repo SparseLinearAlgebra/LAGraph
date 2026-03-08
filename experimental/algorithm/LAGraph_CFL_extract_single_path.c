@@ -111,7 +111,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
     // Initial capacity 1, since most often looking for exactly 1 path with a fixed start and end
     output->capacity = 1;
 
-    LG_CFL_CHECK_BASE_INPUTS(adj_matrices, terms_count, nonterms_count, rules_count, rules);
+    LG_TRY(LAGraph_CFL_check_base_inputs(adj_matrices, terms_count, nonterms_count, rules_count, rules, msg, &msg_len));
     LG_ASSERT_MSG(nonterm < nonterms_count, GrB_INVALID_VALUE,
                   "The start non-terminal must be no greater than the number of non-terminals.");
     LG_ASSERT_MSG(path_index_matrices != NULL, GrB_NULL_POINTER, "The path_index_matrices array cannot be null.");
