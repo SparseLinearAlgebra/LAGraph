@@ -40,6 +40,11 @@
         }                                                                 \
     }
 
+// LAGraph_CFPQ_core: Context-Free Path Querying Matrix-Based Algorithm
+//
+// Internal core function for context-free language path finding.
+// Computes path information for all non-terminals using matrix operations defined by the input semiring.
+// The semiring determines the specific problem variant being solved.
 GrB_Info LAGraph_CFPQ_core(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
