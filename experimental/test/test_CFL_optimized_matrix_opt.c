@@ -12,6 +12,7 @@
 
 //------------------------------------------------------------------------------
 
+#include "../experimental/algorithm/LAGraph_CFL_optimized_matrix_opt.h"
 #include <LAGraph.h>
 #include <LAGraphX.h>
 #include <LAGraph_test.h>
