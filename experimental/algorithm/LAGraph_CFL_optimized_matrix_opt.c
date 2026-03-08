@@ -17,8 +17,8 @@
 // Algorithm" and based on the python implementation from:
 // https://github.com/FormalLanguageConstrainedPathQuerying/CFPQ_PyAlgo/tree/murav/optimize-matrix
 
-#include "LG_internal.h"
 #include "LAGraph_CFL_optimized_matrix_opt.h"
+#include "LG_internal.h"
 #include <LAGraphX.h>
 
 #define BENCH_CFL_REACHBILITY false
@@ -292,7 +292,6 @@ GrB_Info matrix_dup_block(Matrix *output, Matrix *input, int8_t optimizations) {
 
 // block optimization specific methods
 
-// TODO: cause of memory leaks because of redefinition
 GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block format) {
     if (matrix->is_lazy) {
         for (size_t i = 0; i < matrix->base_matrices_count; i++) {
@@ -317,7 +316,6 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
 
     TRY(CFL_matrix_update(matrix));
 
-    // TODO: change. just transpose enough
     GrB_Index *nrows;
     GrB_Index *ncols;
     TRY(LAGraph_Calloc((void **)&nrows, matrix->nvals, sizeof(GrB_Index), NULL));
@@ -352,7 +350,6 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
         TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
         matrix->base_col = new;
 
-        // TODO:
         int format;
         TRY(GrB_get(matrix->base_row, &format, GrB_STORAGE_ORIENTATION_HINT));
         if (format != GrB_ROWMAJOR) {
@@ -521,11 +518,6 @@ GrB_Info CFL_matrix_to_base(Matrix **matrix_p, Matrix *input, int8_t optimizatio
         return GrB_SUCCESS;
     }
 
-    // GrB_Matrix _matrix;
-    // GrB_Matrix_new(&_matrix, GrB_BOOL, input->nrows, input->ncols);
-    // GrB_free(&_matrix);
-
-    // TODO: it's some undocument magic. reformat this
     Matrix *matrix;
     TRY(CFL_matrix_create_lazy(&matrix, input->nrows, input->ncols));
     TRY(CFL_matrix_free(&matrix->base_matrices[0]));
@@ -673,7 +665,10 @@ GrB_Info CFL_matrix_from_base_lazy(Matrix **matrix_p, GrB_Matrix base) {
 
     Matrix *matrix = *matrix_p;
     matrix->is_lazy = true;
-    matrix->base_matrices = malloc(sizeof(CFL_Matrix) * 40); // TODO: dynamic size
+    TRY(LAGraph_Calloc(
+        (void **)&matrix->base_matrices, 40, sizeof(CFL_Matrix *),
+        NULL)); // this is enough for this centry i guess, because 40th matrices must
+                // have 10^40 nvals for being putten in base_matrices, this is 2^132
     matrix->base_matrices[0] = result;
     matrix->base_matrices_count = 1;
     matrix->base = NULL;
@@ -698,13 +693,11 @@ GrB_Info CFL_matrix_create_lazy(Matrix **matrix, GrB_Index nrows, GrB_Index ncol
     return GrB_SUCCESS;
 }
 
-// TODO: free all base_matrices, free format matrices
 GrB_Info CFL_matrix_free(Matrix **matrix_p) {
     if (*matrix_p == NULL) {
         return GrB_SUCCESS;
     }
 
-    // TODO: try just free three matrices base, base_col, base_row. I can free NULL
     Matrix *matrix = *matrix_p;
     if (matrix->is_both) {
         TRY(GrB_Matrix_free(&(matrix->base_col)));
@@ -932,22 +925,8 @@ GrB_Info matrix_wise(Matrix *output, Matrix *first, Matrix *second, bool accum) 
     TRY(CFL_matrix_update(second));
     TRY(CFL_matrix_update(output));
 
-    // TRY(GxB_print(first->base, 1));
-    // TRY(GxB_print(second->base, 1));
-    // TRY(GxB_print(output->base, 1));
-
-    // eWiseUnion for saving ISO property
-    // TODO: question about scalars
-    // GrB_Scalar scalar_true;
-    // TRY(GrB_Scalar_new(&scalar_true, GrB_BOOL));
-    // TRY(GrB_Scalar_setElement_BOOL(scalar_true, true));
-
     TRY(GrB_Matrix_eWiseAdd_BinaryOp(output->base, GrB_NULL, accum_op, GxB_ANY_BOOL,
                                      first->base, second->base, GrB_NULL));
-
-    // TRY(GrB_Scalar_free(&scalar_true));
-
-    // TRY(GxB_print(output->base, 0));
 
     TRY(CFL_matrix_update(output));
 
@@ -1065,7 +1044,6 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
 
     if (!first->is_lazy && second->is_lazy) {
         for (size_t i = 0; i < second->base_matrices_count; i++) {
-            // TODO: clear if acuum false ?
             TRY(matrix_wise_empty(output, first, second->base_matrices[i], true,
                                   optimizations));
         }
@@ -1136,7 +1114,7 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
         TRY(matrix_wise_lazy(output, first, second, accum, optimizations));
         return GrB_SUCCESS;
     }
-    // TODO: optimize it, i think there is no needed dup methods
+
     // second is vector
     if (first->block_type == CELL) {
         Matrix *temp_reduced;
