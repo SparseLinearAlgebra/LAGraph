@@ -63,7 +63,7 @@
 //    For any vertex v, calling with start = v, end = v returns an empty path (word eps)
 //
 // 3. No path exists (start = 0, end = 5):
-//    A word formed in this way does not belong to the language - returns GrB_NO_VALUE
+//    A word formed in this way does not belong to the language - returns empty PathArray
 //
 // 4. Multiple paths (start = NULL, end = 3):
 //    Returns PathArray containing all paths to vertex 3:
