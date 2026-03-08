@@ -1364,7 +1364,7 @@ void LAGraph_CFL_classify_rules(
     int64_t rules_count             // Number of terminal rules
 );
 
-#define ADD_TO_MSG(...)                                               \
+#define ADD_TO_MSG(msg_len, ...)                                      \
 {                                                                     \
     if (msg_len == 0)                                                 \
     {                                                                 \

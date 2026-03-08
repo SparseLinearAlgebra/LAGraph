@@ -109,9 +109,9 @@ GrB_Info LAGraph_CFL_extract_single_path(
 
         if (!found_null)
         {
-            ADD_TO_MSG("path_index_matrices matrices with these indexes are null:");
+            ADD_TO_MSG(msg_len, "path_index_matrices matrices with these indexes are null:");
         }
-        ADD_TO_MSG(" %" PRId64, i);
+        ADD_TO_MSG(msg_len, " %" PRId64, i);
 
         found_null = true;
     }

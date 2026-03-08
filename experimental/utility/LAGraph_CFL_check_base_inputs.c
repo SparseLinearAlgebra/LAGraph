@@ -83,23 +83,23 @@ GrB_Info LAGraph_CFL_check_grammar(int64_t terms_count, int64_t nonterms_count, 
 
     if (term_err.count + nonterm_err.count + invalid_err.count > 0)
     {
-        ADD_TO_MSG("Count of invalid rules: %" PRId64 ".\n",
+        ADD_TO_MSG(msg_len, "Count of invalid rules: %" PRId64 ".\n",
                    (int64_t)(term_err.count + nonterm_err.count + invalid_err.count));
 
         if (nonterm_err.count > 0)
         {
-            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str);
+            ADD_TO_MSG(msg_len, "Non-terminals must be in range [0, nonterms_count). ");
+            ADD_TO_MSG(msg_len, "Indexes of invalid rules: %s\n", nonterm_err.indexes_str);
         }
         if (term_err.count > 0)
         {
-            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str);
+            ADD_TO_MSG(msg_len, "Terminals must be in range [-1, nonterms_count). ");
+            ADD_TO_MSG(msg_len, "Indexes of invalid rules: %s\n", term_err.indexes_str);
         }
         if (invalid_err.count > 0)
         {
-            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str);
+            ADD_TO_MSG(msg_len, "[Variable -> _ B] type of rule is not acceptable. ");
+            ADD_TO_MSG(msg_len, "Indexes of invalid rules: %.120s\n", invalid_err.indexes_str);
         }
         return GrB_INVALID_VALUE;
     }
@@ -123,12 +123,12 @@ GrB_Info LAGraph_CFL_check_graph(const GrB_Matrix *adj_matrices, int64_t terms_c
 
         if (!found_null)
         {
-            ADD_TO_MSG("Adjacency matrices with these indexes are null: ");
-            ADD_TO_MSG("%" PRId64, i);
+            ADD_TO_MSG(msg_len, "Adjacency matrices with these indexes are null: ");
+            ADD_TO_MSG(msg_len, "%" PRId64, i);
         }
         else
         {
-            ADD_TO_MSG(" %" PRId64, i);
+            ADD_TO_MSG(msg_len, " %" PRId64, i);
         }
 
         found_null = true;
