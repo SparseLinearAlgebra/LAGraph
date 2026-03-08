@@ -113,36 +113,7 @@ GrB_Info LAGraph_CFPQ_core(
     LG_TRY(LAGraph_Calloc((void **)&term_rules, rules_count, sizeof(size_t), msg));
     LG_TRY(LAGraph_Calloc((void **)&bin_rules, rules_count, sizeof(size_t), msg));
 
-    // Process rules
-    for (int64_t i = 0; i < rules_count; i++)
-    {
-        LAGraph_rule_WCNF rule = rules[i];
-
-        bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
-        bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
-        bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
-
-        // [Variable -> eps]
-        if (is_rule_eps)
-        {
-            eps_rules[eps_rules_count++] = i;
-            continue;
-        }
-
-        // [Variable -> term]
-        if (is_rule_term)
-        {
-            term_rules[term_rules_count++] = i;
-            continue;
-        }
-
-        // [Variable -> A B]
-        if (is_rule_bin)
-        {
-            bin_rules[bin_rules_count++] = i;
-            continue;
-        }
-    }
+    LAGraph_CFL_classify_rules(eps_rules, &eps_rules_count, term_rules, &term_rules_count, bin_rules, &bin_rules_count, rules, rules_count);
 
     // Rule [Variable -> term]
     for (int64_t i = 0; i < term_rules_count; i++)

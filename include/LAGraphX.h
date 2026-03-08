@@ -1513,6 +1513,31 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
     char *msg                              // Message string for error reporting.
 );
 
+// This function groups rules of a context-free grammar in Weak Chomsky Normal Form
+// (represented by LAGraph_rule_WCNF structure) by their type:
+//   - epsilon rules (prod_A == -1 && prod_B == -1)
+//   - terminal rules (prod_A != -1 && prod_B == -1)
+//   - binary rules   (prod_A != -1 && prod_B != -1)
+//
+// It also counts the number of rules of each type.
+//
+// Important: This function does not validate the rules.
+// It assumes prior validation (e.g., by LG_CFL_CHECK_GRAMMAR_INPUTS macro).
+// The memory allocated by the calling function.
+
+void LAGraph_CFL_classify_rules(
+    // Output
+    size_t *eps_rules,  // Array of eps-rules
+    size_t *eps_count,  // Number of terminal rules
+    size_t *term_rules, // Array of term-rules
+    size_t *term_count, // Number of terminal rules
+    size_t *bin_rules,  // Array of bin-rules
+    size_t *bin_count,   // Number of terminal rules
+    // Input
+    const LAGraph_rule_WCNF *rules, // Array of all rules
+    int64_t rules_count // Number of terminal rules
+);
+
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
 //------------------------------------------------------------------------------
