@@ -1248,51 +1248,51 @@ GrB_Info matrix_rsub_block(Matrix *output, Matrix *mask, int8_t optimizations) {
 
 // utility methods
 
-GrB_Info matrix_print_lazy(Matrix *A, int8_t optimizations) {
-    // return;
-    GxB_Print_Level pr = 1;
+// GrB_Info matrix_print_lazy(Matrix *A, int8_t optimizations) {
+//     // return;
+//     GxB_Print_Level pr = 1;
 
-    if (!A->is_lazy) {
-        TRY(CFL_matrix_update(A));
-        TRY(GxB_print(A->base, pr));
-        // printf("nnz: %ld\n", A->nvals);
-        return GrB_SUCCESS;
-    }
+//     if (!A->is_lazy) {
+//         TRY(CFL_matrix_update(A));
+//         TRY(GxB_print(A->base, pr));
+//         // printf("nnz: %ld\n", A->nvals);
+//         return GrB_SUCCESS;
+//     }
 
-    if (A->base_matrices_count == 1) {
-        TRY(CFL_matrix_update(A));
-        // printf("nnz: %ld\n", A->nvals);
-        TRY(GxB_print(A->base_matrices[0]->base, pr));
-        return GrB_SUCCESS;
-    }
+//     if (A->base_matrices_count == 1) {
+//         TRY(CFL_matrix_update(A));
+//         // printf("nnz: %ld\n", A->nvals);
+//         TRY(GxB_print(A->base_matrices[0]->base, pr));
+//         return GrB_SUCCESS;
+//     }
 
-    Matrix *temp;
-    TRY(CFL_matrix_create(&temp, A->nrows, A->ncols));
-    for (size_t i = 0; i < A->base_matrices_count; i++) {
-        TRY(matrix_wise_empty(temp, temp, A->base_matrices[i], false, optimizations));
-    }
+//     Matrix *temp;
+//     TRY(CFL_matrix_create(&temp, A->nrows, A->ncols));
+//     for (size_t i = 0; i < A->base_matrices_count; i++) {
+//         TRY(matrix_wise_empty(temp, temp, A->base_matrices[i], false, optimizations));
+//     }
 
-    A = temp;
-    TRY(GxB_print(A->base, pr));
-    TRY(CFL_matrix_update(A));
-    // printf("nnz: %ld\n", A->nvals);
-    TRY(CFL_matrix_free(&temp));
+//     A = temp;
+//     TRY(GxB_print(A->base, pr));
+//     TRY(CFL_matrix_update(A));
+//     // printf("nnz: %ld\n", A->nvals);
+//     TRY(CFL_matrix_free(&temp));
 
-    return GrB_SUCCESS;
-}
+//     return GrB_SUCCESS;
+// }
 
-GrB_Info print_graph_info(Matrix **matrices, size_t count) {
-    GrB_Index nnz = 0;
+// GrB_Info print_graph_info(Matrix **matrices, size_t count) {
+//     GrB_Index nnz = 0;
 
-    for (size_t i = 0; i < count; i++) {
-        Matrix *A = matrices[i];
-        TRY(CFL_matrix_update(A));
-        nnz += A->nvals;
-    }
+//     for (size_t i = 0; i < count; i++) {
+//         Matrix *A = matrices[i];
+//         TRY(CFL_matrix_update(A));
+//         nnz += A->nvals;
+//     }
 
-    printf("NNZ: %ld\n", nnz);
-    return GrB_SUCCESS;
-}
+//     printf("NNZ: %ld\n", nnz);
+//     return GrB_SUCCESS;
+// }
 
 // order of optimizations: block -> lazy -> empty -> format
 
