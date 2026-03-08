@@ -1103,7 +1103,6 @@ typedef struct
     GrB_Type type;
     GrB_Semiring semiring;
     GrB_BinaryOp add;
-    GrB_BinaryOp add_eps;
     GrB_BinaryOp mult;
     GrB_BinaryOp init_path; // Function for defining elements used to describe information about paths of length 0 and 1.
                             // Depends on the specific task, therefore it is included in this structure.
