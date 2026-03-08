@@ -11,6 +11,7 @@
     GrB_free(&AllPaths_add_free);        \
     GrB_free(&AllPaths_add_get_nvals);        \
     GrB_free(&Theta);         \
+    GrB_free(&AllPaths_type); \
   }
 
 #include "LG_internal.h"
@@ -256,7 +257,7 @@ GrB_Info LAGraph_CFL_AllPaths(
   CFL_Semiring semiring = {.type = AllPaths_type,
       .semiring = AllPaths_semiring_free,
       .add = AllPaths_add_free,
-      .add_eps = AllPaths_add,
+      .add_eps = AllPaths_add_free,
       .mult = AllPaths_mult,
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,

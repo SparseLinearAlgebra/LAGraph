@@ -175,6 +175,14 @@ void free_workspace() {
     {
         for (size_t i = 0; i < grammar.nonterms_count; i++)
         {
+          void* val_void = NULL;
+          GrB_Index nnz = 0;
+          GrB_Matrix_nvals(&nnz, outputs[i]);
+          LAGraph_Malloc ((void **) &val_void, nnz, sizeof (AllPathsElem), msg) ;
+          GrB_Matrix_extractTuples(NULL, NULL, val_void, &nnz, outputs[i]);
+          AllPathsElem* val = (AllPathsElem*) val_void;
+          for(size_t j = 0; j<nnz; ++j) if(val[j].middle) free(val[j].middle);
+          LAGraph_Free (&val_void, msg);
             GrB_free(&outputs[i]);
         }
     }
@@ -519,7 +527,7 @@ void test_CFL_AllPaths_cycle(void) {
   print_outputs();
   //    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
   
-  //    free_workspace();
+      free_workspace();
   teardown();
 #endif
 }
@@ -538,7 +546,7 @@ void test_CFL_AllPaths_two_nodes_cycle(void) {
   print_outputs();
   //      check_result("(0, 0) (1, 0)");
   
-//  free_workspace();
+  free_workspace();
   teardown();
 #endif
 }
