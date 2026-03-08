@@ -145,7 +145,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
     GrB_Index end_begin = (end == NULL) ? 0 : *end;
     GrB_Index end_end = (end == NULL) ? n - 1 : *end;
 
-    LG_TRY(LAGraph_Malloc((void **)&output->paths, output->capacity, sizeof(Path), msg));
+    LG_TRY(LAGraph_Calloc((void **)&output->paths, rules_count, sizeof(size_t), msg));
 
     for (GrB_Index st = start_begin; st <= start_end; st++)
     {
