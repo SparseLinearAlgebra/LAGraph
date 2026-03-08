@@ -813,9 +813,9 @@ static void test_CFL_lazy_create(void) {
 }
 
 // Create lazy matrix
-// 1 1 1 0 .. 0 (count of 1: 111)
 // 1 0 0 0 .. 0 (count of 1: 1)
 // 1 1 0 0 .. 0 (count of 1: 11)
+// 1 1 1 0 .. 0 (count of 1: 111)
 // . . . . .. .
 // 0 0 0 0 .. 0
 static GrB_Info make_lazy_matrix(Matrix **M, size_t base_matrices_count) {
@@ -1295,6 +1295,38 @@ static void test_CFL_block_hyper_rotate(void) {
         TEST_CHECK(A->is_lazy != true);
 
         OK(block_matrix_hyper_rotate_i(A, VEC_HORIZ));
+
+        OK(free_matrix(&A));
+    }
+
+    // Format
+    {
+        Matrix *A;
+        make_block_vector(&A, 5, 5, VEC_VERT);
+        matrix_to_format(A, GrB_COLMAJOR, true);
+
+        OK(block_matrix_hyper_rotate_i(A, VEC_HORIZ));
+        TEST_CHECK(A->nvals != 0);
+        TEST_CHECK(A->is_both = true);
+
+        GrB_Index nrows_A, ncols_A, nrows_B, ncols_B;
+        OK(GrB_Matrix_nrows(&nrows_A, A->base_row));
+        OK(GrB_Matrix_ncols(&ncols_A, A->base_row));
+        OK(GrB_Matrix_nrows(&nrows_B, A->base_col));
+        OK(GrB_Matrix_ncols(&ncols_B, A->base_col));
+
+        TEST_CHECK(nrows_A == nrows_B);
+        TEST_CHECK(ncols_A == ncols_B);
+
+        OK(block_matrix_hyper_rotate_i(A, VEC_VERT));
+
+        OK(GrB_Matrix_nrows(&nrows_A, A->base_row));
+        OK(GrB_Matrix_ncols(&ncols_A, A->base_row));
+        OK(GrB_Matrix_nrows(&nrows_B, A->base_col));
+        OK(GrB_Matrix_ncols(&ncols_B, A->base_col));
+
+        TEST_CHECK(nrows_A == nrows_B);
+        TEST_CHECK(ncols_A == ncols_B);
 
         OK(free_matrix(&A));
     }
