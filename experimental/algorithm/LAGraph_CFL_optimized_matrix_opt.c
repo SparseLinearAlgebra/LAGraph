@@ -341,7 +341,6 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
         TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
         TRY(GrB_Matrix_free(&matrix->base_row));
         TRY(GrB_Matrix_free(&matrix->base_col));
-        matrix->base = NULL;
         matrix->base = new;
         matrix->base_row = new;
         TRY(TO_ROW(matrix->base));
@@ -349,18 +348,6 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
         TRY(TO_COL(new));
         TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
         matrix->base_col = new;
-
-        int format;
-        TRY(GrB_get(matrix->base_row, &format, GrB_STORAGE_ORIENTATION_HINT));
-        if (format != GrB_ROWMAJOR) {
-            fprintf(stderr, "WRONG FORMAT\n");
-            exit(-1);
-        }
-        TRY(GrB_get(matrix->base_col, &format, GrB_STORAGE_ORIENTATION_HINT));
-        if (format != GrB_COLMAJOR) {
-            fprintf(stderr, "WRONG FORMAT\n");
-            exit(-1);
-        }
         matrix->format = GrB_ROWMAJOR;
     } else {
         TRY(GrB_Matrix_free(&matrix->base));
