@@ -1380,32 +1380,49 @@ void LAGraph_CFL_classify_rules(
     }                                                                 \
 }
 
-// LAGraph_CFL_check_base_inputs: Checks the input graph and CFL grammar for algorithms working with it
+// LAGraph_CFL_check_grammar_input: Checks the input CFL grammar
 //
 // Checks:
-//   - The adjacency matrix array is not NULL
-//   - There are no entries equal to NULL in the adjacency matrix array
 //   - The rule array is not NULL
 //   - Valid number of terms/non-terms/rules (> 0)
 //   - Correctly formed grammar rules in WCNF format
 //
-// Parameters:
-//   - adj_matrices: adjacency matrix array for terminals
-//   - terms_count: number of terminal symbols
-//   - nonterms_count: number of non-terminal symbols
-//   - rules_count: number of rules in the grammar
-//   - rules: array of rules
-//
 // If an error occurs: adds a message using ADD_TO_MSG,
 // returns the corresponding GrB_Info
 
+GrB_Info LAGraph_CFL_check_grammar_input(
+    int64_t terms_count,            // Number of terminal symbols
+    int64_t nonterms_count,         // Number of non-terminal symbols
+    int64_t rules_count,            // Number of rules in the grammar
+    const LAGraph_rule_WCNF *rules, // Array of rules
+    char *msg                       // Message string for error reporting
+);
+
+// LAGraph_CFL_check_graph_input: Checks the input graph for CFL algorithms
+//
+// Checks:
+//   - The adjacency matrix array is not NULL
+//   - There are no entries equal to NULL in the adjacency matrix array
+//
+// If an error occurs: adds a message using ADD_TO_MSG,
+// returns the corresponding GrB_NULL_POINTER
+
+GrB_Info LAGraph_CFL_check_graph_input(
+    const GrB_Matrix *adj_matrices, // Adjacency matrix array for terminals
+    int64_t terms_count,            // Number of terminal symbols
+    char *msg                       // Message string for error reporting
+);
+
+// LAGraph_CFL_check_base_inputs: Checks the input graph and CFL grammar for algorithms working with it
+// Equivalent to calling LAGraph_CFL_check_graph_input + LAGraph_CFL_check_grammar_input
+// See LAGraph_CFL_check_graph_input and LAGraph_CFL_check_grammar_input for details
 GrB_Info LAGraph_CFL_check_base_inputs(
-    const GrB_Matrix *adj_matrices,
-    int64_t terms_count,
-    int64_t nonterms_count,
-    int64_t rules_count,
-    const LAGraph_rule_WCNF *rules,
-    char *msg
+    const GrB_Matrix *adj_matrices, // Adjacency matrix array for terminals
+    int64_t terms_count,            // Number of terminal symbols
+    int64_t nonterms_count,         // Number of non-terminal symbols
+    int64_t rules_count,            // Number of rules in the grammar
+    const LAGraph_rule_WCNF *rules, // Array of rules
+    char *msg                       // Message string for error reporting
 );
 
 //------------------------------------------------------------------------------
@@ -1414,13 +1431,12 @@ GrB_Info LAGraph_CFL_check_base_inputs(
 
 LAGRAPHX_PUBLIC
 int LAGraph_HelloWorld // a simple algorithm, just for illustration
-(
-    // output
-    GrB_Matrix *Yhandle,    // Y, created on output
-    // input: not modified
-    LAGraph_Graph G,
-    char *msg
-) ;
+    (
+        // output
+        GrB_Matrix *Yhandle, // Y, created on output
+        // input: not modified
+        LAGraph_Graph G,
+        char *msg);
 
 //------------------------------------------------------------------------------
 // run a breadth first search for multiple source nodes
