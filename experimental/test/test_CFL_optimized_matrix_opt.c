@@ -1086,7 +1086,6 @@ static GrB_Info make_block_vector(Matrix **M, size_t n, size_t alpha,
     return GrB_SUCCESS;
 }
 
-// TODO: create equality check with basic mxm
 static void test_CFL_block_mxm(void) {
 #if LAGRAPH_SUITESPARSE
     setup();

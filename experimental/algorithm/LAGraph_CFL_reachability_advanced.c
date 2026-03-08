@@ -38,11 +38,6 @@
 
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
-        for (size_t i = 0; i < symbols_amount; i++) {                                    \
-            /* TODO: delete it and free actual matrices */                               \
-            /* GrB_free(&T[i]); */                                                       \
-        }                                                                                \
-                                                                                         \
         LG_FREE_WORK;                                                                    \
     }
 
