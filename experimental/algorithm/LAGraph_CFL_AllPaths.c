@@ -68,13 +68,12 @@ void clear_elem_all_paths(AllPathsElem *z){
 
 void add_free_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
 {
-  AllPathsElem v_temp;
-  AllPathsElem* temp = &v_temp;
-  temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
+  AllPathsElem temp;
+  temp.middle = merge_all_paths(&temp.n, x->middle, x->n, y->middle, y->n);
   clear_elem_all_paths(x);
   clear_elem_all_paths(y);
-  z->middle = temp->middle;
-  z->n = temp->n;
+  z->middle = temp.middle;
+  z->n = temp.n;
 }
 
 void mult_all_paths(AllPathsElem *z,
