@@ -173,6 +173,12 @@ GrB_Info LAGraph_CFL_extract_single_path(
         }
     }
 
+    // No paths found - free previously allocated memory
+    if (output->count == 0)
+    {
+        LG_FREE_ALL;
+    }
+
     LG_FREE_WORK;
     return GrB_SUCCESS;
 }
