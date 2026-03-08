@@ -10,22 +10,6 @@ typedef struct
     char indexes_str[LAGRAPH_MSG_LEN];
 } LAGraph_rule_error_s;
 
-#define ADD_TO_MSG(...)                                                            \
-    {                                                                              \
-        if ((*msg_len) == 0)                                                       \
-        {                                                                          \
-            (*msg_len) +=                                                          \
-                snprintf(msg, LAGRAPH_MSG_LEN,                                     \
-                         "LAGraph failure (file %s, line %d): ",                   \
-                         __FILE__, __LINE__);                                      \
-        }                                                                          \
-        if ((*msg_len) < LAGRAPH_MSG_LEN)                                          \
-        {                                                                          \
-            (*msg_len) += snprintf(msg + (*msg_len), LAGRAPH_MSG_LEN - (*msg_len), \
-                                   __VA_ARGS__);                                   \
-        }                                                                          \
-    }
-
 #define ADD_INDEX_TO_ERROR_RULE(rule, i)                     \
     {                                                        \
         rule.len_indexes_str += snprintf(                    \
@@ -36,8 +20,10 @@ typedef struct
     }
 
 // Checks the input CFL grammar
-GrB_Info LAGraph_CFL_check_grammar(int64_t terms_count, int64_t nonterms_count, int64_t rules_count, const LAGraph_rule_WCNF *rules, char *msg, size_t *msg_len)
+GrB_Info LAGraph_CFL_check_grammar(int64_t terms_count, int64_t nonterms_count, int64_t rules_count, const LAGraph_rule_WCNF *rules, char *msg)
 {
+    LG_CLEAR_MSG;
+    size_t msg_len = 0;
     LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
                   "The number of terminals must be greater than zero.");
     LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
@@ -97,23 +83,23 @@ GrB_Info LAGraph_CFL_check_grammar(int64_t terms_count, int64_t nonterms_count, 
 
     if (term_err.count + nonterm_err.count + invalid_err.count > 0)
     {
-        ADD_TO_MSG("Count of invalid rules: %" PRId64 ".n",
+        ADD_TO_MSG("Count of invalid rules: %" PRId64 ".\n",
                    (int64_t)(term_err.count + nonterm_err.count + invalid_err.count));
 
         if (nonterm_err.count > 0)
         {
             ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %sn", nonterm_err.indexes_str);
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str);
         }
         if (term_err.count > 0)
         {
             ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %sn", term_err.indexes_str);
+            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str);
         }
         if (invalid_err.count > 0)
         {
             ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120sn", invalid_err.indexes_str);
+            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str);
         }
         return GrB_INVALID_VALUE;
     }
@@ -121,8 +107,10 @@ GrB_Info LAGraph_CFL_check_grammar(int64_t terms_count, int64_t nonterms_count, 
 }
 
 // Checks the input graph for CFL algorithms
-GrB_Info LAGraph_CFL_check_graph(const GrB_Matrix *adj_matrices, int64_t terms_count, char *msg, size_t *msg_len)
+GrB_Info LAGraph_CFL_check_graph(const GrB_Matrix *adj_matrices, int64_t terms_count, char *msg)
 {
+    LG_CLEAR_MSG;
+    size_t msg_len = 0;
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
 
@@ -178,13 +166,11 @@ GrB_Info LAGraph_CFL_check_base_inputs(
     int64_t nonterms_count,
     int64_t rules_count,
     const LAGraph_rule_WCNF *rules,
-    char *msg,
-    size_t *msg_len // For error formatting
-)
+    char *msg)
 {
-    LG_ASSERT_MSG(msg_len != NULL, GrB_NULL_POINTER,
-                  "The msg_len cannot be null.");
-    LG_TRY(LAGraph_CFL_check_graph(adj_matrices, terms_count, msg, msg_len));
-    LG_TRY(LAGraph_CFL_check_grammar(terms_count, nonterms_count, rules_count, rules, msg, msg_len));
+    LG_CLEAR_MSG;
+    size_t msg_len = 0;
+    LG_TRY(LAGraph_CFL_check_graph(adj_matrices, terms_count, msg));
+    LG_TRY(LAGraph_CFL_check_grammar(terms_count, nonterms_count, rules_count, rules, msg));
     return GrB_SUCCESS;
 }

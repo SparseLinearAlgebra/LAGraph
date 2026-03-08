@@ -15,22 +15,6 @@
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
-#define ADD_TO_MSG(...)                                                   \
-    {                                                                     \
-        if (msg_len == 0)                                                 \
-        {                                                                 \
-            msg_len +=                                                    \
-                snprintf(msg, LAGRAPH_MSG_LEN,                            \
-                         "LAGraph failure (file %s, line %d): ",          \
-                         __FILE__, __LINE__);                             \
-        }                                                                 \
-        if (msg_len < LAGRAPH_MSG_LEN)                                    \
-        {                                                                 \
-            msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
-                                __VA_ARGS__);                             \
-        }                                                                 \
-    }
-
 // Internal helper for LAGraph_CFL_extract_single_path.
 // Extracts a path for a fixed (start, end) vertex pair.
 GrB_Info LAGraph_CFL_extract_single_path_internal(

@@ -24,22 +24,6 @@
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
-#define ADD_TO_MSG(...)                                                   \
-    {                                                                     \
-        if (msg_len == 0)                                                 \
-        {                                                                 \
-            msg_len +=                                                    \
-                snprintf(msg, LAGRAPH_MSG_LEN,                            \
-                         "LAGraph failure (file %s, line %d): ",          \
-                         __FILE__, __LINE__);                             \
-        }                                                                 \
-        if (msg_len < LAGRAPH_MSG_LEN)                                    \
-        {                                                                 \
-            msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
-                                __VA_ARGS__);                             \
-        }                                                                 \
-    }
-
 // LAGraph_CFPQ_core: Context-Free Path Querying Matrix-Based Algorithm
 //
 // Internal core function for context-free language path finding.
@@ -94,7 +78,7 @@ GrB_Info LAGraph_CFPQ_core(
     LG_TRY(LAGraph_Calloc((void **)&T, nonterms_count, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Calloc((void **)&t_empty_flags, nonterms_count, sizeof(bool), msg));
 
-    LG_TRY(LAGraph_CFL_check_base_inputs(adj_matrices, terms_count, nonterms_count, rules_count, rules, msg, &msg_len));
+    LG_TRY(LAGraph_CFL_check_base_inputs(adj_matrices, terms_count, nonterms_count, rules_count, rules, msg));
     LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
     LG_ASSERT_MSG(semiring != NULL, GrB_NULL_POINTER,
                   "The semiring cannot be null.");

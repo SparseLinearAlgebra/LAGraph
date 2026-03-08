@@ -1364,6 +1364,22 @@ void LAGraph_CFL_classify_rules(
     int64_t rules_count             // Number of terminal rules
 );
 
+#define ADD_TO_MSG(...)                                               \
+{                                                                     \
+    if (msg_len == 0)                                                 \
+    {                                                                 \
+        msg_len +=                                                    \
+            snprintf(msg, LAGRAPH_MSG_LEN,                            \
+                     "LAGraph failure (file %s, line %d): ",          \
+                     __FILE__, __LINE__);                             \
+    }                                                                 \
+    if (msg_len < LAGRAPH_MSG_LEN)                                    \
+    {                                                                 \
+        msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
+                            __VA_ARGS__);                             \
+    }                                                                 \
+}
+
 // LAGraph_CFL_check_base_inputs: Checks the input graph and CFL grammar for algorithms working with it
 //
 // Checks:
@@ -1389,8 +1405,7 @@ GrB_Info LAGraph_CFL_check_base_inputs(
     int64_t nonterms_count,
     int64_t rules_count,
     const LAGraph_rule_WCNF *rules,
-    char *msg,
-    size_t *msg_len
+    char *msg
 );
 
 //------------------------------------------------------------------------------

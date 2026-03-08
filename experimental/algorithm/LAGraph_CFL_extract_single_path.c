@@ -8,22 +8,6 @@
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
-#define ADD_TO_MSG(...)                                                   \
-    {                                                                     \
-        if (msg_len == 0)                                                 \
-        {                                                                 \
-            msg_len +=                                                    \
-                snprintf(msg, LAGRAPH_MSG_LEN,                            \
-                         "LAGraph failure (file %s, line %d): ",          \
-                         __FILE__, __LINE__);                             \
-        }                                                                 \
-        if (msg_len < LAGRAPH_MSG_LEN)                                    \
-        {                                                                 \
-            msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
-                                __VA_ARGS__);                             \
-        }                                                                 \
-    }
-
 // LAGraph_CFL_extract_single_path: Context-Free Language Single Path Extraction Algorithm
 //
 // For a given pair of vertices (start, end) and a non-terminal symbol (nonterm),
@@ -111,7 +95,7 @@ GrB_Info LAGraph_CFL_extract_single_path(
     // Initial capacity 1, since most often looking for exactly 1 path with a fixed start and end
     output->capacity = 1;
 
-    LG_TRY(LAGraph_CFL_check_base_inputs(adj_matrices, terms_count, nonterms_count, rules_count, rules, msg, &msg_len));
+    LG_TRY(LAGraph_CFL_check_base_inputs(adj_matrices, terms_count, nonterms_count, rules_count, rules, msg));
     LG_ASSERT_MSG(nonterm < nonterms_count, GrB_INVALID_VALUE,
                   "The start non-terminal must be no greater than the number of non-terminals.");
     LG_ASSERT_MSG(path_index_matrices != NULL, GrB_NULL_POINTER, "The path_index_matrices array cannot be null.");
