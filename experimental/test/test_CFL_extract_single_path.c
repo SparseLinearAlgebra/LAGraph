@@ -10,55 +10,57 @@
                             grammar.nonterms_count, grammar.rules, grammar.rules_count, \
                             msg)
 
-#define run_algorithm()                                                                               \
-    LAGraph_CFL_extract_single_path_internal(&path, start, end, 0, adj_matrices, outputs, grammar.terms_count, \
-                                    grammar.nonterms_count, grammar.rules, grammar.rules_count,       \
+#define run_algorithm()                                                                                \
+    LAGraph_CFL_extract_single_path(&paths, start, end, 0, adj_matrices, outputs, grammar.terms_count, \
+                                    grammar.nonterms_count, grammar.rules, grammar.rules_count,        \
                                     msg)
 
-#define check_error(error)                         \
-    {                                              \
-        retval = run_algorithm();                  \
-        TEST_CHECK(retval == error);               \
-        TEST_MSG("retval = %d (%s)", retval, msg); \
+#define check_error(error)                          \
+    {                                               \
+        retval = run_algorithm();                   \
+        TEST_CHECK(retval == error);                \
+        TEST_MSG("Retval = %d (%s)", retval, msg);  \
+        TEST_CHECK(is_path_array_correct(0));       \
+        TEST_MSG("Path array invalid after error"); \
+    }
+
+// Checks the array of paths
+// param path_cnt - expected number of paths in the array
+#define check_path_array(expected_path_cnt)                   \
+    {                                                         \
+        retval = run_algorithm();                             \
+        TEST_CHECK(retval == GrB_SUCCESS);                    \
+        TEST_MSG("Retval = %d (%s)", retval, msg);            \
+        TEST_CHECK(is_path_array_correct(expected_path_cnt)); \
+        TEST_MSG("Path array invalid");                       \
     }
 
 // Check the path through the string
-#define check_result1(expected_ret, result)             \
+// The path by index i from the path array is equal to expected_path
+#define check_path_str(i, expected_path)                \
     {                                                   \
-        retval = run_algorithm();                       \
-        TEST_CHECK(retval == expected_ret);             \
-        TEST_MSG("retval = %d (%s)", retval, msg);      \
-        char *expected = path_to_str();                 \
-        TEST_CHECK(strcmp(result, expected) == 0);      \
-        TEST_MSG("Wrong result. Actual: %s", expected); \
-        LAGraph_Free((void **)&expected, msg);          \
+        TEST_ASSERT(i < paths.count);                   \
+        char *actual = path_to_str(paths.paths[i]);     \
+        TEST_CHECK(strcmp(expected_path, actual) == 0); \
+        TEST_MSG("Wrong path. Actual: %s", actual);     \
+        LAGraph_Free((void **)&actual, msg);            \
     }
 
-// Check the path according to its type
-#define check_result2(expected_path)                   \
-    {                                                  \
-        retval = run_algorithm();                      \
-        if (expected_path == non_exist)                \
-        {                                              \
-            TEST_CHECK(retval == GrB_NO_VALUE);        \
-            TEST_MSG("retval = %d (%s)", retval, msg); \
-            TEST_CHECK(check_empty_path());            \
-            TEST_MSG("Wrong result");                  \
-        }                                              \
-        else if (expected_path == empty)               \
-        {                                              \
-            TEST_CHECK(retval == GrB_SUCCESS);         \
-            TEST_MSG("retval = %d (%s)", retval, msg); \
-            TEST_CHECK(check_empty_path());            \
-            TEST_MSG("Wrong result");                  \
-        }                                              \
-        else                                           \
-        {                                              \
-            TEST_CHECK(retval == GrB_SUCCESS);         \
-            TEST_MSG("retval = %d (%s)", retval, msg); \
-            TEST_CHECK(check_non_empty_path());        \
-            TEST_MSG("Wrong result");                  \
-        }                                              \
+// Check the path according to it's type
+#define check_path_type(i, expected_path)                   \
+    {                                                       \
+        TEST_ASSERT(i < paths.count);                       \
+        TEST_ASSERT(expected_path != non_exist);            \
+        if (expected_path == empty)                         \
+        {                                                   \
+            TEST_CHECK(is_empty_path(paths.paths[i]));      \
+            TEST_MSG("Path should be empty but isn't");     \
+        }                                                   \
+        else                                                \
+        {                                                   \
+            TEST_CHECK(is_non_empty_path(paths.paths[i]));  \
+            TEST_MSG("Path should be non-empty but isn't"); \
+        }                                                   \
     }
 
 typedef struct
@@ -73,9 +75,10 @@ GrB_Matrix *adj_matrices = NULL;
 int n_adj_matrices = 0;
 GrB_Matrix *outputs = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
-Path path;
+PathArray paths;
+GrB_Index *start = NULL;
+GrB_Index *end = NULL;
 char msg[LAGRAPH_MSG_LEN];
-// GrB_Type PI_type = NULL;
 
 typedef enum // Path type
 {
@@ -87,7 +90,6 @@ typedef enum // Path type
 void setup()
 {
     LAGraph_Init(msg);
-    // GrB_Type_new(&PI_type, sizeof(PathIndex));
 }
 
 void teardown(void) { LAGraph_Finalize(msg); }
@@ -98,12 +100,12 @@ void init_outputs()
                    grammar.nonterms_count, sizeof(GrB_Matrix), msg);
 }
 
-bool check_empty_path()
+bool is_empty_path(Path path)
 {
     return path.len == 0 && path.edges == NULL;
 }
 
-bool check_non_empty_path()
+bool is_non_empty_path(Path path)
 {
     if (path.len == 0)
     {
@@ -121,7 +123,16 @@ bool check_non_empty_path()
     return true;
 }
 
-char *path_to_str()
+bool is_path_array_correct(size_t expected_path_cnt)
+{
+    if (expected_path_cnt == 0)
+    {
+        return paths.capacity == 0 && paths.count == 0 && paths.paths == NULL;
+    }
+    return paths.capacity >= expected_path_cnt && paths.count == expected_path_cnt && paths.paths != NULL;
+}
+
+char *path_to_str(Path path)
 {
     char *result_str = NULL;
     // 15 - size of "%ld->(%d)->%ld "
@@ -166,6 +177,23 @@ void free_workspace()
 
     LAGraph_Free((void **)&grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
+
+    start = NULL;
+    end = NULL;
+}
+
+void free_path_array()
+{
+    if (paths.paths != NULL)
+    {
+        for (size_t i = 0; i < paths.count; i++)
+        {
+            LAGraph_Free((void **)&paths.paths[i].edges, msg);
+        }
+    }
+    LAGraph_Free((void **)&paths.paths, msg);
+    paths.capacity = 0;
+    paths.count = 0;
 }
 
 //====================
@@ -312,11 +340,6 @@ void init_graph_double_cycle()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 4, 4);
-    // }
 }
 
 // Graph:
@@ -337,11 +360,6 @@ void init_graph_one_cycle()
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
 
     adj_matrices[0] = adj_matrix_a;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
-    // }
 }
 
 // Graph:
@@ -375,11 +393,6 @@ void init_graph_1()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 8, 8);
-    // }
 }
 
 // Graph:
@@ -421,11 +434,6 @@ void init_graph_tree()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 7, 7);
-    // }
 }
 
 // Graph:
@@ -451,11 +459,6 @@ void init_graph_line()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 5, 5);
-    // }
 }
 
 // Graph:
@@ -480,11 +483,6 @@ void init_graph_2()
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
     adj_matrices[2] = adj_matrix_c;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
-    // }
 }
 
 // Graph:
@@ -507,11 +505,6 @@ void init_graph_3()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
-    // }
 }
 
 // Graph:
@@ -532,18 +525,13 @@ void init_graph_4()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
-    // }
 }
 
-//=====================
-// Tests full result
-//=====================
+//===================================
+// Full path test with fixed vertices
+//===================================
 
-void test_CFL_extract_single_path_two_cycle(void)
+void test_CFL_extract_single_path_two_cycle_fixed(void)
 {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -552,33 +540,42 @@ void test_CFL_extract_single_path_two_cycle(void)
     init_grammar_aSb();
     init_outputs();
     init_graph_double_cycle();
-    int expected_ret[16] = {GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_SUCCESS, GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_SUCCESS, GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_SUCCESS, GrB_NO_VALUE, GrB_NO_VALUE, GrB_NO_VALUE, GrB_NO_VALUE};
+    size_t expected_path_cnt[16] = {
+        1, 0, 0, 1,
+        1, 0, 0, 1,
+        1, 0, 0, 1,
+        0, 0, 0, 0};
     char *expected_path[16] = {"len: 12 path: 0->(0)->1 1->(0)->2 2->(0)->0 0->(0)->1 1->(0)->2 2->(0)->0 0->(1)->3 3->(1)->0 0->(1)->3 3->(1)->0 0->(1)->3 3->(1)->0 ",
-                               "len: 0 path: ",
-                               "len: 0 path: ",
+                               "",
+                               "",
                                "len: 6 path: 0->(0)->1 1->(0)->2 2->(0)->0 0->(1)->3 3->(1)->0 0->(1)->3 ",
                                "len: 4 path: 1->(0)->2 2->(0)->0 0->(1)->3 3->(1)->0 ",
-                               "len: 0 path: ",
-                               "len: 0 path: ",
+                               "",
+                               "",
                                "len: 10 path: 1->(0)->2 2->(0)->0 0->(0)->1 1->(0)->2 2->(0)->0 0->(1)->3 3->(1)->0 0->(1)->3 3->(1)->0 0->(1)->3 ",
                                "len: 8 path: 2->(0)->0 0->(0)->1 1->(0)->2 2->(0)->0 0->(1)->3 3->(1)->0 0->(1)->3 3->(1)->0 ",
-                               "len: 0 path: ",
-                               "len: 0 path: ",
+                               "",
+                               "",
                                "len: 2 path: 2->(0)->0 0->(1)->3 ",
-                               "len: 0 path: ",
-                               "len: 0 path: ",
-                               "len: 0 path: ",
-                               "len: 0 path: "};
+                               "",
+                               "",
+                               "",
+                               ""};
     OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 4; start++)
+    for (GrB_Index st = 0; st < 4; st++)
     {
-        for (GrB_Index end = 0; end < 4; end++)
+        for (GrB_Index en = 0; en < 4; en++)
         {
-            check_result1(expected_ret[start * 4 + end], expected_path[start * 4 + end]);
-            if (path.len > 0)
+            start = &st;
+            end = &en;
+
+            size_t idx = st * 4 + en;
+            check_path_array(expected_path_cnt[idx]);
+            if (paths.count != 0)
             {
-                LAGraph_Free((void **)&path.edges, msg);
+                check_path_str(0, expected_path[idx]);
             }
+            free_path_array();
         }
     }
     free_workspace();
@@ -587,10 +584,10 @@ void test_CFL_extract_single_path_two_cycle(void)
 }
 
 //==========================================
-// Tests that the path exists in the graph
+// Path type test with fixed vertices
 //==========================================
 
-void test_CFL_extract_single_path_cycle(void)
+void test_CFL_extract_single_path_cycle_fixed(void)
 {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -599,19 +596,28 @@ void test_CFL_extract_single_path_cycle(void)
     init_grammar_aS();
     init_outputs();
     init_graph_one_cycle();
-    int expected[9] = {empty, non_empty, non_empty,
-                       non_empty, empty, non_empty,
-                       non_empty, non_empty, empty};
+    size_t expected_path_cnt[9] = {
+        1, 1, 1,
+        1, 1, 1,
+        1, 1, 1};
+    int expected_path[9] = {empty, non_empty, non_empty,
+                            non_empty, empty, non_empty,
+                            non_empty, non_empty, empty};
     OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 3; start++)
+    for (GrB_Index st = 0; st < 3; st++)
     {
-        for (GrB_Index end = 0; end < 3; end++)
+        for (GrB_Index en = 0; en < 3; en++)
         {
-            check_result2(expected[start * 3 + end]);
-            if (path.len > 0)
+            start = &st;
+            end = &en;
+
+            size_t idx = st * 3 + en;
+            check_path_array(expected_path_cnt[idx]);
+            if (paths.count != 0)
             {
-                LAGraph_Free((void **)&path.edges, msg);
+                check_path_type(0, expected_path[idx]);
             }
+            free_path_array();
         }
     }
     free_workspace();
@@ -619,7 +625,7 @@ void test_CFL_extract_single_path_cycle(void)
 #endif
 }
 
-void test_CFL_extract_single_path_labels_more_than_nonterms(void)
+void test_CFL_extract_single_path_labels_more_than_nonterms_fixed(void)
 {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -628,20 +634,28 @@ void test_CFL_extract_single_path_labels_more_than_nonterms(void)
     init_grammar_aSb();
     init_outputs();
     init_graph_2();
-
-    int expected[9] = {non_exist, non_empty, non_exist,
-                       non_exist, non_exist, non_exist,
-                       non_exist, non_exist, non_exist};
+    size_t expected_path_cnt[9] = {
+        0, 1, 0,
+        0, 0, 0,
+        0, 0, 0};
+    int expected_path[9] = {non_exist, non_empty, non_exist,
+                            non_exist, non_exist, non_exist,
+                            non_exist, non_exist, non_exist};
     OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 3; start++)
+    for (GrB_Index st = 0; st < 3; st++)
     {
-        for (GrB_Index end = 0; end < 3; end++)
+        for (GrB_Index en = 0; en < 3; en++)
         {
-            check_result2(expected[start * 3 + end]);
-            if (path.len > 0)
+            start = &st;
+            end = &en;
+
+            size_t idx = st * 3 + en;
+            check_path_array(expected_path_cnt[idx]);
+            if (paths.count != 0)
             {
-                LAGraph_Free((void **)&path.edges, msg);
+                check_path_type(0, expected_path[idx]);
             }
+            free_path_array();
         }
     }
     free_workspace();
@@ -649,7 +663,7 @@ void test_CFL_extract_single_path_labels_more_than_nonterms(void)
 #endif
 }
 
-void test_CFL_extract_single_path_complex_grammar(void)
+void test_CFL_extract_single_path_complex_grammar_fixed(void)
 {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -658,143 +672,38 @@ void test_CFL_extract_single_path_complex_grammar(void)
     init_grammar_complex();
     init_outputs();
     init_graph_1();
-    int expected[64] = {non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_empty,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_empty, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist};
+    size_t expected_path_cnt[64] = {
+        0, 0, 0, 0, 0, 0, 0, 1,
+        0, 0, 0, 0, 0, 0, 1, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0};
+    int expected_path[64] = {non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_empty,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_empty, non_exist,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist,
+                             non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist};
     OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 8; start++)
+    for (GrB_Index st = 0; st < 8; st++)
     {
-        for (GrB_Index end = 0; end < 8; end++)
+        for (GrB_Index en = 0; en < 8; en++)
         {
-            check_result2(expected[start * 8 + end]);
-            if (path.len > 0)
+            start = &st;
+            end = &en;
+
+            size_t idx = st * 8 + en;
+            check_path_array(expected_path_cnt[idx]);
+            if (paths.count != 0)
             {
-                LAGraph_Free((void **)&path.edges, msg);
+                check_path_type(0, expected_path[idx]);
             }
-        }
-    }
-    free_workspace();
-    teardown();
-#endif
-}
-
-void test_CFL_extract_single_path_tree(void)
-{
-#if LAGRAPH_SUITESPARSE
-    setup();
-    GrB_Info retval;
-
-    init_grammar_aSb();
-    init_outputs();
-    init_graph_tree();
-
-    int expected[49] = {non_empty, non_empty, non_exist, non_empty, non_empty, non_exist, non_exist,
-                        non_empty, non_empty, non_exist, non_empty, non_empty, non_exist, non_exist,
-                        non_exist, non_exist, non_empty, non_exist, non_exist, non_empty, non_exist,
-                        non_empty, non_empty, non_exist, non_empty, non_empty, non_exist, non_exist,
-                        non_empty, non_empty, non_exist, non_empty, non_empty, non_exist, non_exist,
-                        non_exist, non_exist, non_empty, non_exist, non_exist, non_empty, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist, non_exist, non_exist};
-    OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 7; start++)
-    {
-        for (GrB_Index end = 0; end < 7; end++)
-        {
-            check_result2(expected[start * 7 + end]);
-            if (path.len > 0)
-            {
-                LAGraph_Free((void **)&path.edges, msg);
-            }
-        }
-    }
-    free_workspace();
-    teardown();
-#endif
-}
-
-void test_CFL_extract_single_path_line(void)
-{
-#if LAGRAPH_SUITESPARSE
-    setup();
-    GrB_Info retval;
-
-    init_grammar_aSb();
-    init_outputs();
-    init_graph_line();
-    int expected[25] = {non_exist, non_exist, non_exist, non_exist, non_empty,
-                        non_exist, non_exist, non_exist, non_empty, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist,
-                        non_exist, non_exist, non_exist, non_exist, non_exist};
-    OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 5; start++)
-    {
-        for (GrB_Index end = 0; end < 5; end++)
-        {
-            check_result2(expected[start * 5 + end]);
-            if (path.len > 0)
-            {
-                LAGraph_Free((void **)&path.edges, msg);
-            }
-        }
-    }
-    free_workspace();
-    teardown();
-#endif
-}
-
-void test_CFL_extract_single_path_two_nodes_cycle(void)
-{
-#if LAGRAPH_SUITESPARSE
-    setup();
-    GrB_Info retval;
-
-    init_grammar_aSb();
-    init_outputs();
-    init_graph_3();
-    int expected[4] = {non_empty, non_exist,
-                       non_empty, non_exist};
-    OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 2; start++)
-    {
-        for (GrB_Index end = 0; end < 2; end++)
-        {
-            check_result2(expected[start * 2 + end]);
-            if (path.len > 0)
-            {
-                LAGraph_Free((void **)&path.edges, msg);
-            }
-        }
-    }
-    free_workspace();
-    teardown();
-#endif
-}
-
-void test_CFL_extract_single_path_with_empty_adj_matrix(void)
-{
-#if LAGRAPH_SUITESPARSE
-    setup();
-    GrB_Info retval;
-
-    init_grammar_aS();
-    init_outputs();
-    init_graph_4();
-
-    int expected[4] = {empty, non_exist,
-                       non_exist, empty};
-    OK(run_aux_algorithm());
-    for (GrB_Index start = 0; start < 2; start++)
-    {
-        for (GrB_Index end = 0; end < 2; end++)
-        {
-            check_result2(expected[start * 2 + end]);
-            LAGraph_Free((void **)&path.edges, msg);
+            free_path_array();
         }
     }
     free_workspace();
@@ -814,14 +723,15 @@ void test_CFL_extract_single_path_inappropriate_grammar(void)
     init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
-    GrB_Index start = 0;
-    GrB_Index end = 0;
+    GrB_Index st = 0, en = 0;
+    start = &st;
+    end = &en;
 
     LAGraph_Free((void **)&grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
-    init_grammar_aS();
-    check_result2(non_exist);
 
+    init_grammar_aS();
+    check_path_array(0);
     free_workspace();
     teardown();
 #endif
@@ -839,16 +749,118 @@ void test_CFL_extract_single_path_inappropriate_graph(void)
     init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
-    GrB_Index start = 0;
-    GrB_Index end = 0;
+    GrB_Index st = 0, en = 0;
+    start = &st;
+    end = &en;
 
     GrB_free(&adj_matrices[0]);
     GrB_free(&adj_matrices[1]);
     LAGraph_Free((void **)&adj_matrices, msg);
 
     init_graph_4();
-    check_result2(non_exist);
+    check_path_array(0);
+    free_workspace();
+    teardown();
+#endif
+}
 
+//==========================================
+// Path type test with NULL vertices
+//==========================================
+
+void test_CFL_extract_single_path_tree_all(void)
+{
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_outputs();
+    init_graph_tree();
+
+    int expected_path[20] = {non_empty, non_empty, non_empty, non_empty, non_empty,
+                             non_empty, non_empty, non_empty, non_empty, non_empty,
+                             non_empty, non_empty, non_empty, non_empty, non_empty,
+                             non_empty, non_empty, non_empty, non_empty, non_empty};
+    OK(run_aux_algorithm());
+    check_path_array(20);
+    for (size_t i = 0; i < paths.count; i++)
+    {
+        check_path_type(i, expected_path[i]);
+    }
+    free_path_array();
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_line_all(void)
+{
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_outputs();
+    init_graph_line();
+    int expected_path[2] = {non_empty, non_empty};
+    OK(run_aux_algorithm());
+    check_path_array(2);
+    for (size_t i = 0; i < paths.count; i++)
+    {
+        check_path_type(i, expected_path[i]);
+    }
+    free_path_array();
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_two_nodes_cycle_all_starts(void)
+{
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_outputs();
+    init_graph_3();
+    int expected_path[2] = {non_empty, non_empty};
+    OK(run_aux_algorithm());
+
+    // End is fixed at vertex 0 and start = NULL
+    GrB_Index ed = 0;
+    end = &ed;
+
+    check_path_array(2);
+    for (size_t i = 0; i < paths.count; i++)
+    {
+        check_path_type(i, expected_path[i]);
+    }
+    free_path_array();
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_extract_single_path_with_empty_adj_matrix_all(void)
+{
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aS();
+    init_outputs();
+    init_graph_4();
+
+    int expected_path[2] = {empty, empty};
+    OK(run_aux_algorithm());
+    check_path_array(2);
+    for (size_t i = 0; i < paths.count; i++)
+    {
+        check_path_type(i, expected_path[i]);
+    }
+    free_path_array();
     free_workspace();
     teardown();
 #endif
@@ -869,8 +881,9 @@ void test_CFL_extract_single_path_invalid_rules(void)
     init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
-    GrB_Index start = 1;
-    GrB_Index end = 2;
+    GrB_Index st = 1, en = 2;
+    start = &st;
+    end = &en;
 
     // Rule [Variable -> _ B]
     grammar.rules[0] =
@@ -914,8 +927,9 @@ void test_CFL_extract_single_path_null_pointers(void)
     init_graph_double_cycle();
     OK(run_aux_algorithm());
     // Random path
-    GrB_Index start = 1;
-    GrB_Index end = 2;
+    GrB_Index st = 1, en = 2;
+    start = &st;
+    end = &en;
 
     //  adj_matrices[0] = NULL;
     //  adj_matrices[1] = NULL;
@@ -970,8 +984,10 @@ void test_CFL_extract_single_path_vertex_out_the_graph(void)
     init_graph_double_cycle(); // 4 * 4
     OK(run_aux_algorithm());
 
-    GrB_Index start = 4; // Vertex outside the graph
-    GrB_Index end = 2;
+    GrB_Index st = 4; // Vertex outside the graph
+    GrB_Index en = 2;
+    start = &st;
+    end = &en;
 
     check_error(GrB_INVALID_INDEX);
 
@@ -981,17 +997,17 @@ void test_CFL_extract_single_path_vertex_out_the_graph(void)
 }
 
 TEST_LIST = {
-    {"CFL_extract_single_path_two_cycle", test_CFL_extract_single_path_two_cycle},
-    {"CFL_extract_single_path_cycle", test_CFL_extract_single_path_cycle},
-    {"CFL_extract_single_path_labels_more_than_nonterms", test_CFL_extract_single_path_labels_more_than_nonterms},
-    {"CFL_extract_single_path_complex_grammar", test_CFL_extract_single_path_complex_grammar},
-    {"CFL_extract_single_path_tree", test_CFL_extract_single_path_tree},
-    {"CFL_extract_single_path_line", test_CFL_extract_single_path_line},
-    {"CFL_extract_single_path_two_nodes_cycle", test_CFL_extract_single_path_two_nodes_cycle},
-    // {"CFL_extract_single_path_with_empty_adj_matrix", test_CFL_extract_single_path_with_empty_adj_matrix},
+    {"CFL_extract_single_path_two_cycle_fixed", test_CFL_extract_single_path_two_cycle_fixed},
+    {"CFL_extract_single_path_cycle_fixed", test_CFL_extract_single_path_cycle_fixed},
+    {"CFL_extract_single_path_labels_more_than_nonterms_fixed", test_CFL_extract_single_path_labels_more_than_nonterms_fixed},
+    {"CFL_extract_single_path_complex_grammar_fixed", test_CFL_extract_single_path_complex_grammar_fixed},
+    {"CFL_extract_single_path_tree_all", test_CFL_extract_single_path_tree_all},
+    {"CFL_extract_single_path_line_all", test_CFL_extract_single_path_line_all},
+    {"CFL_extract_single_path_two_nodes_cycle_all_starts", test_CFL_extract_single_path_two_nodes_cycle_all_starts},
+    {"CFL_extract_single_path_with_empty_adj_matrix_all", test_CFL_extract_single_path_with_empty_adj_matrix_all},
     {"CFL_extract_single_path_inappropriate_grammar", test_CFL_extract_single_path_inappropriate_grammar},
     {"CFL_extract_single_path_inappropriate_graph", test_CFL_extract_single_path_inappropriate_graph},
-    // {"CFL_extract_single_path_invalid_rules", test_CFL_extract_single_path_invalid_rules},
-    // {"CFL_extract_single_path_null_pointers", test_CFL_extract_single_path_null_pointers},
+    {"CFL_extract_single_path_invalid_rules", test_CFL_extract_single_path_invalid_rules},
+    {"CFL_extract_single_path_null_pointers", test_CFL_extract_single_path_null_pointers},
     {"CFL_extract_single_path_vertex_out_the_graph", test_CFL_extract_single_path_vertex_out_the_graph},
     {NULL, NULL}};
