@@ -81,11 +81,11 @@ char *output_to_str(size_t nonterm)
 
    LAGraph_Malloc ((void **) &row, nnz, sizeof(GrB_Index), msg);
    LAGraph_Malloc ((void **) &col, nnz, sizeof(GrB_Index), msg);
-   LAGraph_Malloc ((void **) &val_void, nnz, sizeof(AllPathsVex), msg);
+   LAGraph_Malloc ((void **) &val_void, nnz, sizeof(AllPathsElem), msg);
 
    OK(GrB_Matrix_extractTuples(row, col, val_void, &nnz, outputs[nonterm]));
 
-   AllPathsVex *val = (AllPathsVex *) val_void;
+   AllPathsElem *val = (AllPathsElem *) val_void;
 
     size_t cap = 256;
     size_t len = 0;

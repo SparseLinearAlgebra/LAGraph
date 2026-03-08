@@ -1115,7 +1115,7 @@ typedef struct
 {
     GrB_Index n;
     GrB_Index* middle;
-} AllPathsVex;
+} AllPathsElem;
 
 GrB_Info LAGraph_CFPQ_core
 (

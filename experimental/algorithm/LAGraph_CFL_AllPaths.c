@@ -2,12 +2,14 @@
   {                           \
     GrB_free(&AllPaths_semiring_free);   \
     GrB_free(&AllPaths_monoid_free);     \
+    GrB_free(&AllPaths_monoid_get_nvals);     \
     GrB_free(&bottom_scalar); \
     GrB_free(&IAllPaths_mult);      \
     GrB_free(&AllPaths_set);        \
     GrB_free(&AllPaths_mult);       \
     GrB_free(&AllPaths_add);        \
     GrB_free(&AllPaths_add_free);        \
+    GrB_free(&AllPaths_add_get_nvals);        \
     GrB_free(&Theta);         \
   }
 
@@ -24,7 +26,6 @@ static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Inde
   }
   
   GrB_Index *tmp = malloc((na + nb) * sizeof(GrB_Index));
-  //    LG_TRY(LAGraph_Malloc((void**)&tmp, na+nb, sizeof(GrB_Index), msg));
   
   GrB_Index ia = 0, ib = 0, outn = 0;
   while (ia < na && ib < nb) {
@@ -50,7 +51,6 @@ static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Inde
     if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
   }
   
-  //    LG_TRY(LAGraph_Realloc((void**)&tmp, outn, na+nb, sizeof(GrB_Index), msg));
   GrB_Index *sh = realloc(tmp, outn * sizeof(GrB_Index));
   if (sh) tmp = sh;
   
@@ -58,8 +58,7 @@ static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Inde
   return tmp;
 }
 
-void clear_all_paths_vex(AllPathsVex *z){
-//  if(z->middle) LG_TRY(LAGraph_Free((void**) z->middle, msg));
+void clear_elem_all_paths(AllPathsElem *z){
   if(z->middle){
     free(z->middle);
     z->middle=NULL;
@@ -67,37 +66,35 @@ void clear_all_paths_vex(AllPathsVex *z){
   z->n = 0;
 }
 
-void add_all_paths(AllPathsVex *z, const AllPathsVex *x, const AllPathsVex *y)
+void add_all_paths(AllPathsElem *z, const AllPathsElem *x, const AllPathsElem *y)
 {
   z->middle = merge_all_paths(&z->n, x->middle, x->n, y->middle, y->n);
 }
 
-void add_all_paths_free(AllPathsVex *z, AllPathsVex *x, AllPathsVex *y)
+void add_free_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
 {
-  AllPathsVex v_temp;
-  AllPathsVex* temp = &v_temp;
+  AllPathsElem v_temp;
+  AllPathsElem* temp = &v_temp;
   temp->middle = merge_all_paths(&temp->n, x->middle, x->n, y->middle, y->n);
-  clear_all_paths_vex(x);
-  clear_all_paths_vex(y);
-//  clear_all_paths_vex(z);
+  clear_elem_all_paths(x);
+  clear_elem_all_paths(y);
   z->middle = temp->middle;
   z->n = temp->n;
 }
 
-void mult_all_paths_index(AllPathsVex *z,
-                     const AllPathsVex *x, GrB_Index ix, GrB_Index jx,
-                     const AllPathsVex *y, GrB_Index iy, GrB_Index jy,
+void mult_all_paths(AllPathsElem *z,
+                     const AllPathsElem *x, GrB_Index ix, GrB_Index jx,
+                     const AllPathsElem *y, GrB_Index iy, GrB_Index jy,
                      const void *theta)
 {
-//  LG_TRY(LAGraph_Malloc((void**) &z->middle, 1, size_of(GrB_Index), msg));
   z->middle = malloc(sizeof(GrB_Index));
   z->middle[0] = jx;
   z->n = 1;
 }
 
-void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist)
+void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exist)
 {
-  AllPathsVex temp;
+  AllPathsElem temp;
   temp.middle = NULL;
   temp.n = 0;
   
@@ -108,46 +105,45 @@ void set_all_paths(AllPathsVex *z, const AllPathsVex *x, const bool *edge_exist)
   }
   
   z->middle = merge_all_paths(&z->n, x->middle, x->n, temp.middle, temp.n);
-  clear_all_paths_vex(&temp);
+  clear_elem_all_paths(&temp);
 }
 
 #define MULT_PATH_INDEX_DEFN                                                   \
-"void mult_all_paths_index(AllPathsVex *z, \n"      \
-"                     const AllPathsVex *x, GrB_Index ix, GrB_Index jx, \n"      \
-"                     const AllPathsVex *y, GrB_Index iy, GrB_Index jy, \n"      \
+"void mult_all_paths(AllPathsElem *z, \n"      \
+"                     const AllPathsElem *x, GrB_Index ix, GrB_Index jx, \n"      \
+"                     const AllPathsElem *y, GrB_Index iy, GrB_Index jy, \n"      \
 "                     const void *theta) \n"      \
 "{ \n"      \
-"  //clear_all_paths_vex(z); \n"      \
 "  z->middle = malloc(sizeof(GrB_Index)); \n"      \
 "  z->middle[0] = jx; \n"      \
 "  z->n = 1; \n"      \
 "}"
 
+void add_get_nvals_all_paths(AllPathsElem *z, const AllPathsElem *x, const AllPathsElem *y)
+{
+  z->n = x->n + y->n;
+  z->middle = NULL;
+}
+
+static GrB_Type* AllPaths_type_get_nvals = NULL;
+static GrB_Monoid AllPaths_monoid_get_nvals = NULL;
+
 //A function that replaces GrB_Matrix_nvals for counting non-zero elements
-GrB_Info all_paths_get_nvals(GrB_Index *nvals, const GrB_Matrix A){
-  GrB_Index nnz = 0;
-  GrB_Index accum = 0;
-  GrB_Matrix_nvals(&nnz, A);
-  *nvals = 0;
-  void *val_void = NULL;
+GrB_Info get_nvals_all_paths(GrB_Index *nvals, const GrB_Matrix A){
+  GrB_Scalar s = NULL;
+  GrB_Scalar_new(&s, *AllPaths_type_get_nvals);
+  GrB_Info info = GrB_reduce(s, NULL, AllPaths_monoid_get_nvals, A, NULL);
   
-  if(nnz==0){
-    *nvals = 0;
-    return GrB_SUCCESS;
+  if (info != GrB_SUCCESS)
+  {
+    GrB_free(&s);
+    return info;
   }
   
-  val_void = malloc(nnz * sizeof(AllPathsVex));
-  GrB_Matrix_extractTuples(NULL, NULL, val_void, &nnz, A);
-  AllPathsVex *val = (AllPathsVex *) val_void;
-  
-  size_t end = nnz;
-  for (size_t start = 0; start < end; ++start){
-    accum+=val[start].n;
-  }
-  *nvals = accum;
-  
-  free(val_void);
-  
+  AllPathsElem result;
+  GrB_Scalar_extractElement_UDT(&result, s);
+  *nvals = result.n;
+  GrB_free(&s);
   return GrB_SUCCESS;
 }
 
@@ -156,7 +152,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.
                          //
-                         // outputs[k]: (i, j) contains a AllPathsVex structure if and only if there is a path
+                         // outputs[k]: (i, j) contains a AllPathsElem structure if and only if there is a path
                          // from node i to node j whose edge labels form a word
                          // derivable from the non-terminal 'k' of the specified CFG.
     // Input
@@ -179,6 +175,7 @@ GrB_Info LAGraph_CFL_AllPaths(
   GrB_Type AllPaths_type = NULL;
   GrB_BinaryOp AllPaths_add = NULL;
   GrB_BinaryOp AllPaths_add_free = NULL;
+  GrB_BinaryOp AllPaths_add_get_nvals = NULL;
   GrB_Monoid AllPaths_monoid_free = NULL;
   GxB_IndexBinaryOp IAllPaths_mult = NULL;
   GrB_BinaryOp AllPaths_mult = NULL;
@@ -187,12 +184,14 @@ GrB_Info LAGraph_CFL_AllPaths(
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
 
-  GRB_TRY(GrB_Type_new(&AllPaths_type, sizeof(AllPathsVex)));
+  GRB_TRY(GrB_Type_new(&AllPaths_type, sizeof(AllPathsElem)));
 
+  AllPaths_type_get_nvals = &AllPaths_type;
+  
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
 
-  AllPathsVex bottom = {0, NULL};
+  AllPathsElem bottom = {0, NULL};
   GRB_TRY(GrB_Scalar_new(&bottom_scalar, AllPaths_type));
   GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
 
@@ -205,7 +204,7 @@ GrB_Info LAGraph_CFL_AllPaths(
   
   GRB_TRY(GrB_BinaryOp_new(
       &AllPaths_add_free,
-      (void *)add_all_paths_free,
+      (void *)add_free_all_paths,
       AllPaths_type,
       AllPaths_type,
       AllPaths_type));
@@ -217,12 +216,12 @@ GrB_Info LAGraph_CFL_AllPaths(
   
   GRB_TRY(GxB_IndexBinaryOp_new(
       &IAllPaths_mult,
-      (void *)mult_all_paths_index,
+      (void *)mult_all_paths,
       AllPaths_type,
       AllPaths_type,
       AllPaths_type,
       GrB_BOOL,
-      "mult_all_paths_index",
+      "mult_all_paths",
       MULT_PATH_INDEX_DEFN));
 
   GRB_TRY(GxB_BinaryOp_new_IndexOp(
@@ -242,6 +241,18 @@ GrB_Info LAGraph_CFL_AllPaths(
                             AllPaths_type,
                             GrB_BOOL));
   
+  GRB_TRY(GrB_BinaryOp_new(
+      &AllPaths_add_get_nvals,
+      (void *)add_get_nvals_all_paths,
+      AllPaths_type,
+      AllPaths_type,
+      AllPaths_type));
+
+  GRB_TRY(GrB_Monoid_new(
+      &AllPaths_monoid_get_nvals,
+      AllPaths_add_get_nvals,
+      (void *)(&bottom)));
+    
   CFL_Semiring semiring = {.type = AllPaths_type,
       .semiring = AllPaths_semiring_free,
       .add = AllPaths_add_free,
@@ -249,9 +260,11 @@ GrB_Info LAGraph_CFL_AllPaths(
       .mult = AllPaths_mult,
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,
-      .get_nvals = all_paths_get_nvals};
+      .get_nvals = get_nvals_all_paths};
   
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
+  
+  AllPaths_type_get_nvals = NULL;
   LG_FREE_WORK;
   return GrB_SUCCESS;
 }
