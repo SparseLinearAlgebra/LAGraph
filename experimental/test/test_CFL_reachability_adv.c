@@ -641,7 +641,7 @@ void test_CFL_indexed_simple(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
 
-    for (size_t mask = 0; mask == 16; mask++) {
+    for (size_t mask = 0; mask < 16; mask++) {
         GrB_Info retval;
 
         init_indexed_grammar_simple();
@@ -650,9 +650,6 @@ void test_CFL_indexed_simple(void) {
 
         OK(run_algorithm(mask));
         TEST_MSG("MASK: %zx, ERROR: %s\n", mask, msg);
-        // for (size_t i = 0; i < grammar.nonterms_count + grammar.terms_count; i++) {
-        //     GxB_print(outputs[i], 2);
-        // }
 
         char *expected = output_to_str(3);
         TEST_CHECK(strcmp("(0, 1)", expected) == 0);
@@ -742,7 +739,7 @@ void test_CFL_reachability_indexed_rules(void) {
         GrB_Info retval;
 
         init_indexed_grammar();
-        init_graph_2();
+        init_graph_5();
         init_outputs();
 
         OK(run_algorithm(mask));
@@ -988,6 +985,7 @@ TEST_LIST = {
     {"CFG_reachability_indexed_simple", test_CFL_indexed_simple},
     {"CFG_reachability_indexed_simple_exploded", test_CFL_indexed_simple_exploded},
     {"CFL_reachability_cycle", test_CFL_reachability_cycle},
+    {"CFG_reachability_indexed_rules", test_CFL_reachability_indexed_rules},
     {"CFL_reachability_two_cycle", test_CFL_reachability_two_cycle},
     {"CFL_reachability_labels_more_than_nonterms",
      test_CFL_reachability_labels_more_than_nonterms},
