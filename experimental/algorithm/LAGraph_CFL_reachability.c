@@ -95,7 +95,6 @@ GrB_Info LAGraph_CFL_reachability(
   CFL_Semiring semiring = {.type = GrB_BOOL,
       .semiring = GxB_ANY_PAIR_BOOL,
       .add = GxB_ANY_BOOL,
-      .add_eps = GxB_ANY_BOOL,
       .mult = GxB_PAIR_BOOL,
       .init_path = GxB_PAIR_BOOL,
       .bottom_scalar = false_scalar,
