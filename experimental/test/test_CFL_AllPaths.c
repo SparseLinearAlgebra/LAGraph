@@ -1,15 +1,3 @@
-//------------------------------------------------------------------------------
-// LAGraph/experimental/test/LAGraph_CFL_reachability.c: test cases for Context-Free
-// Language Reachability Matrix-Based Algorithm
-//------------------------------------------------------------------------------
-//
-// LAGraph, (c) 2019-2024 by The LAGraph Contributors, All Rights Reserved.
-// SPDX-License-Identifier: BSD-2-Clause
-
-// Contributed by Ilhom Kombaev, Semyon Grigoriev, St. Petersburg State University.
-
-//------------------------------------------------------------------------------
-
 #include <LAGraphX.h>
 #include <LAGraph_test.h>
 #include <LG_Xtest.h>
@@ -31,9 +19,9 @@
         TEST_MSG("retval = %d (%s)", retval, msg);                                       \
     }
 
-#define check_result(result)                                                             \
+#define check_result(nonterm, result) \
     {                                                                                    \
-        char *expected = output_to_str(0);                                               \
+        char *expected = output_to_str(nonterm);                                               \
         TEST_CHECK(strcmp(result, expected) == 0);                                       \
         TEST_MSG("Wrong result. Actual: %s", expected);                                  \
         LAGraph_Free ((void **) &expected, msg);                                         \
@@ -129,11 +117,19 @@ char *output_to_str(size_t nonterm)
             {
                 if (k == 0)
                 {
-                    wrote = sprintf(result_str + len, "%" PRIu64, (uint64_t) val[i].middle[k]);
+                  if (val[i].middle[k] == GrB_INDEX_MAX) {
+                      wrote = sprintf(result_str + len, "INDEX_MAX");
+                  } else {
+                      wrote = sprintf(result_str + len, "%" PRIu64, (uint64_t)val[i].middle[k]);
+                  }
                 }
                 else
                 {
-                    wrote = sprintf(result_str + len, ",%" PRIu64, (uint64_t) val[i].middle[k]);
+                  if (val[i].middle[k] == GrB_INDEX_MAX) {
+                      wrote = sprintf(result_str + len, ",INDEX_MAX");
+                  } else {
+                      wrote = sprintf(result_str + len, ",%" PRIu64, (uint64_t)val[i].middle[k]);
+                  }
                 }
                 len += (size_t) wrote;
             }
@@ -512,47 +508,260 @@ void init_graph_4() {
     adj_matrices[1] = adj_matrix_b;
 }
 
+//====================
+// Tests with valid result
+//====================
 
 void test_CFL_AllPaths_cycle(void) {
 #if LAGRAPH_SUITESPARSE
-  setup();
-  GrB_Info retval;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aS();
+    init_graph_one_cycle();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[0,1,2,INDEX_MAX] (0, 1):[0,1,2,INDEX_MAX] (0, 2):[0,1,2] (1, 0):[0,1,2] (1, 1):[0,1,2,INDEX_MAX] (1, 2):[0,1,2,INDEX_MAX] (2, 0):[0,1,2,INDEX_MAX] (2, 1):[0,1,2] (2, 2):[0,1,2,INDEX_MAX]");
   
-  init_grammar_aS();
-  init_graph_one_cycle();
-  init_outputs() ;
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPaths_two_cycle(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[1] (0, 3):[1] (1, 0):[2] (1, 3):[2] (2, 0):[0] (2, 3):[0]");
+    check_result(1,"(0, 1):[INDEX_MAX] (1, 2):[INDEX_MAX] (2, 0):[INDEX_MAX]");
   
-  OK(run_algorithm());
-  printf("\nMatrices:\n");
-  print_outputs();
-  //    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPaths_labels_more_than_nonterms(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_2();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0, "(0, 1):[0]");
+    check_result(1,"(0, 0):[INDEX_MAX]");
+    check_result(2,"(0, 1):[INDEX_MAX]");
+    check_result(3,"");
   
-      free_workspace();
-  teardown();
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPaths_complex_grammar(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_complex();
+    init_graph_1();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0, "(0, 7):[1,4] (1, 6):[2]");
+    check_result(1, "(0, 4):[2]");
+    check_result(6,"(3, 6):[5] (4, 5):[3] (5, 7):[6]");
+    check_result(7,"(0, 1):[INDEX_MAX] (1, 2):[INDEX_MAX] (2, 3):[INDEX_MAX] (3, 4):[INDEX_MAX]");
+    
+  
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPaths_tree(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_tree();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0,"(0, 0):[2] (0, 1):[2] (0, 3):[2] (0, 4):[2] (1, 0):[2] (1, 1):[2] (1, 3):[2] (1, 4):[2] (2, 2):[6] (2, 5):[6] (3, 0):[5] (3, 1):[5] (3, 3):[5] (3, 4):[5] (4, 0):[5] (4, 1):[5] (4, 3):[5] (4, 4):[5] (5, 2):[6] (5, 5):[6]");
+    check_result(1, "(0, 2):[INDEX_MAX] (1, 2):[INDEX_MAX] (2, 6):[INDEX_MAX] (3, 5):[INDEX_MAX] (4, 5):[INDEX_MAX] (5, 6):[INDEX_MAX]");
+  
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPaths_line(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_line();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0,"(0, 4):[1] (1, 3):[2]");
+    check_result(1,"(0, 1):[INDEX_MAX] (1, 2):[INDEX_MAX]");
+    check_result(2,"(2, 3):[INDEX_MAX] (3, 4):[INDEX_MAX]");
+    check_result(3,"(1, 4):[3]");
+  
+    free_workspace();
+    teardown();
 #endif
 }
 
 void test_CFL_AllPaths_two_nodes_cycle(void) {
 #if LAGRAPH_SUITESPARSE
-  setup();
-  GrB_Info retval;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_3();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0,"(0, 0):[1] (1, 0):[0]");
+    check_result(1,"(0, 1):[INDEX_MAX] (1, 0):[INDEX_MAX]");
+    check_result(2, "(0, 0):[INDEX_MAX]");
+    check_result(3, "(0, 0):[0] (1, 0):[0]");
   
-  init_grammar_aSb();
-  init_graph_3();
-  init_outputs() ;
-  
-  OK(run_algorithm());
-  printf("\nMatrices:\n");
-  print_outputs();
-  //      check_result("(0, 0) (1, 0)");
-  
-  free_workspace();
-  teardown();
+    free_workspace();
+    teardown();
 #endif
 }
-  
-TEST_LIST = {
-             {"CFL_AllPaths_two_nodes_cycle", test_CFL_AllPaths_two_nodes_cycle},
+
+void test_CFL_AllPaths_with_empty_adj_matrix(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aS();
+    init_graph_4();
+    init_outputs() ;
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[0,INDEX_MAX] (1, 1):[1,INDEX_MAX]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+//====================
+// Tests with invalid result
+//====================
+
+void test_CFL_AllPaths_invalid_rules(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs() ;
+
+    // Rule [Variable -> _ B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [_ -> A B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> A B], where C >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [S -> A B], where A >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> t], where t >= terms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPaths_null_pointers(void) {
+#if LAGRAPH_SUITESPARSE
+
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs() ;
+
+//  adj_matrices[0] = NULL;
+//  adj_matrices[1] = NULL;
+    GrB_free(&adj_matrices[0]);
+    GrB_free(&adj_matrices[1]);
+
+    check_error(GrB_NULL_POINTER);
+
+//  adj_matrices = NULL;
+    LAGraph_Free ((void **) &adj_matrices, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs() ;
+
+//  outputs = NULL;
+    LAGraph_Free ((void **) &outputs, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs() ;
+
+//  grammar.rules = NULL;
+    LAGraph_Free ((void **) &grammar.rules, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+TEST_LIST = {{"CFL_AllPaths_complex_grammar", test_CFL_AllPaths_complex_grammar},
              {"CFL_AllPaths_cycle", test_CFL_AllPaths_cycle},
+             {"CFL_AllPaths_two_cycle", test_CFL_AllPaths_two_cycle},
+             {"CFL_AllPaths_labels_more_than_nonterms",
+              test_CFL_AllPaths_labels_more_than_nonterms},
+             {"CFL_AllPaths_tree", test_CFL_AllPaths_tree},
+             {"CFL_AllPaths_line", test_CFL_AllPaths_line},
+             {"CFL_AllPaths_two_nodes_cycle", test_CFL_AllPaths_two_nodes_cycle},
+             {"CFG_reach_basic_invalid_rules", test_CFL_AllPaths_invalid_rules},
+             {"test_CFL_AllPaths_with_empty_adj_matrix", test_CFL_AllPaths_with_empty_adj_matrix},
+             #if !defined ( GRAPHBLAS_HAS_CUDA )
+             {"CFL_AllPaths_null_pointers", test_CFL_AllPaths_null_pointers},
+             #endif
              {NULL, NULL}};
 
