@@ -146,16 +146,6 @@ char *output_to_str(size_t nonterm)
     return result_str;
 }
 
-void print_outputs(void)
-{
-    for (size_t i = 0; i < grammar.nonterms_count; i++)
-    {
-        char *s = output_to_str(i);
-        printf("Output[%zu]: %s\n", i, s[0] ? s : "(empty)");
-        LAGraph_Free ((void **) &s, msg);
-    }
-}
-
 void free_workspace() {
 
     if (adj_matrices != NULL)

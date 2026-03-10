@@ -1,13 +1,13 @@
 #define LG_FREE_WORK          \
   {                           \
-    GrB_free(&AllPaths_semiring_free);   \
-    GrB_free(&AllPaths_monoid_free);     \
+    GrB_free(&AllPaths_semiring);   \
+    GrB_free(&AllPaths_monoid);     \
     GrB_free(&AllPaths_monoid_get_nvals);     \
     GrB_free(&bottom_scalar); \
     GrB_free(&IAllPaths_mult);      \
     GrB_free(&AllPaths_set);        \
     GrB_free(&AllPaths_mult);       \
-    GrB_free(&AllPaths_add_free);        \
+    GrB_free(&AllPaths_add);        \
     GrB_free(&AllPaths_add_get_nvals);        \
     GrB_free(&Theta);         \
     GrB_free(&AllPaths_type); \
@@ -66,7 +66,7 @@ void clear_elem_all_paths(AllPathsElem *z){
   z->n = 0;
 }
 
-void add_free_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
+void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
 {
   AllPathsElem temp;
   temp.middle = merge_all_paths(&temp.n, x->middle, x->n, y->middle, y->n);
@@ -167,12 +167,12 @@ GrB_Info LAGraph_CFL_AllPaths(
 {
   // Semiring components
   GrB_Type AllPaths_type = NULL;
-  GrB_BinaryOp AllPaths_add_free = NULL;
+  GrB_BinaryOp AllPaths_add = NULL;
   GrB_BinaryOp AllPaths_add_get_nvals = NULL;
-  GrB_Monoid AllPaths_monoid_free = NULL;
+  GrB_Monoid AllPaths_monoid = NULL;
   GxB_IndexBinaryOp IAllPaths_mult = NULL;
   GrB_BinaryOp AllPaths_mult = NULL;
-  GrB_Semiring AllPaths_semiring_free = NULL;
+  GrB_Semiring AllPaths_semiring = NULL;
   GrB_BinaryOp AllPaths_set = NULL;
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
@@ -189,15 +189,15 @@ GrB_Info LAGraph_CFL_AllPaths(
   GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
   
   GRB_TRY(GrB_BinaryOp_new(
-      &AllPaths_add_free,
-      (void *)add_free_all_paths,
+      &AllPaths_add,
+      (void *)add_all_paths,
       AllPaths_type,
       AllPaths_type,
       AllPaths_type));
 
   GRB_TRY(GrB_Monoid_new(
-      &AllPaths_monoid_free,
-      AllPaths_add_free,
+      &AllPaths_monoid,
+      AllPaths_add,
       (void *)(&bottom)));
   
   GRB_TRY(GxB_IndexBinaryOp_new(
@@ -216,8 +216,8 @@ GrB_Info LAGraph_CFL_AllPaths(
       Theta));
 
   GRB_TRY(GrB_Semiring_new(
-      &AllPaths_semiring_free,
-      AllPaths_monoid_free,
+      &AllPaths_semiring,
+      AllPaths_monoid,
       AllPaths_mult));
   
   GRB_TRY(GrB_BinaryOp_new(
@@ -240,8 +240,8 @@ GrB_Info LAGraph_CFL_AllPaths(
       (void *)(&bottom)));
     
   CFL_Semiring semiring = {.type = AllPaths_type,
-      .semiring = AllPaths_semiring_free,
-      .add = AllPaths_add_free,
+      .semiring = AllPaths_semiring,
+      .add = AllPaths_add,
       .mult = AllPaths_mult,
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,
