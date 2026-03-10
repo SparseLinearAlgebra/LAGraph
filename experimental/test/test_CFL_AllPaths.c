@@ -748,8 +748,8 @@ TEST_LIST = {{"CFL_AllPaths_complex_grammar", test_CFL_AllPaths_complex_grammar}
              {"CFL_AllPaths_tree", test_CFL_AllPaths_tree},
              {"CFL_AllPaths_line", test_CFL_AllPaths_line},
              {"CFL_AllPaths_two_nodes_cycle", test_CFL_AllPaths_two_nodes_cycle},
-             {"CFG_reach_basic_invalid_rules", test_CFL_AllPaths_invalid_rules},
-             {"test_CFL_AllPaths_with_empty_adj_matrix", test_CFL_AllPaths_with_empty_adj_matrix},
+             {"CFL_AllPaths_basic_invalid_rules", test_CFL_AllPaths_invalid_rules},
+             {"CFL_AllPaths_with_empty_adj_matrix", test_CFL_AllPaths_with_empty_adj_matrix},
              #if !defined ( GRAPHBLAS_HAS_CUDA )
              {"CFL_AllPaths_null_pointers", test_CFL_AllPaths_null_pointers},
              #endif
