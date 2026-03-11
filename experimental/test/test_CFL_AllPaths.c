@@ -175,13 +175,11 @@ void free_workspace() {
           GxB_Iterator_new(&iterator);
           GrB_Info info = GxB_Matrix_Iterator_attach(iterator, outputs[i], NULL);
           info = GxB_Matrix_Iterator_seek(iterator, 0);
+          AllPathsElem val;
           while (info != GxB_EXHAUSTED)
           {
-            AllPathsElem val;
             GxB_Iterator_get_UDT(iterator, (void*) &val);
-            if (val.middle!=NULL){
-              free(val.middle);
-            }
+            if (val.middle) free(val.middle);
             info = GxB_Matrix_Iterator_next(iterator);
           }
           
