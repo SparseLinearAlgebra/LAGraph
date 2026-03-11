@@ -146,6 +146,16 @@ char *output_to_str(size_t nonterm)
     return result_str;
 }
 
+void print_outputs(void)
+{
+    for (size_t i = 0; i < grammar.nonterms_count; i++)
+    {
+        char *s = output_to_str(i);
+        printf("Output[%zu]: %s\n", i, s[0] ? s : "(empty)");
+        LAGraph_Free ((void **) &s, msg);
+    }
+}
+
 void free_workspace() {
 
     if (adj_matrices != NULL)
@@ -161,15 +171,22 @@ void free_workspace() {
     {
         for (size_t i = 0; i < grammar.nonterms_count; i++)
         {
-          void* val_void = NULL;
-          GrB_Index nnz = 0;
-          GrB_Matrix_nvals(&nnz, outputs[i]);
-          LAGraph_Malloc ((void **) &val_void, nnz, sizeof (AllPathsElem), msg) ;
-          GrB_Matrix_extractTuples(NULL, NULL, val_void, &nnz, outputs[i]);
-          AllPathsElem* val = (AllPathsElem*) val_void;
-          for(size_t j = 0; j<nnz; ++j) if(val[j].middle) free(val[j].middle);
-          LAGraph_Free (&val_void, msg);
-            GrB_free(&outputs[i]);
+          GxB_Iterator iterator;
+          GxB_Iterator_new(&iterator);
+          GrB_Info info = GxB_Matrix_Iterator_attach(iterator, outputs[i], NULL);
+          info = GxB_Matrix_Iterator_seek(iterator, 0);
+          while (info != GxB_EXHAUSTED)
+          {
+            AllPathsElem val;
+            GxB_Iterator_get_UDT(iterator, (void*) &val);
+            if (val.middle!=NULL){
+              free(val.middle);
+            }
+            info = GxB_Matrix_Iterator_next(iterator);
+          }
+          
+          GrB_free(&iterator);
+          GrB_free(&outputs[i]);
         }
     }
     LAGraph_Free ((void **) &outputs, msg);
