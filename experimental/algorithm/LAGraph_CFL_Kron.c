@@ -27,7 +27,7 @@ GrB_Info transitive_closure_inplace(GrB_Matrix A) {
     GrB_Index nvals_old = 0, nvals_new = 0;
     GrB_Matrix_nvals(&nvals_old, A);
     while (true) {
-        GrB_mxm(A, NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, A, A, NULL);
+        GrB_mxm(A, NULL, GrB_LOR, GxB_ANY_PAIR_BOOL, A, A, NULL);
         GrB_Matrix_nvals(&nvals_new, A);
         if (nvals_new == nvals_old) break;
         nvals_old = nvals_new;
@@ -83,13 +83,13 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
         GrB_Matrix_clear(M3);
 
         for (int64_t t = 0; t < terms_count; ++t) {
-            GrB_kronecker(M3, NULL, GrB_LOR, GrB_LAND,
-                          rsm->terminal_matrices[t], adj_matrices[t], NULL);
+            GrB_kronecker(M3, NULL, GrB_LOR, GxB_PAIR_BOOL,
+                rsm->terminal_matrices[t], adj_matrices[t], NULL);
         }
 
         for (int64_t nt = 0; nt < rsm->nonterminal_count; ++nt) {
-            GrB_kronecker(M3, NULL, GrB_LOR, GrB_LAND,
-                          rsm->nonterminal_matrices[nt], outputs[nt], NULL);
+            GrB_kronecker(M3, NULL, GrB_LOR, GxB_PAIR_BOOL,
+                rsm->nonterminal_matrices[nt], outputs[nt], NULL);
         }
 
         transitive_closure_inplace(M3);
