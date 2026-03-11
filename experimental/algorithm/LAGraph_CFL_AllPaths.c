@@ -16,6 +16,7 @@
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
+//Merging two ordered arrays of internal vertices in the add function
 static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Index na, const void* right, const GrB_Index nb){
   GrB_Index* a = (GrB_Index*) left;
   GrB_Index* b = (GrB_Index*) right;
@@ -68,6 +69,7 @@ void clear_elem_all_paths(AllPathsElem *z){
 
 void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
 {
+  //temp is needed to avoid freeing the memory of z in case z == x or z == y
   AllPathsElem temp;
   temp.middle = merge_all_paths(&temp.n, x->middle, x->n, y->middle, y->n);
   clear_elem_all_paths(x);
@@ -95,7 +97,7 @@ void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exis
   if (edge_exist && *edge_exist){
     temp.middle = malloc(sizeof(GrB_Index));
     temp.n = 1;
-    temp.middle[0] = GrB_INDEX_MAX;
+    temp.middle[0] = GrB_INDEX_MAX; //GrB_INDEX_MAX - marker of A->eps and A->t
   }
   
   z->middle = merge_all_paths(&z->n, x->middle, x->n, temp.middle, temp.n);
@@ -113,16 +115,18 @@ void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exis
 "  z->n = 1; \n"      \
 "}"
 
+//Adding the count of all internal vertices in a reduction
 void add_get_nvals_all_paths(AllPathsElem *z, const AllPathsElem *x, const AllPathsElem *y)
 {
   z->n = x->n + y->n;
   z->middle = NULL;
 }
 
+//Made global so that the get_nvals_all_paths matches the GrB_Matrix_nvals signature
 static GrB_Type* AllPaths_type_get_nvals = NULL;
 static GrB_Monoid AllPaths_monoid_get_nvals = NULL;
 
-//A function that replaces GrB_Matrix_nvals for counting non-zero elements
+//A function that replaces GrB_Matrix_nvals in Reachability to check if new vertices have been added to the matrix.
 GrB_Info get_nvals_all_paths(GrB_Index *nvals, const GrB_Matrix A){
   GrB_Scalar s = NULL;
   GrB_Scalar_new(&s, *AllPaths_type_get_nvals);
@@ -138,6 +142,28 @@ GrB_Info get_nvals_all_paths(GrB_Index *nvals, const GrB_Matrix A){
   GrB_Scalar_extractElement_UDT(&result, s);
   *nvals = result.n;
   GrB_free(&s);
+  return GrB_SUCCESS;
+}
+
+//To test the non-reduction approach in the future
+GrB_Info get_nvals_all_paths2(GrB_Index *nvals, const GrB_Matrix A){
+  GrB_Index accum = 0;
+  GxB_Iterator iterator;
+  GxB_Iterator_new(&iterator);
+  GrB_Info info = GxB_Matrix_Iterator_attach(iterator, A, NULL);
+  info = GxB_Matrix_Iterator_seek(iterator, 0);
+  AllPathsElem val;
+  
+  while (info != GxB_EXHAUSTED)
+  {
+    GxB_Iterator_get_UDT(iterator, (void*) &val);
+    accum+=val.n;
+    info = GxB_Matrix_Iterator_next(iterator);
+  }
+  
+  GrB_free(&iterator);
+  *nvals = accum;
+  
   return GrB_SUCCESS;
 }
 

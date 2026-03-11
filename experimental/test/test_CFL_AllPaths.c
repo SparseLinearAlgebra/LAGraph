@@ -156,6 +156,25 @@ void print_outputs(void)
     }
 }
 
+//Cleaning of internal elements before free matrix
+void free_AllPaths_matrix(GrB_Matrix* ptr_output){
+  GrB_Matrix output = *ptr_output;
+  GxB_Iterator iterator;
+  GxB_Iterator_new(&iterator);
+  GrB_Info info = GxB_Matrix_Iterator_attach(iterator, output, NULL);
+  info = GxB_Matrix_Iterator_seek(iterator, 0);
+  AllPathsElem val;
+  while (info != GxB_EXHAUSTED)
+  {
+    GxB_Iterator_get_UDT(iterator, (void*) &val);
+    if (val.middle) free(val.middle);
+    info = GxB_Matrix_Iterator_next(iterator);
+  }
+  
+  GrB_free(&iterator);
+  GrB_free(ptr_output);
+}
+
 void free_workspace() {
 
     if (adj_matrices != NULL)
@@ -171,20 +190,7 @@ void free_workspace() {
     {
         for (size_t i = 0; i < grammar.nonterms_count; i++)
         {
-          GxB_Iterator iterator;
-          GxB_Iterator_new(&iterator);
-          GrB_Info info = GxB_Matrix_Iterator_attach(iterator, outputs[i], NULL);
-          info = GxB_Matrix_Iterator_seek(iterator, 0);
-          AllPathsElem val;
-          while (info != GxB_EXHAUSTED)
-          {
-            GxB_Iterator_get_UDT(iterator, (void*) &val);
-            if (val.middle) free(val.middle);
-            info = GxB_Matrix_Iterator_next(iterator);
-          }
-          
-          GrB_free(&iterator);
-          GrB_free(&outputs[i]);
+          free_AllPaths_matrix(&outputs[i]);
         }
     }
     LAGraph_Free ((void **) &outputs, msg);
