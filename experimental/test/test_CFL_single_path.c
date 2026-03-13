@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #define run_algorithm()                                                                 \
-    LAGraph_CFL_single_path(outputs, adj_matrices, grammar.terms_count,                 \
+    LAGraph_CFL_single_path(outputs, &path_index_t, adj_matrices, grammar.terms_count,  \
                             grammar.nonterms_count, grammar.rules, grammar.rules_count, \
                             msg)
 
@@ -36,14 +36,13 @@ typedef struct
 GrB_Matrix *adj_matrices = NULL;
 int n_adj_matrices = 0;
 GrB_Matrix *outputs = NULL;
+GrB_Type path_index_t = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 char msg[LAGRAPH_MSG_LEN];
-// GrB_Type PI_type = NULL;
 
 void setup()
 {
     LAGraph_Init(msg);
-    // GrB_Type_new(&PI_type, sizeof(PathIndex));
 }
 
 void teardown(void) { LAGraph_Finalize(msg); }
@@ -99,6 +98,7 @@ void free_workspace()
     }
     LAGraph_Free((void **)&adj_matrices, msg);
 
+    GrB_free(&path_index_t);
     if (outputs != NULL)
     {
         for (size_t i = 0; i < grammar.nonterms_count; i++)
@@ -256,11 +256,6 @@ void init_graph_double_cycle()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 4, 4);
-    // }
 }
 
 // Graph:
@@ -281,11 +276,6 @@ void init_graph_one_cycle()
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
 
     adj_matrices[0] = adj_matrix_a;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
-    // }
 }
 
 // Graph:
@@ -319,11 +309,6 @@ void init_graph_1()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 8, 8);
-    // }
 }
 
 // Graph:
@@ -365,11 +350,6 @@ void init_graph_tree()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 7, 7);
-    // }
 }
 
 // Graph:
@@ -395,11 +375,6 @@ void init_graph_line()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 5, 5);
-    // }
 }
 
 // Graph:
@@ -424,11 +399,6 @@ void init_graph_2()
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
     adj_matrices[2] = adj_matrix_c;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 3, 3);
-    // }
 }
 
 // Graph:
@@ -451,11 +421,6 @@ void init_graph_3()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
-    // }
 }
 
 // Graph:
@@ -476,11 +441,6 @@ void init_graph_4()
 
     adj_matrices[0] = adj_matrix_a;
     adj_matrices[1] = adj_matrix_b;
-
-    // for (int64_t i = 0; i < grammar.nonterms_count; i++)
-    // {
-    //     GrB_Matrix_new(&outputs[i], PI_type, 2, 2);
-    // }
 }
 
 //====================

@@ -126,6 +126,9 @@ void set_path_index(PathIndex *z,
 // Note: This function does not compute the actual path, only information about it (represented by the PathIndex structure).
 // To reconstruct the full path as PathArray and Path structures, use the LAGraph_CFL_extract_single_path function.
 //
+// Important: Do not free path_index_t until all work with the output matrices is complete.
+// Accessing matrices after freeing their type is undefined behavior.
+//
 // Example:
 //
 // Graph:
@@ -156,12 +159,13 @@ void set_path_index(PathIndex *z,
 
 GrB_Info LAGraph_CFL_single_path(
     // Output
-    GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to nonterms_count.
-                         //
-                         // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
-                         // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
+    GrB_Matrix *outputs,    // Array of matrices containing results.
+                            // The size of the array must be equal to nonterms_count.
+                            //
+                            // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
+                            // from node i to node j whose edge labels form a word
+                            // derivable from the non-terminal 'k' of the specified CFG.
+    GrB_Type *path_index_t, // PathIndex type - elements of the output matrices
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -179,7 +183,6 @@ GrB_Info LAGraph_CFL_single_path(
 )
 {
   // Semiring components
-  GrB_Type PathIndex_type = NULL;
   GrB_BinaryOp PathIndex_add = NULL;
   GrB_Monoid PathIndex_monoid = NULL;
   GxB_IndexBinaryOp IPathIndex_mult = NULL;
@@ -190,7 +193,8 @@ GrB_Info LAGraph_CFL_single_path(
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
 
-  GRB_TRY(GrB_Type_new(&PathIndex_type, sizeof(PathIndex))); // the memory is not being freed yet
+  GRB_TRY(GrB_Type_new(path_index_t, sizeof(PathIndex)));
+  GrB_Type PathIndex_type = *path_index_t;
 
   // Theta cannot be NULL
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));

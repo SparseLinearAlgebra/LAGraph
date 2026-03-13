@@ -1176,6 +1176,9 @@ GrB_Info LAGraph_CFPQ_core
 // Note: This function does not compute the actual path, only information about it (represented by the PathIndex structure).
 // To reconstruct the full path as PathArray and Path structures, use the LAGraph_CFL_extract_single_path function.
 //
+// Important: Do not free path_index_t until all work with the output matrices is complete.
+// Accessing matrices after freeing their type is undefined behavior.
+//
 // Example:
 //
 // Graph:
@@ -1204,15 +1207,15 @@ GrB_Info LAGraph_CFPQ_core
 // (1, 2) - because there exists a path (1-5-2) that forms the word "ab"
 // (0, 3) - because there exists a path (0-1-5-2-3) that forms the word "aabb"
 
-GrB_Info LAGraph_CFL_single_path
-(
+GrB_Info LAGraph_CFL_single_path(
     // Output
-    GrB_Matrix *outputs, // Array of matrices containing results.
-                         // The size of the array must be equal to nonterms_count.
-                         //
-                         // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
-                         // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
+    GrB_Matrix *outputs,    // Array of matrices containing results.
+                            // The size of the array must be equal to nonterms_count.
+                            //
+                            // outputs[k]: (i, j) contains a PathIndex structure if and only if there is a path
+                            // from node i to node j whose edge labels form a word
+                            // derivable from the non-terminal 'k' of the specified CFG.
+    GrB_Type *path_index_t, // PathIndex type - elements of the output matrices
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of

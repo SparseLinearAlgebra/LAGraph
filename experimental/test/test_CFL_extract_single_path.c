@@ -6,7 +6,7 @@
 #include <stdio.h>
 
 #define run_aux_algorithm()                                                             \
-    LAGraph_CFL_single_path(outputs, adj_matrices, grammar.terms_count,                 \
+    LAGraph_CFL_single_path(outputs, &path_index_t, adj_matrices, grammar.terms_count,  \
                             grammar.nonterms_count, grammar.rules, grammar.rules_count, \
                             msg)
 
@@ -74,6 +74,7 @@ typedef struct
 GrB_Matrix *adj_matrices = NULL;
 int n_adj_matrices = 0;
 GrB_Matrix *outputs = NULL;
+GrB_Type path_index_t = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 PathArray paths;
 GrB_Index *start = NULL;
@@ -165,6 +166,8 @@ void free_workspace()
         }
     }
     LAGraph_Free((void **)&adj_matrices, msg);
+
+    GrB_free(&path_index_t);
 
     if (outputs != NULL)
     {
