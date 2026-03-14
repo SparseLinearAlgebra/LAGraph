@@ -182,6 +182,10 @@ GrB_Info LAGraph_CFL_single_path(
     char *msg                       // Message string for error reporting.
 )
 {
+
+#if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
+  return (GrB_NOT_IMPLEMENTED);
+#else
   // Semiring components
   GrB_BinaryOp PathIndex_add = NULL;
   GrB_Monoid PathIndex_monoid = NULL;
@@ -261,4 +265,5 @@ GrB_Info LAGraph_CFL_single_path(
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   LG_FREE_WORK;
   return GrB_SUCCESS;
+#endif
 }

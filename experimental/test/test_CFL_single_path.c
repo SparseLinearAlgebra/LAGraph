@@ -725,6 +725,7 @@ void test_CFL_single_path_null_pointers(void)
 }
 
 TEST_LIST = {
+#if GxB_IMPLEMENTATION >= GxB_VERSION(9, 4, 5)
     {"CFL_reachability_cycle", test_CFL_single_path_cycle},
     {"CFL_path_two_cycle", test_CFL_single_path_two_cycle},
     {"CFL_single_path_labels_more_than_nonterms", test_CFL_single_path_labels_more_than_nonterms},
@@ -735,4 +736,5 @@ TEST_LIST = {
     {"CFL_single_path_with_empty_adj_matrix", test_CFL_single_path_with_empty_adj_matrix},
     {"CFL_single_path_invalid_rules", test_CFL_single_path_invalid_rules},
     {"CFL_single_path_null_pointers", test_CFL_single_path_null_pointers},
+#endif
     {NULL, NULL}};

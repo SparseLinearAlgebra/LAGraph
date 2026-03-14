@@ -1000,6 +1000,7 @@ void test_CFL_extract_single_path_vertex_out_the_graph(void)
 }
 
 TEST_LIST = {
+#if GxB_IMPLEMENTATION >= GxB_VERSION(9, 4, 5)
     {"CFL_extract_single_path_two_cycle_fixed", test_CFL_extract_single_path_two_cycle_fixed},
     {"CFL_extract_single_path_cycle_fixed", test_CFL_extract_single_path_cycle_fixed},
     {"CFL_extract_single_path_labels_more_than_nonterms_fixed", test_CFL_extract_single_path_labels_more_than_nonterms_fixed},
@@ -1013,4 +1014,5 @@ TEST_LIST = {
     {"CFL_extract_single_path_invalid_rules", test_CFL_extract_single_path_invalid_rules},
     {"CFL_extract_single_path_null_pointers", test_CFL_extract_single_path_null_pointers},
     {"CFL_extract_single_path_vertex_out_the_graph", test_CFL_extract_single_path_vertex_out_the_graph},
+#endif
     {NULL, NULL}};
