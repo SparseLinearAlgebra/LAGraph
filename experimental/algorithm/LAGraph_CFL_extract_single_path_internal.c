@@ -104,9 +104,9 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
                 }
             }
             // If couldn't find rules for outputting an empty or terminal path,
-            // then the path were looking for doesn't match the rules
+            // then the input graph or grammar differs from those used to construct the path_index_matrices
             LG_FREE_WORK;
-            ADD_TO_MSG(msg_len, "The extracted path does not match the input grammar.");
+            ADD_TO_MSG(msg_len, "Path information matrices were constructed with different grammar/graph.");
             return GrB_NO_VALUE;
         }
         // Rules of the form Nonterm -> Nonterm * Nonterm are traversed recursively and merged
@@ -181,10 +181,10 @@ GrB_Info LAGraph_CFL_extract_single_path_internal(
             return GrB_SUCCESS;
         }
 
-        // If couldn't find rules for outputting an path,
-        // then the path were looking for doesn't match the rules
+        // If couldn't find rules for outputting an empty or terminal path,
+        // then the input graph or grammar differs from those used to construct the path_index_matrices
         LG_FREE_WORK;
-        ADD_TO_MSG(msg_len, "The extracted path does not match the input grammar.");
+        ADD_TO_MSG(msg_len, "Path information matrices were constructed with different grammar/graph.");
         return GrB_NO_VALUE;
     }
     // Such a path doesn't exists - return an empty path and GrB_NO_VALUE
