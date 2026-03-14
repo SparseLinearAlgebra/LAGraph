@@ -18,9 +18,9 @@ typedef struct {
 #define LG_FREE_WORK                                                        \
     {                                                                       \
         GrB_free(&M3);                                                      \
-        LAGraph_Free((void**) &i, NULL);                                    \
-        LAGraph_Free((void**) &j, NULL);                                    \
-        LAGraph_Free((void**) &V, NULL);                                    \
+        GrB_free(&TempBlock);                                               \
+        LAGraph_Free((void**) &row_indices, NULL);                          \
+        LAGraph_Free((void**) &col_indices, NULL);                          \
     }
 
 GrB_Info transitive_closure_inplace(GrB_Matrix A) {
@@ -45,8 +45,6 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
 )
 {
     GrB_Matrix M3 = NULL;
-    GrB_Index *i = NULL, *j = NULL;
-    bool *V = NULL;
     
     GrB_Index g_dim;
     GrB_Matrix_ncols(&g_dim, adj_matrices[0]);
@@ -71,6 +69,12 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
 
     GrB_Index nvals_old = 0, nvals_new = 0;
     bool changed = true;
+
+    GrB_Matrix TempBlock;
+    GrB_Matrix_new(&TempBlock, GrB_BOOL, g_dim, g_dim);
+
+    GrB_Index* row_indices = (GrB_Index*)malloc(g_dim * sizeof(GrB_Index));
+    GrB_Index* col_indices = (GrB_Index*)malloc(g_dim * sizeof(GrB_Index));
 
     while (changed) {
         nvals_old = 0;
@@ -97,7 +101,7 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
         GrB_Index m3_nvals;
         GrB_Matrix_nvals(&m3_nvals, M3);
 
-        if (m3_nvals > 0) {
+        /*if (m3_nvals > 0) {
             i = (GrB_Index*)malloc(m3_nvals * sizeof(GrB_Index));
             j = (GrB_Index*)malloc(m3_nvals * sizeof(GrB_Index));
             V = (bool*)malloc(m3_nvals * sizeof(bool));
@@ -122,6 +126,33 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
             }
             free(i); free(j); free(V);
             i = NULL; j = NULL; V = NULL;
+        }*/
+
+        if (m3_nvals > 0) {
+            for (GrB_Index nt = 0; nt < rsm->nonterminal_count; ++nt) {
+                GrB_Index s = rsm->start_states[nt];
+
+                for (GrB_Index v = 0; v < g_dim; ++v) {
+                    row_indices[v] = s * g_dim + v;
+                }
+
+                for (GrB_Index f = 0; f < rsm->state_count; ++f) {
+                    bool is_final = false;
+                    GrB_Vector_extractElement_BOOL(&is_final, rsm->final_states[nt], f);
+
+                    if (is_final) {
+                        for (GrB_Index v = 0; v < g_dim; ++v) {
+                            col_indices[v] = f * g_dim + v;
+                        }
+
+                        GrB_Matrix_extract(TempBlock, NULL, NULL, M3,
+                            row_indices, g_dim, col_indices, g_dim, NULL);
+
+                        GrB_eWiseAdd(outputs[nt], NULL, NULL, GrB_LOR,
+                            outputs[nt], TempBlock, NULL);
+                    }
+                }
+            }
         }
 
         nvals_new = 0;
