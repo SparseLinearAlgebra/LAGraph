@@ -17,7 +17,7 @@ typedef struct {
 
 #define LG_FREE_WORK                                                        \
     {                                                                       \
-        GrB_free(&M3);                                                      \
+        GrB_free(&CombinedGraph);                                           \
         GrB_free(&TempBlock);                                               \
         LAGraph_Free((void**) &row_indices, NULL);                          \
         LAGraph_Free((void**) &col_indices, NULL);                          \
@@ -44,7 +44,7 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
     char *msg
 )
 {
-    GrB_Matrix M3 = NULL;
+    GrB_Matrix CombinedGraph = NULL;
     
     GrB_Index g_dim;
     GrB_Matrix_ncols(&g_dim, adj_matrices[0]);
@@ -65,7 +65,7 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
         }
     }
 
-    GrB_Matrix_new(&M3, GrB_BOOL, kronecker_dim, kronecker_dim);
+    GrB_Matrix_new(&CombinedGraph, GrB_BOOL, kronecker_dim, kronecker_dim);
 
     GrB_Index nvals_old = 0, nvals_new = 0;
     bool changed = true;
@@ -84,31 +84,31 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
             nvals_old += vals;
         }
 
-        GrB_Matrix_clear(M3);
+        GrB_Matrix_clear(CombinedGraph);
 
         for (int64_t t = 0; t < terms_count; ++t) {
-            GrB_kronecker(M3, NULL, GrB_LOR, GxB_PAIR_BOOL,
+            GrB_kronecker(CombinedGraph, NULL, GrB_LOR, GxB_PAIR_BOOL,
                 rsm->terminal_matrices[t], adj_matrices[t], NULL);
         }
 
         for (int64_t nt = 0; nt < rsm->nonterminal_count; ++nt) {
-            GrB_kronecker(M3, NULL, GrB_LOR, GxB_PAIR_BOOL,
+            GrB_kronecker(CombinedGraph, NULL, GrB_LOR, GxB_PAIR_BOOL,
                 rsm->nonterminal_matrices[nt], outputs[nt], NULL);
         }
 
-        transitive_closure_inplace(M3);
+        transitive_closure_inplace(CombinedGraph);
 
-        GrB_Index m3_nvals;
-        GrB_Matrix_nvals(&m3_nvals, M3);
+        GrB_Index CombinedGraph_nvals;
+        GrB_Matrix_nvals(&CombinedGraph_nvals, CombinedGraph);
 
-        /*if (m3_nvals > 0) {
-            i = (GrB_Index*)malloc(m3_nvals * sizeof(GrB_Index));
-            j = (GrB_Index*)malloc(m3_nvals * sizeof(GrB_Index));
-            V = (bool*)malloc(m3_nvals * sizeof(bool));
+        /*if (CombinedGraph_nvals > 0) {
+            i = (GrB_Index*)malloc(CombinedGraph_nvals * sizeof(GrB_Index));
+            j = (GrB_Index*)malloc(CombinedGraph_nvals * sizeof(GrB_Index));
+            V = (bool*)malloc(CombinedGraph_nvals * sizeof(bool));
             
-            GrB_Matrix_extractTuples_BOOL(i, j, V, &m3_nvals, M3);
+            GrB_Matrix_extractTuples_BOOL(i, j, V, &CombinedGraph_nvals, CombinedGraph);
 
-            for (GrB_Index k = 0; k < m3_nvals; ++k) {
+            for (GrB_Index k = 0; k < CombinedGraph_nvals; ++k) {
                 GrB_Index s = i[k] / g_dim; 
                 GrB_Index f = j[k] / g_dim; 
                 GrB_Index x = i[k] % g_dim; 
@@ -128,7 +128,7 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
             i = NULL; j = NULL; V = NULL;
         }*/
 
-        if (m3_nvals > 0) {
+        if (CombinedGraph_nvals > 0) {
             for (GrB_Index nt = 0; nt < rsm->nonterminal_count; ++nt) {
                 GrB_Index s = rsm->start_states[nt];
 
@@ -145,7 +145,7 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
                             col_indices[v] = f * g_dim + v;
                         }
 
-                        GrB_Matrix_extract(TempBlock, NULL, NULL, M3,
+                        GrB_Matrix_extract(TempBlock, NULL, NULL, CombinedGraph,
                             row_indices, g_dim, col_indices, g_dim, NULL);
 
                         GrB_eWiseAdd(outputs[nt], NULL, NULL, GrB_LOR,
