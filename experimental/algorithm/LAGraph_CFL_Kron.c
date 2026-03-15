@@ -155,6 +155,45 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
             }
         }
 
+        /*if (CombinedGraph_nvals > 0) {
+            // if there is enough memory, you can move it out of the while loop            
+            GrB_Index* row_indices = (GrB_Index*)malloc(g_dim * sizeof(GrB_Index));
+            GrB_Index* col_indices = (GrB_Index*)malloc(g_dim * sizeof(GrB_Index));
+
+            for (int64_t nt = 0; nt < rsm->nonterminal_count; ++nt) {
+                GrB_Index s = rsm->start_states[nt];
+
+                for (GrB_Index i = 0; i < g_dim; ++i) {
+                    row_indices[i] = s * g_dim + i;
+                }
+
+                // extract all final states for the given nonterminal
+                GrB_Index f_nvals;
+                GrB_Vector_nvals(&f_nvals, rsm->final_states[nt]);
+                GrB_Index* f_indices = (GrB_Index*)malloc(f_nvals * sizeof(GrB_Index));
+                bool* f_values = (bool*)malloc(f_nvals * sizeof(bool));
+                GrB_Vector_extractTuples_BOOL(f_indices, f_values, &f_nvals, rsm->final_states[nt]);
+
+                // for each final state, extract the corresponding block
+                for (GrB_Index k = 0; k < f_nvals; ++k) {
+                    if (f_values[k]) {
+                        GrB_Index f = f_indices[k];
+
+                        for (GrB_Index j = 0; j < g_dim; ++j) {
+                            col_indices[j] = f * g_dim + j;
+                        }
+
+                        // using the GrB_LOR accumulator replaces the need for GrB_eWiseAdd
+                        GrB_Matrix_extract(outputs[nt], NULL, GrB_LOR, CombinedGraph, row_indices, g_dim, col_indices, g_dim, NULL);
+                    }
+                }
+                free(f_indices);
+                free(f_values);
+            }
+            free(row_indices);
+            free(col_indices);
+        }*/
+
         nvals_new = 0;
         for (int64_t nt = 0; nt < rsm->nonterminal_count; ++nt) {
             GrB_Index vals;
