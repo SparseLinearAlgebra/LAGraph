@@ -1142,9 +1142,13 @@ GrB_Info LAGraph_CFPQ_core
     char *msg // Message string for error reporting.
 );
 
+// Important: Do not free all_paths_ptr_t until all work with the output matrices is complete.
+// Accessing matrices after freeing their type is undefined behavior.
+//
 GrB_Info LAGraph_CFL_AllPaths(
     GrB_Matrix *outputs,
     const GrB_Matrix *adj_matrices,
+    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices
     int64_t terms_count,
     int64_t nonterms_count,
     const LAGraph_rule_WCNF *rules,

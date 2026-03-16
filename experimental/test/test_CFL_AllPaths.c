@@ -8,7 +8,7 @@
 #include <stdarg.h>
 
 #define run_algorithm()                                                                  \
-    LAGraph_CFL_AllPaths(outputs, adj_matrices, grammar.terms_count,                 \
+    LAGraph_CFL_AllPaths(outputs, adj_matrices, &all_paths_t, grammar.terms_count,       \
                              grammar.nonterms_count, grammar.rules, grammar.rules_count, \
                              msg)
 
@@ -19,9 +19,9 @@
         TEST_MSG("retval = %d (%s)", retval, msg);                                       \
     }
 
-#define check_result(nonterm, result) \
+#define check_result(nonterm, result)                                                    \
     {                                                                                    \
-        char *expected = output_to_str(nonterm);                                               \
+        char *expected = output_to_str(nonterm);                                         \
         TEST_CHECK(strcmp(result, expected) == 0);                                       \
         TEST_MSG("Wrong result. Actual: %s", expected);                                  \
         LAGraph_Free ((void **) &expected, msg);                                         \
@@ -34,6 +34,7 @@ typedef struct {
     LAGraph_rule_WCNF *rules;
 } grammar_t;
 
+GrB_Type all_paths_t = NULL;
 GrB_Matrix *adj_matrices = NULL;
 int n_adj_matrices = 0 ;
 GrB_Matrix *outputs = NULL;
@@ -63,7 +64,7 @@ char *output_to_str(size_t nonterm)
         return empty;
     }
 
-  GrB_Index *row = NULL;
+   GrB_Index *row = NULL;
    GrB_Index *col = NULL;
    void *val_void = NULL;
 
@@ -194,7 +195,7 @@ void free_workspace() {
         }
     }
     LAGraph_Free ((void **) &outputs, msg);
-
+    GrB_free(&all_paths_t);
     LAGraph_Free ((void **) &grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
 }

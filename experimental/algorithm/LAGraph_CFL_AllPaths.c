@@ -10,7 +10,6 @@
     GrB_free(&AllPaths_add);        \
     GrB_free(&AllPaths_add_get_nvals);        \
     GrB_free(&Theta);         \
-    GrB_free(&AllPaths_type); \
   }
 
 #include "LG_internal.h"
@@ -167,14 +166,14 @@ GrB_Info get_nvals_all_paths2(GrB_Index *nvals, const GrB_Matrix A){
   return GrB_SUCCESS;
 }
 
+// Important: Do not free all_paths_ptr_t until all work with the output matrices is complete.
+// Accessing matrices after freeing their type is undefined behavior.
+//
 GrB_Info LAGraph_CFL_AllPaths(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.
                          //
-                         // outputs[k]: (i, j) contains a AllPathsElem structure if and only if there is a path
-                         // from node i to node j whose edge labels form a word
-                         // derivable from the non-terminal 'k' of the specified CFG.
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -184,6 +183,7 @@ GrB_Info LAGraph_CFL_AllPaths(
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
+    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices
     int64_t terms_count,            // The total number of terminal symbols in the CFG.
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
@@ -203,9 +203,10 @@ GrB_Info LAGraph_CFL_AllPaths(
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
 
-  GRB_TRY(GrB_Type_new(&AllPaths_type, sizeof(AllPathsElem)));
-
-  AllPaths_type_get_nvals = &AllPaths_type;
+  GrB_free(all_paths_ptr_t);
+  GRB_TRY(GrB_Type_new(all_paths_ptr_t, sizeof(AllPathsElem)));
+  AllPaths_type = *all_paths_ptr_t;
+  AllPaths_type_get_nvals = all_paths_ptr_t;
   
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
@@ -275,6 +276,7 @@ GrB_Info LAGraph_CFL_AllPaths(
   
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   
+  AllPaths_type = NULL;
   AllPaths_type_get_nvals = NULL;
   LG_FREE_WORK;
   return GrB_SUCCESS;
