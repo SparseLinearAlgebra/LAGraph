@@ -1142,13 +1142,22 @@ GrB_Info LAGraph_CFPQ_core
     char *msg // Message string for error reporting.
 );
 
+// all_paths_ptr_t is a pointer to the type of elements of the outputs matrices.
+// Use GrB_free(all_paths_ptr_t) after you finish working with the outputs matrices.
 // Important: Do not free all_paths_ptr_t until all work with the output matrices is complete.
 // Accessing matrices after freeing their type is undefined behavior.
-//
 GrB_Info LAGraph_CFL_AllPaths(
-    GrB_Matrix *outputs,
+    GrB_Matrix *outputs,            // Matrix elements are ordered arrays of intermediate vertices type AllPathsElem.
+                                    // Before free outputs[k], you need to free arrays from all matrix elements.
+                                    // For all values of M from the array of the matrix element
+                                    // outputs[k] on the I row of the J column:
+                                    // There are paths from I to M by nonterminal N1 and from M to J by nonterminal N2,
+                                    // and A->N1 N2 where outputs[k] corresponds to nonterminal A.
+                                    // GrB_INDEX_MAX in the array is a special value for A->eps and A->t.
     const GrB_Matrix *adj_matrices,
-    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices
+    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices.
+                                    // Pass a pointer to GrB_Type and
+                                    // free it after you finish working with outputs matrices.
     int64_t terms_count,
     int64_t nonterms_count,
     const LAGraph_rule_WCNF *rules,

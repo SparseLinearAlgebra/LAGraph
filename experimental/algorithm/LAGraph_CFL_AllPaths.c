@@ -166,14 +166,21 @@ GrB_Info get_nvals_all_paths2(GrB_Index *nvals, const GrB_Matrix A){
   return GrB_SUCCESS;
 }
 
+// all_paths_ptr_t is a pointer to the type of elements of the outputs matrices.
+// Use GrB_free(all_paths_ptr_t) after you finish working with the outputs matrices.
 // Important: Do not free all_paths_ptr_t until all work with the output matrices is complete.
 // Accessing matrices after freeing their type is undefined behavior.
-//
 GrB_Info LAGraph_CFL_AllPaths(
     // Output
     GrB_Matrix *outputs, // Array of matrices containing results.
                          // The size of the array must be equal to nonterms_count.
-                         //
+                         // Matrix elements are ordered arrays of intermediate vertices type AllPathsElem.
+                         // Before free outputs[k], you need to free arrays from all matrix elements.
+                         // For all values of M from the array of the matrix element
+                         // outputs[k] on the I row of the J column:
+                         // There are paths from I to M by nonterminal N1 and from M to J by nonterminal N2,
+                         // and A->N1 N2 where outputs[k] corresponds to nonterminal A.
+                         // GrB_INDEX_MAX in the array is a special value for A->eps and A->t.
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -183,7 +190,9 @@ GrB_Info LAGraph_CFL_AllPaths(
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
                                     // in the range [0, terms_count - 1]).
-    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices
+    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices.
+                                    // Pass a pointer to GrB_Type and
+                                    // free it after you finish working with outputs matrices.
     int64_t terms_count,            // The total number of terminal symbols in the CFG.
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
@@ -191,6 +200,9 @@ GrB_Info LAGraph_CFL_AllPaths(
     char *msg                       // Message string for error reporting.
 )
 {
+#if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
+  return (GrB_NOT_IMPLEMENTED);
+#else
   // Semiring components
   GrB_Type AllPaths_type = NULL;
   GrB_BinaryOp AllPaths_add = NULL;
@@ -202,7 +214,7 @@ GrB_Info LAGraph_CFL_AllPaths(
   GrB_BinaryOp AllPaths_set = NULL;
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
-
+  
   GrB_free(all_paths_ptr_t);
   GRB_TRY(GrB_Type_new(all_paths_ptr_t, sizeof(AllPathsElem)));
   AllPaths_type = *all_paths_ptr_t;
@@ -210,69 +222,69 @@ GrB_Info LAGraph_CFL_AllPaths(
   
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
-
+  
   AllPathsElem bottom = {0, NULL};
   GRB_TRY(GrB_Scalar_new(&bottom_scalar, AllPaths_type));
   GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
   
   GRB_TRY(GrB_BinaryOp_new(
-      &AllPaths_add,
-      (void *)add_all_paths,
-      AllPaths_type,
-      AllPaths_type,
-      AllPaths_type));
-
+                           &AllPaths_add,
+                           (void *)add_all_paths,
+                           AllPaths_type,
+                           AllPaths_type,
+                           AllPaths_type));
+  
   GRB_TRY(GrB_Monoid_new(
-      &AllPaths_monoid,
-      AllPaths_add,
-      (void *)(&bottom)));
+                         &AllPaths_monoid,
+                         AllPaths_add,
+                         (void *)(&bottom)));
   
   GRB_TRY(GxB_IndexBinaryOp_new(
-      &IAllPaths_mult,
-      (void *)mult_all_paths,
-      AllPaths_type,
-      AllPaths_type,
-      AllPaths_type,
-      GrB_BOOL,
-      "mult_all_paths",
-      MULT_PATH_INDEX_DEFN));
-
+                                &IAllPaths_mult,
+                                (void *)mult_all_paths,
+                                AllPaths_type,
+                                AllPaths_type,
+                                AllPaths_type,
+                                GrB_BOOL,
+                                "mult_all_paths",
+                                MULT_PATH_INDEX_DEFN));
+  
   GRB_TRY(GxB_BinaryOp_new_IndexOp(
-      &AllPaths_mult,
-      IAllPaths_mult,
-      Theta));
-
+                                   &AllPaths_mult,
+                                   IAllPaths_mult,
+                                   Theta));
+  
   GRB_TRY(GrB_Semiring_new(
-      &AllPaths_semiring,
-      AllPaths_monoid,
-      AllPaths_mult));
+                           &AllPaths_semiring,
+                           AllPaths_monoid,
+                           AllPaths_mult));
   
   GRB_TRY(GrB_BinaryOp_new(
                            &AllPaths_set,
                            (void *)set_all_paths,
-                            AllPaths_type,
-                            AllPaths_type,
-                            GrB_BOOL));
+                           AllPaths_type,
+                           AllPaths_type,
+                           GrB_BOOL));
   
   GRB_TRY(GrB_BinaryOp_new(
-      &AllPaths_add_get_nvals,
-      (void *)add_get_nvals_all_paths,
-      AllPaths_type,
-      AllPaths_type,
-      AllPaths_type));
-
+                           &AllPaths_add_get_nvals,
+                           (void *)add_get_nvals_all_paths,
+                           AllPaths_type,
+                           AllPaths_type,
+                           AllPaths_type));
+  
   GRB_TRY(GrB_Monoid_new(
-      &AllPaths_monoid_get_nvals,
-      AllPaths_add_get_nvals,
-      (void *)(&bottom)));
-    
+                         &AllPaths_monoid_get_nvals,
+                         AllPaths_add_get_nvals,
+                         (void *)(&bottom)));
+  
   CFL_Semiring semiring = {.type = AllPaths_type,
       .semiring = AllPaths_semiring,
       .add = AllPaths_add,
       .mult = AllPaths_mult,
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,
-      .get_nvals = get_nvals_all_paths};
+    .get_nvals = get_nvals_all_paths};
   
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   
@@ -280,4 +292,5 @@ GrB_Info LAGraph_CFL_AllPaths(
   AllPaths_type_get_nvals = NULL;
   LG_FREE_WORK;
   return GrB_SUCCESS;
+#endif
 }

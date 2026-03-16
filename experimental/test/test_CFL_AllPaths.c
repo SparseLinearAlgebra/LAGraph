@@ -762,17 +762,17 @@ void test_CFL_AllPaths_null_pointers(void) {
 #endif
 }
 
-TEST_LIST = {{"CFL_AllPaths_complex_grammar", test_CFL_AllPaths_complex_grammar},
+TEST_LIST = {
+             #if GxB_IMPLEMENTATION >= GxB_VERSION(9, 4, 5)
+             {"CFL_AllPaths_complex_grammar", test_CFL_AllPaths_complex_grammar},
              {"CFL_AllPaths_cycle", test_CFL_AllPaths_cycle},
              {"CFL_AllPaths_two_cycle", test_CFL_AllPaths_two_cycle},
-             {"CFL_AllPaths_labels_more_than_nonterms",
-              test_CFL_AllPaths_labels_more_than_nonterms},
+             {"CFL_AllPaths_labels_more_than_nonterms", test_CFL_AllPaths_labels_more_than_nonterms},
              {"CFL_AllPaths_tree", test_CFL_AllPaths_tree},
              {"CFL_AllPaths_line", test_CFL_AllPaths_line},
              {"CFL_AllPaths_two_nodes_cycle", test_CFL_AllPaths_two_nodes_cycle},
              {"CFL_AllPaths_basic_invalid_rules", test_CFL_AllPaths_invalid_rules},
              {"CFL_AllPaths_with_empty_adj_matrix", test_CFL_AllPaths_with_empty_adj_matrix},
-             #if !defined ( GRAPHBLAS_HAS_CUDA )
              {"CFL_AllPaths_null_pointers", test_CFL_AllPaths_null_pointers},
              #endif
              {NULL, NULL}};
