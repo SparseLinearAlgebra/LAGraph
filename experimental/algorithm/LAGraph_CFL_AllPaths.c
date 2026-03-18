@@ -137,8 +137,19 @@ GrB_Info get_nvals_all_paths(GrB_Index *nvals, const GrB_Matrix A){
     return info;
   }
   
-  AllPathsElem result;
-  GrB_Scalar_extractElement_UDT(&result, s);
+  AllPathsElem result = {0, NULL};
+  GrB_Info extract_info = GrB_Scalar_extractElement_UDT(&result, s);
+    
+  if (extract_info == GrB_NO_VALUE)
+  {
+      result.n = 0;
+  }
+  else if (extract_info != GrB_SUCCESS)
+  {
+      GrB_free(&s);
+      return extract_info;
+  }
+    
   *nvals = result.n;
   GrB_free(&s);
   return GrB_SUCCESS;
