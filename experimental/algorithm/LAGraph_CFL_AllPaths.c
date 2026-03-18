@@ -21,34 +21,49 @@ static GrB_Index* merge_all_paths(GrB_Index* n, const void* left, const GrB_Inde
   GrB_Index* b = (GrB_Index*) right;
   
   if (na == 0 && nb == 0) {
-      *n = 0;
-      return NULL;
+    *n = 0;
+    return NULL;
   }
   
   GrB_Index *tmp = malloc((na + nb) * sizeof(GrB_Index));
   
   GrB_Index ia = 0, ib = 0, outn = 0;
+  if (na > 0 && nb > 0) {
+    if (a[0] < b[0]) {
+      tmp[outn++] = a[ia++];
+    } else if (b[0] < a[0]) {
+      tmp[outn++] = b[ib++];
+    } else {
+      tmp[outn++] = a[ia++];
+      ib++;
+    }
+  } else if (na > 0) {
+    tmp[outn++] = a[ia++];
+  } else {
+    tmp[outn++] = b[ib++];
+  }
+  
   while (ia < na && ib < nb) {
     GrB_Index va = a[ia];
     GrB_Index vb = b[ib];
     if (va < vb) {
-      if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
+      if (tmp[outn-1] != va) tmp[outn++] = va;
       ia++;
     } else if (vb < va) {
-      if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
+      if (tmp[outn-1] != vb) tmp[outn++] = vb;
       ib++;
     } else {
-      if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
+      if (tmp[outn-1] != va) tmp[outn++] = va;
       ia++; ib++;
     }
   }
   while (ia < na) {
     GrB_Index va = a[ia++];
-    if (outn == 0 || tmp[outn-1] != va) tmp[outn++] = va;
+    if (tmp[outn-1] != va) tmp[outn++] = va;
   }
   while (ib < nb) {
     GrB_Index vb = b[ib++];
-    if (outn == 0 || tmp[outn-1] != vb) tmp[outn++] = vb;
+    if (tmp[outn-1] != vb) tmp[outn++] = vb;
   }
   
   GrB_Index *sh = realloc(tmp, outn * sizeof(GrB_Index));
