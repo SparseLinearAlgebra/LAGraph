@@ -295,7 +295,7 @@ GrB_Info LAGraph_CFL_AllPaths(
       .mult = AllPaths_mult,
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,
-    .get_nvals = get_nvals_all_paths};
+    .get_nvals = get_nvals_all_paths2};
   
   LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   
