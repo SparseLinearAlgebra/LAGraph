@@ -772,55 +772,103 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         return GrB_SUCCESS;
     }
 
-    if (!first->is_lazy) {
-        TRY(matrix_mxm_empty(output, first, second, accum, swap, optimizations));
+    if (first->is_lazy) {
+        TRY(CFL_matrix_update(second));
+
+        TRY(matrix_combine_lazy(first, second->nvals, optimizations));
+        TRY(matrix_sort_lazy(first, false));
+
+        GrB_Matrix *accs;
+        TRY(LAGraph_Calloc((void **)&accs, first->base_matrices_count, sizeof(GrB_Matrix),
+                           NULL));
+        Matrix **acc_matrices;
+        TRY(LAGraph_Calloc((void **)&acc_matrices, first->base_matrices_count,
+                           sizeof(Matrix *), NULL));
+        for (size_t i = 0; i < first->base_matrices_count; i++) {
+            TRY(GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? second->nrows : first->nrows,
+                               swap ? first->ncols : second->ncols));
+            TRY(CFL_matrix_from_base(&acc_matrices[i], accs[i]))
+        }
+
+        for (size_t i = 0; i < first->base_matrices_count; i++) {
+            TRY(matrix_mxm_empty(acc_matrices[i], first->base_matrices[i], second, false,
+                                 swap, optimizations));
+        }
+
+        GrB_Matrix acc;
+        GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
+                       swap ? first->ncols : second->ncols);
+        Matrix *acc_matrix;
+        CFL_matrix_from_base(&acc_matrix, acc);
+
+        for (size_t i = 0; i < first->base_matrices_count; i++) {
+            TRY(matrix_wise_empty(acc_matrix, acc_matrix, acc_matrices[i], false,
+                                  optimizations));
+            TRY(CFL_matrix_free(&acc_matrices[i]));
+        }
+        LAGraph_Free((void **)&accs, NULL);
+        LAGraph_Free((void **)&acc_matrices, NULL);
+
+        if (accum) {
+            TRY(matrix_wise_empty(output, output, acc_matrix, false, optimizations));
+        } else {
+            TRY(matrix_dup_block(output, acc_matrix, optimizations));
+        }
+
+        TRY(CFL_matrix_free(&acc_matrix));
+
         return GrB_SUCCESS;
     }
 
-    TRY(CFL_matrix_update(second));
+    if (second->is_lazy) {
+        TRY(CFL_matrix_update(first));
 
-    TRY(matrix_combine_lazy(first, second->nvals, optimizations));
-    TRY(matrix_sort_lazy(first, false));
+        TRY(matrix_combine_lazy(second, first->nvals, optimizations));
+        TRY(matrix_sort_lazy(second, false));
 
-    GrB_Matrix *accs;
-    TRY(LAGraph_Calloc((void **)&accs, first->base_matrices_count, sizeof(GrB_Matrix),
-                       NULL));
-    Matrix **acc_matrices;
-    TRY(LAGraph_Calloc((void **)&acc_matrices, first->base_matrices_count,
-                       sizeof(Matrix *), NULL));
-    for (size_t i = 0; i < first->base_matrices_count; i++) {
-        TRY(GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? second->nrows : first->nrows,
-                           swap ? first->ncols : second->ncols));
-        TRY(CFL_matrix_from_base(&acc_matrices[i], accs[i]))
+        GrB_Matrix *accs;
+        TRY(LAGraph_Calloc((void **)&accs, second->base_matrices_count, sizeof(GrB_Matrix),
+                           NULL));
+        Matrix **acc_matrices;
+        TRY(LAGraph_Calloc((void **)&acc_matrices, second->base_matrices_count,
+                           sizeof(Matrix *), NULL));
+        for (size_t i = 0; i < second->base_matrices_count; i++) {
+            TRY(GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? second->nrows : first->nrows,
+                               swap ? first->ncols : second->ncols));
+            TRY(CFL_matrix_from_base(&acc_matrices[i], accs[i]))
+        }
+
+        for (size_t i = 0; i < second->base_matrices_count; i++) {
+            TRY(matrix_mxm_empty(acc_matrices[i], first, second->base_matrices[i], false,
+                                 swap, optimizations));
+        }
+
+        GrB_Matrix acc;
+        GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
+                       swap ? first->ncols : second->ncols);
+        Matrix *acc_matrix;
+        CFL_matrix_from_base(&acc_matrix, acc);
+
+        for (size_t i = 0; i < second->base_matrices_count; i++) {
+            TRY(matrix_wise_empty(acc_matrix, acc_matrix, acc_matrices[i], false,
+                                  optimizations));
+            TRY(CFL_matrix_free(&acc_matrices[i]));
+        }
+        LAGraph_Free((void **)&accs, NULL);
+        LAGraph_Free((void **)&acc_matrices, NULL);
+
+        if (accum) {
+            TRY(matrix_wise_empty(output, output, acc_matrix, false, optimizations));
+        } else {
+            TRY(matrix_dup_block(output, acc_matrix, optimizations));
+        }
+
+        TRY(CFL_matrix_free(&acc_matrix));
+
+        return GrB_SUCCESS;
     }
 
-    for (size_t i = 0; i < first->base_matrices_count; i++) {
-        TRY(matrix_mxm_empty(acc_matrices[i], first->base_matrices[i], second, false,
-                             swap, optimizations));
-    }
-
-    GrB_Matrix acc;
-    GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
-                   swap ? first->ncols : second->ncols);
-    Matrix *acc_matrix;
-    CFL_matrix_from_base(&acc_matrix, acc);
-
-    for (size_t i = 0; i < first->base_matrices_count; i++) {
-        TRY(matrix_wise_empty(acc_matrix, acc_matrix, acc_matrices[i], false,
-                              optimizations));
-        TRY(CFL_matrix_free(&acc_matrices[i]));
-    }
-    LAGraph_Free((void **)&accs, NULL);
-    LAGraph_Free((void **)&acc_matrices, NULL);
-
-    if (accum) {
-        TRY(matrix_wise_empty(output, output, acc_matrix, false, optimizations));
-    } else {
-        TRY(matrix_dup_block(output, acc_matrix, optimizations));
-    }
-
-    TRY(CFL_matrix_free(&acc_matrix));
-
+    TRY(matrix_mxm_empty(output, first, second, accum, swap, optimizations));
     return GrB_SUCCESS;
 }
 
