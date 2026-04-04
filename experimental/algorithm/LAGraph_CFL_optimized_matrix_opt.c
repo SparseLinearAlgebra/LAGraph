@@ -95,60 +95,47 @@ typedef enum CFL_Matrix_block Matrix_block;
 GrB_Info matrix_print_lazy(Matrix *A, int8_t optimizations);
 
 GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
-    TRY(CFL_matrix_update(matrix));
-
-    // Matrix contain both formats so just switch base matrix
-    if (matrix->is_both) {
-        matrix->base = format == GrB_ROWMAJOR ? matrix->base_row : matrix->base_col;
-        matrix->format = format;
-        return GrB_SUCCESS;
-    }
-
     // No changes required
     if (matrix->format == format) {
         return GrB_SUCCESS;
     }
 
-    // Matrix contain just one matrix and format is not same
-    GrB_Matrix new_matrix, old_matrix;
-    if (matrix->format == GrB_ROWMAJOR) {
-        new_matrix = matrix->base_col;
-        old_matrix = matrix->base_row;
-    } else {
-        new_matrix = matrix->base_row;
-        old_matrix = matrix->base_col;
+    // Matrix contains both formats, need to update required format and switch to it
+    if (matrix->is_both) {
+        if (matrix->format == GrB_ROWMAJOR && format == GrB_COLMAJOR) {
+            GrB_Matrix_assign(matrix->base_col, GrB_NULL, GrB_NULL, matrix->base, GrB_ALL,
+                    matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
+            TO_COL(matrix->base_col);
+            matrix->base = matrix->base_col;
+        } else if (matrix->format == GrB_COLMAJOR && format == GrB_ROWMAJOR) {
+            GrB_Matrix_assign(matrix->base_row, GrB_NULL, GrB_NULL, matrix->base, GrB_ALL,
+                    matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
+            TO_ROW(matrix->base_row);
+            matrix->base = matrix->base_row;
+        }
+        matrix->format = format;
+        return GrB_SUCCESS;
     }
+
+    // Matrix contains just one matrix and format is not same
+    GrB_Matrix *new_matrix =
+        matrix->format == GrB_ROWMAJOR ? &matrix->base_col : &matrix->base_row;
+    GrB_Matrix *old_matrix =
+        matrix->format == GrB_ROWMAJOR ? &matrix->base_row : &matrix->base_col;
 
     if (is_both) {
-        TRY(GrB_Matrix_new(&new_matrix, GrB_BOOL, matrix->nrows, matrix->ncols));
-        TRY(GrB_set(new_matrix, format, GrB_STORAGE_ORIENTATION_HINT))
-        TRY(GrB_Matrix_assign(new_matrix, GrB_NULL, GrB_NULL, old_matrix, GrB_ALL,
-                              matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL));
-        if (format == GrB_ROWMAJOR) {
-            matrix->base_row = new_matrix;
-            matrix->base_col = matrix->base;
-        } else {
-            matrix->base_row = matrix->base;
-            matrix->base_col = new_matrix;
-        }
+        GrB_Matrix_new(new_matrix, GrB_BOOL, matrix->nrows, matrix->ncols);
+        GrB_Matrix_assign(*new_matrix, GrB_NULL, GrB_NULL, *old_matrix, GrB_ALL,
+                          matrix->nrows, GrB_ALL, matrix->ncols, GrB_NULL);
         matrix->is_both = true;
-        matrix->base = new_matrix;
     } else {
-        if (format == GrB_ROWMAJOR) {
-            matrix->base_row = matrix->base;
-            matrix->base_col = NULL;
-            TRY(TO_ROW(matrix->base));
-        } else {
-            matrix->base_row = NULL;
-            matrix->base_col = matrix->base;
-            TRY(TO_COL(matrix->base));
-        }
+        *new_matrix = *old_matrix;
+        *old_matrix = NULL;
     }
 
+    matrix->base = format == GrB_ROWMAJOR ? matrix->base_row : matrix->base_col;
+    format == GrB_ROWMAJOR ? TO_ROW(matrix->base) : TO_COL(matrix->base);
     matrix->format = format;
-
-    TRY(CFL_matrix_update(matrix));
-
     return GrB_SUCCESS;
 }
 
