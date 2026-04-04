@@ -237,26 +237,18 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     TRY(LAGraph_Calloc((void **) &nnzs_TSrc_C, nonterms_count, sizeof(GrB_Index), msg));
 
     for (int32_t i = 0; i < terms_count; i++) {
-        if (opt_mask & OPT_LAZY) {
-            TRY(CFL_matrix_from_base_lazy(&Adj[i], adj_matrices[i]));
-        } else {
-            TRY(CFL_matrix_from_base(&Adj[i], adj_matrices[i]));
-        }
+        TRY(CFL_matrix_from_base(&Adj[i], adj_matrices[i]));
     }
 
     // Create nonterms matrices
     for (int32_t i = 0; i < nonterms_count; i++) {
-        // GrB_Matrix matrix;
-
-        // GRB_TRY(GrB_Matrix_new(&matrix, GrB_BOOL, n, n));
-
         if (opt_mask & OPT_LAZY) {
-            TRY(CFL_matrix_create_lazy(&T[i],n,n));
-            TRY(CFL_matrix_create_lazy(&dT[i], n, n));
+            TRY(CFL_matrix_create_lazy(&T[i], n, n));
         } else {
-            TRY(CFL_matrix_create(&T[i],n,n));
-            TRY(CFL_matrix_create(&dT[i], n, n));
+            TRY(CFL_matrix_create(&T[i], n, n));
         }
+
+        TRY(CFL_matrix_create(&dT[i], n, n));
 
         TRY(CFL_matrix_create(&TSrc[i], n, n));
     }
@@ -264,11 +256,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0]->base, true, src[i], src[i]);
     }
-    if (opt_mask & OPT_LAZY) {
-        TRY(CFL_matrix_from_base_lazy(&TSrc[0], TSrc[0]->base));
-    } else {
-        TRY(CFL_matrix_from_base(&TSrc[0], TSrc[0]->base));
-    }
+    TRY(CFL_matrix_from_base(&TSrc[0], TSrc[0]->base));
 
     TRY(CFL_matrix_create(&MSrc, n, n));
     TRY(CFL_matrix_create(&M1, n, n));
@@ -278,8 +266,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     TRY(CFL_matrix_create(&A, n, n));
     TRY(CFL_dup(MSrc, TSrc[0], opt_mask));
     TRY(GrB_Vector_new(&a, GrB_BOOL, n));
-
-    (CFL_wise(MSrc, MSrc, TSrc[0], false, opt_mask));
 
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
