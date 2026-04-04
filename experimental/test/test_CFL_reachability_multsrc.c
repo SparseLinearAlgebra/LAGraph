@@ -3,7 +3,7 @@
 // Multiple-Source Context-Free Language Reachability Matrix-Based Algorithm
 //------------------------------------------------------------------------------
 //
-// LAGraph, (c) 2019-2025 by The LAGraph Contributors, All Rights Reserved.
+// LAGraph, (c) 2019-2026 by The LAGraph Contributors, All Rights Reserved.
 // SPDX-License-Identifier: BSD-2-Clause
 
 // Contributed by Vlasenco Daniel, Ilhom Kombaev, Semyon Grigoriev, St. Petersburg State University.
