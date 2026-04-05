@@ -23,11 +23,12 @@
 #include <acutest.h>
 #include <stdio.h>
 
-#define MAX_MASK 4
+#define MIN_MASK 0
+#define MAX_MASK 8
 
 #define run_algorithm(opt_mask)                                                                  \
     LAGraph_CFL_reachability_multsrc_adv(&output, adj_matrices, src, src_count,              \
-        grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
+        grammar.terms_count + grammar.nonterms_count, grammar.rules, grammar.rules_count, \
         msg, opt_mask)
 
 #define check_error(opt_mask, error)                                                               \
@@ -48,10 +49,11 @@ typedef struct {
     size_t nonterms_count;
     size_t terms_count;
     size_t rules_count;
-    LAGraph_rule_WCNF *rules;
+    LAGraph_rule_EWCNF *rules;
 } grammar_t;
 
 GrB_Matrix *adj_matrices = NULL;
+int n_adj_matrices = 0;
 GrB_Matrix output = NULL;
 grammar_t grammar = {0, 0, 0, NULL};
 char msg[LAGRAPH_MSG_LEN];
@@ -109,77 +111,50 @@ void free_workspace() {
 
 // S -> aSb | ab in WCNF
 //
-// Terms: [0 a] [1 b]
+// Terms: [4 a] [5 b]
 // Nonterms: [0 S] [1 A] [2 B] [3 C]
 // S -> AB [0 1 2 0]
 // S -> AC [0 1 3 0]
 // C -> SB [3 0 2 0]
-// A -> a  [1 0 -1 0]
-// B -> b  [2 1 -1 0]
+// A -> a  [1 4 -1 0]
+// B -> b  [2 5 -1 0]
 void init_grammar_aSb() {
-//  LAGraph_rule_WCNF *rules = calloc(5, sizeof(LAGraph_rule_WCNF));
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 5, sizeof(LAGraph_rule_WCNF), msg);
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 5, sizeof(LAGraph_rule_EWCNF), msg);
 
-    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
-    rules[2] = (LAGraph_rule_WCNF){3, 0, 2, 0};
-    rules[3] = (LAGraph_rule_WCNF){1, 0, -1, 0};
-    rules[4] = (LAGraph_rule_WCNF){2, 1, -1, 0};
+    rules[0] = (LAGraph_rule_EWCNF){0, 1, 2, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){0, 1, 3, 0, 0};
+    rules[2] = (LAGraph_rule_EWCNF){3, 0, 2, 0, 0};
+    rules[3] = (LAGraph_rule_EWCNF){1, 4, -1, 0, 0};
+    rules[4] = (LAGraph_rule_EWCNF){2, 5, -1, 0, 0};
 
     grammar = (grammar_t){
         .nonterms_count = 4, .terms_count = 2, .rules_count = 5, .rules = rules};
 }
 
-// S -> aSb | ab | eps in WCNF
+// S -> aS | a | eps in WCNF
 //
-// Terms: [0 a] [1 b]
-// Nonterms: [0 S] [1 A] [2 B] [3 C]
-// S -> AB  [0 1 2 0]
-// S -> AC  [0 1 3 0]
-// S -> eps [0 -1 -1 0]
-// C -> SB  [3 0 2 0]
-// A -> a   [1 0 -1 0]
-// B -> b   [2 1 -1 0]
-void init_grammar_aSb_eps() {
-//  LAGraph_rule_WCNF *rules = calloc(5, sizeof(LAGraph_rule_WCNF));
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 6, sizeof(LAGraph_rule_WCNF), msg);
-
-    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 1, 3, 0};
-    rules[2] = (LAGraph_rule_WCNF){3, 0, 2, 0};
-    rules[3] = (LAGraph_rule_WCNF){1, 0, -1, 0};
-    rules[4] = (LAGraph_rule_WCNF){2, 1, -1, 0};
-    rules[5] = (LAGraph_rule_WCNF){0, -1, -1, 0};
-
-
-    grammar = (grammar_t){
-        .nonterms_count = 4, .terms_count = 2, .rules_count = 6, .rules = rules};
-}
-
-// S -> aS | a in WCNF
-//
-// Terms: [0 a]
+// Terms: [1 a]
 // Nonterms: [0 S]
 // S -> SS [0 0 0 0]
-// S -> a  [0 0 -1 0]
+// S -> a  [0 1 -1 0]
+// S -> eps [0 -1 -1 0]
 void init_grammar_aS() {
-//  LAGraph_rule_WCNF *rules = calloc(2, sizeof(LAGraph_rule_WCNF));
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 2, sizeof(LAGraph_rule_WCNF), msg);
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 3, sizeof(LAGraph_rule_EWCNF), msg);
 
-    rules[0] = (LAGraph_rule_WCNF){0, 0, 0, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 0, -1, 0};
+    rules[0] = (LAGraph_rule_EWCNF){0, 0, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){0, 1, -1, 0};
+    rules[2] = (LAGraph_rule_EWCNF){0, -1, -1, 0};
 
     grammar = (grammar_t){
-        .nonterms_count = 1, .terms_count = 1, .rules_count = 2, .rules = rules};
+        .nonterms_count = 1, .terms_count = 1, .rules_count = 3, .rules = rules};
 }
 
 // Complex grammar
 // aaaabbbb or aaabbb
 //
-// Terms: [0 a] [1 b]
+// Terms: [25 a] [26 b]
 // Nonterms: [0 S] [n Sn]
 // S -> S1 S2       [0 1 2 0]
 // S -> S15 S16     [0 15 16 0]
@@ -193,51 +168,50 @@ void init_grammar_aS() {
 // S17 -> S19 S20   [17 19 20 0]
 // S18 -> S21 S22   [18 21 22 0]
 // S22 -> S23 S24   [22 23 24 0]
-// S7 -> a          [7 0 -1 0]
-// S8 -> a          [8 0 -1 0]
-// S9 -> a          [9 0 -1 0]
-// S10 -> a         [10 0 -1 0]
-// S11 -> b         [11 1 -1 0]
-// S12 -> b         [12 1 -1 0]
-// S13 -> b         [13 1 -1 0]
-// S14 -> b         [14 1 -1 0]
-// S15 -> a         [15 0 -1 0]
-// S19 -> a         [19 0 -1 0]
-// S20 -> a         [20 0 -1 0]
-// S21 -> b         [21 1 -1 0]
-// S23 -> b         [23 1 -1 0]
-// S24 -> b         [24 1 -1 0]
+// S7 -> a          [7 25 -1 0]
+// S8 -> a          [8 25 -1 0]
+// S9 -> a          [9 25 -1 0]
+// S10 -> a         [10 25 -1 0]
+// S11 -> b         [11 26 -1 0]
+// S12 -> b         [12 26 -1 0]
+// S13 -> b         [13 26 -1 0]
+// S14 -> b         [14 26 -1 0]
+// S15 -> a         [15 25 -1 0]
+// S19 -> a         [19 25 -1 0]
+// S20 -> a         [20 25 -1 0]
+// S21 -> b         [21 26 -1 0]
+// S23 -> b         [23 26 -1 0]
+// S24 -> b         [24 26 -1 0]
 void init_grammar_complex() {
-//  LAGraph_rule_WCNF *rules = calloc(26, sizeof(LAGraph_rule_WCNF));
-    LAGraph_rule_WCNF *rules = NULL ;
-    LAGraph_Calloc ((void **) &rules, 26, sizeof(LAGraph_rule_WCNF), msg);
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 26, sizeof(LAGraph_rule_EWCNF), msg);
 
-    rules[0] = (LAGraph_rule_WCNF){0, 1, 2, 0};
-    rules[1] = (LAGraph_rule_WCNF){0, 15, 16, 0};
-    rules[2] = (LAGraph_rule_WCNF){1, 3, 4, 0};
-    rules[3] = (LAGraph_rule_WCNF){2, 5, 6, 0};
-    rules[4] = (LAGraph_rule_WCNF){3, 7, 8, 0};
-    rules[5] = (LAGraph_rule_WCNF){4, 9, 10, 0};
-    rules[6] = (LAGraph_rule_WCNF){5, 11, 12, 0};
-    rules[7] = (LAGraph_rule_WCNF){6, 13, 14, 0};
-    rules[8] = (LAGraph_rule_WCNF){16, 17, 18, 0};
-    rules[9] = (LAGraph_rule_WCNF){17, 19, 20, 0};
-    rules[10] = (LAGraph_rule_WCNF){18, 21, 22, 0};
-    rules[11] = (LAGraph_rule_WCNF){22, 23, 24, 0};
-    rules[12] = (LAGraph_rule_WCNF){7, 0, -1, 0};
-    rules[13] = (LAGraph_rule_WCNF){8, 0, -1, 0};
-    rules[14] = (LAGraph_rule_WCNF){9, 0, -1, 0};
-    rules[15] = (LAGraph_rule_WCNF){10, 0, -1, 0};
-    rules[16] = (LAGraph_rule_WCNF){11, 1, -1, 0};
-    rules[17] = (LAGraph_rule_WCNF){12, 1, -1, 0};
-    rules[18] = (LAGraph_rule_WCNF){13, 1, -1, 0};
-    rules[19] = (LAGraph_rule_WCNF){14, 1, -1, 0};
-    rules[20] = (LAGraph_rule_WCNF){15, 0, -1, 0};
-    rules[21] = (LAGraph_rule_WCNF){19, 0, -1, 0};
-    rules[22] = (LAGraph_rule_WCNF){20, 0, -1, 0};
-    rules[23] = (LAGraph_rule_WCNF){21, 1, -1, 0};
-    rules[24] = (LAGraph_rule_WCNF){23, 1, -1, 0};
-    rules[25] = (LAGraph_rule_WCNF){24, 1, -1, 0};
+    rules[0] = (LAGraph_rule_EWCNF){0, 1, 2, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){0, 15, 16, 0, 0};
+    rules[2] = (LAGraph_rule_EWCNF){1, 3, 4, 0, 0};
+    rules[3] = (LAGraph_rule_EWCNF){2, 5, 6, 0, 0};
+    rules[4] = (LAGraph_rule_EWCNF){3, 7, 8, 0, 0};
+    rules[5] = (LAGraph_rule_EWCNF){4, 9, 10, 0, 0};
+    rules[6] = (LAGraph_rule_EWCNF){5, 11, 12, 0, 0};
+    rules[7] = (LAGraph_rule_EWCNF){6, 13, 14, 0, 0};
+    rules[8] = (LAGraph_rule_EWCNF){16, 17, 18, 0, 0};
+    rules[9] = (LAGraph_rule_EWCNF){17, 19, 20, 0, 0};
+    rules[10] = (LAGraph_rule_EWCNF){18, 21, 22, 0, 0};
+    rules[11] = (LAGraph_rule_EWCNF){22, 23, 24, 0, 0};
+    rules[12] = (LAGraph_rule_EWCNF){7, 25, -1, 0, 0};
+    rules[13] = (LAGraph_rule_EWCNF){8, 25, -1, 0, 0};
+    rules[14] = (LAGraph_rule_EWCNF){9, 25, -1, 0, 0};
+    rules[15] = (LAGraph_rule_EWCNF){10, 25, -1, 0, 0};
+    rules[16] = (LAGraph_rule_EWCNF){11, 26, -1, 0, 0};
+    rules[17] = (LAGraph_rule_EWCNF){12, 26, -1, 0, 0};
+    rules[18] = (LAGraph_rule_EWCNF){13, 26, -1, 0, 0};
+    rules[19] = (LAGraph_rule_EWCNF){14, 26, -1, 0, 0};
+    rules[20] = (LAGraph_rule_EWCNF){15, 25, -1, 0, 0};
+    rules[21] = (LAGraph_rule_EWCNF){19, 25, -1, 0, 0};
+    rules[22] = (LAGraph_rule_EWCNF){20, 25, -1, 0, 0};
+    rules[23] = (LAGraph_rule_EWCNF){21, 26, -1, 0, 0};
+    rules[24] = (LAGraph_rule_EWCNF){23, 26, -1, 0, 0};
+    rules[25] = (LAGraph_rule_EWCNF){24, 26, -1, 0, 0};
 
     grammar = (grammar_t){
         .nonterms_count = 25, .terms_count = 2, .rules_count = 26, .rules = rules};
@@ -255,12 +229,13 @@ void init_grammar_complex() {
 // 0 -b-> 3
 // 3 -b-> 0
 void init_graph_double_cycle() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 4;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 4, 4));
-    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 4, 4));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -269,8 +244,12 @@ void init_graph_double_cycle() {
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 3));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 3, 0));
 
-    adj_matrices[0] = adj_matrix_a;
-    adj_matrices[1] = adj_matrix_b;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -284,12 +263,13 @@ void init_graph_double_cycle() {
 // 5 -b-> 6
 // 6 -b-> 7
 void init_graph_1() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 8;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 8, 8));
-    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 8, 8));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -301,8 +281,12 @@ void init_graph_1() {
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 5, 6));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 6, 7));
 
-    adj_matrices[0] = adj_matrix_a;
-    adj_matrices[1] = adj_matrix_b;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -320,12 +304,13 @@ void init_graph_1() {
 // 6 -b-> 2
 // 6 -b-> 5
 void init_graph_tree() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 7;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 7, 7));
-    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 7, 7));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -341,8 +326,12 @@ void init_graph_tree() {
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 6, 2));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 6, 5));
 
-    adj_matrices[0] = adj_matrix_a;
-    adj_matrices[1] = adj_matrix_b;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -351,17 +340,22 @@ void init_graph_tree() {
 // 1 -a-> 2
 // 2 -a-> 0
 void init_graph_one_cycle() {
-//  adj_matrices = calloc(1, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 3;
 
     GrB_Matrix adj_matrix_a;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
 
-    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -371,12 +365,13 @@ void init_graph_one_cycle() {
 // 2 -b-> 3
 // 3 -b-> 4
 void init_graph_line() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 5;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 5, 5);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 2));
@@ -384,8 +379,12 @@ void init_graph_line() {
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 2, 3));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 3, 4));
 
-    adj_matrices[0] = adj_matrix_a;
-    adj_matrices[1] = adj_matrix_b;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -394,21 +393,26 @@ void init_graph_line() {
 // 0 -b-> 1
 // 1 -c-> 2
 void init_graph_2() {
-//  adj_matrices = calloc(3, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 3, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 3;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b, adj_matrix_c;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 3, 3);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 3, 3);
-    GrB_Matrix_new(&adj_matrix_c, GrB_BOOL, 3, 3);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N);
+    GrB_Matrix_new(&adj_matrix_c, GrB_BOOL, N, N);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 0));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_c, true, 1, 2));
 
-    adj_matrices[0] = adj_matrix_a;
-    adj_matrices[1] = adj_matrix_b;
-    adj_matrices[2] = adj_matrix_c;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+    adj_matrices[grammar.nonterms_count + 2] = adj_matrix_c;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -417,19 +421,24 @@ void init_graph_2() {
 // 1 -a-> 0
 // 0 -b-> 0
 void init_graph_3() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 2, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 2;
 
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 2, 2);
-    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, 2, 2);
+    GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N);
+    GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N);
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 0));
     OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 0));
 
-    adj_matrices[0] = adj_matrix_a;
-    adj_matrices[1] = adj_matrix_b;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -445,11 +454,12 @@ void init_graph_3() {
 // 4 -a-> 5
 // 5 -a-> 1
 void init_graph_whirlpool() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc ((void **) &adj_matrices, n_adj_matrices, sizeof (GrB_Matrix), msg) ;
 
+    size_t N = 6;
     GrB_Matrix adj_matrix_a;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 6, 6));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 1, 0));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 2, 0));
@@ -463,7 +473,11 @@ void init_graph_whirlpool() {
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 4, 5));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 5, 1));
 
-    adj_matrices[0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 // Graph:
@@ -474,11 +488,13 @@ void init_graph_whirlpool() {
 // 0 -a-> 4
 // 0 -b-> 0
 void init_graph_allout() {
-//  adj_matrices = calloc(2, sizeof(GrB_Matrix));
-    LAGraph_Calloc ((void **) &adj_matrices, 1, sizeof (GrB_Matrix), msg) ;
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc ((void **) &adj_matrices, n_adj_matrices, sizeof (GrB_Matrix), msg) ;
 
+    size_t N = 5;
     GrB_Matrix adj_matrix_a, adj_matrix_b;
-    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, 5, 5));
+    OK(GrB_Matrix_new(&adj_matrix_a, GrB_BOOL, N, N));
+    OK(GrB_Matrix_new(&adj_matrix_b, GrB_BOOL, N, N));
 
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 1));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
@@ -486,7 +502,14 @@ void init_graph_allout() {
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 2));
     OK(GrB_Matrix_setElement(adj_matrix_a, true, 0, 4));
 
-    adj_matrices[0] = adj_matrix_a;
+    OK(GrB_Matrix_setElement(adj_matrix_b, true, 0, 0));
+
+    adj_matrices[grammar.nonterms_count + 0] = adj_matrix_a;
+    adj_matrices[grammar.nonterms_count + 1] = adj_matrix_b;
+
+    for (size_t i = 0; i < grammar.nonterms_count; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
 }
 
 //================================
@@ -501,7 +524,7 @@ void test_CFL_reachability_cycle_allsrc(void) {
     init_grammar_aS();
     init_graph_one_cycle();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
     }
@@ -518,7 +541,7 @@ void test_CFL_reachability_two_cycle_allsrc(void) {
     init_grammar_aSb();
     init_graph_double_cycle();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
     }
@@ -535,7 +558,7 @@ void test_CFL_reachability_labels_more_than_nonterms_allsrc(void) {
     init_grammar_aSb();
     init_graph_2();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 1)");
     }
@@ -549,15 +572,17 @@ void test_CFL_reachability_complex_grammar_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-    init_grammar_complex();
-    init_graph_1();
+    
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
+        init_grammar_complex();
+        init_graph_1();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 7) (1, 6)");
+
+        free_workspace();
     }
 
-    free_workspace();
     teardown();
 }
 
@@ -569,7 +594,7 @@ void test_CFL_reachability_tree_allsrc(void) {
     init_grammar_aSb();
     init_graph_tree();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
                     "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
@@ -587,7 +612,7 @@ void test_CFL_reachability_line_allsrc(void) {
     init_grammar_aSb();
     init_graph_line();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 4) (1, 3)");
     }
@@ -604,7 +629,7 @@ void test_CFL_reachability_two_nodes_cycle_allsrc(void) {
     init_grammar_aSb();
     init_graph_3();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 0) (1, 0)");
     }
@@ -625,7 +650,7 @@ void test_CFL_reachability_tree_msrc(void) {
     init_grammar_aSb();
     init_graph_tree();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(2, 2) (2, 5) (3, 0) (3, 1) (3, 3) (3, 4)");
     }
@@ -642,7 +667,7 @@ void test_CFL_reachability_allin_1_4(void) {
     init_grammar_aS();
     init_graph_whirlpool();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(1, 0) (1, 1) (1, 2) (1, 3) (1, 4) (1, 5) (4, 0) (4, 1) (4, 2) (4, 3) (4, 4) (4, 5)");
     }
@@ -663,7 +688,7 @@ void test_CFL_reachability_cycle_onesrc(void) {
     init_grammar_aS();
     init_graph_one_cycle();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
         check_result("(0, 0) (0, 1) (0, 2)");
     }
@@ -672,17 +697,17 @@ void test_CFL_reachability_cycle_onesrc(void) {
     teardown();
 }
 
-void test_CFL_reachability_allin_1(void) {
+void test_CFL_reachability_allin_0(void) {
     setup();
     GrB_Info retval;
     GrB_Index src[] = { 0 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-    init_grammar_aS();
+    init_grammar_aS(); // eps rule -> 0 is reachable
     init_graph_whirlpool();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
-        check_result("");
+        check_result("(0, 0)");
     }
 
     free_workspace();
@@ -695,12 +720,12 @@ void test_CFL_reachability_allout_0(void) {
     GrB_Index src[] = { 0 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
 
-    init_grammar_aS();
+    init_grammar_aS(); // eps rule -> 0 is reachable
     init_graph_allout();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
-        check_result("(0, 1) (0, 2) (0, 3) (0, 4)");
+        check_result("(0, 0) (0, 1) (0, 2) (0, 3) (0, 4)");
     }
 
     free_workspace();
@@ -713,12 +738,12 @@ void test_CFL_reachability_allout_1(void) {
     GrB_Index src[] = { 1 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
 
-    init_grammar_aS();
+    init_grammar_aS(); // eps rule -> 1 is reachable
     init_graph_allout();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
         OK(run_algorithm(mask));
-        check_result("");
+        check_result("(1, 1)");
     }
 
     free_workspace();
@@ -736,30 +761,27 @@ void test_CFL_reachability_invalid_rules(void) {
     GrB_Index src[] = { 0 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
 
-    init_grammar_aSb_eps();
+    init_grammar_aSb();
     init_graph_double_cycle();
 
-    for (size_t mask = 0; mask < MAX_MASK; mask++) {
-        // Rule [Variable -> _ B]
-        grammar.rules[0] =
-            (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
-        check_error(mask, GrB_INVALID_VALUE);
+    grammar.rules[0] =
+        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .indexed_count = 0};
+    check_error(0, GrB_INVALID_VALUE);
 
-        // Rule [_ -> A B]
-        grammar.rules[0] =
-            (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
-        check_error(mask, GrB_INVALID_VALUE);
+    // Rule [_ -> A B]
+    grammar.rules[0] =
+        (LAGraph_rule_EWCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
+    check_error(0, GrB_INVALID_VALUE);
 
-        // Rule [C -> A B], where C >= nonterms_count
-        grammar.rules[0] =
-            (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
-        check_error(mask, GrB_INVALID_VALUE);
+    // Rule [C -> A B], where C >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_EWCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
+    check_error(0, GrB_INVALID_VALUE);
 
-        // Rule [C -> t], where t >= terms_count
-        grammar.rules[0] =
-            (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
-        check_error(mask, GrB_INVALID_VALUE);
-    }
+    // Rule [C -> t], where t >= terms_count
+    grammar.rules[0] =
+        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .indexed_count = 0};
+    check_error(0, GrB_INVALID_VALUE);
 
     free_workspace();
     teardown();
@@ -816,7 +838,7 @@ void test_CFL_reachability_null_params(void) {
     check_error(0, GrB_NULL_POINTER);
     src = temp_src;
 
-    LAGraph_rule_WCNF *temp_rules = grammar.rules;
+    LAGraph_rule_EWCNF *temp_rules = grammar.rules;
     grammar.rules = NULL;
     check_error(0, GrB_NULL_POINTER);
     grammar.rules = temp_rules;
@@ -824,7 +846,7 @@ void test_CFL_reachability_null_params(void) {
     #undef run_algorithm
     #define run_algorithm(opt_mask)                                                                  \
     LAGraph_CFL_reachability_multsrc_adv(NULL, adj_matrices, src, src_count,              \
-        grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
+        grammar.terms_count + grammar.nonterms_count, grammar.rules, grammar.rules_count, \
         msg, opt_mask)
     check_error(0, GrB_NULL_POINTER);
 
@@ -851,7 +873,7 @@ TEST_LIST = {
              //  Tests for some source vertices.
              {"CFL_reachability_cycle_onesrc", test_CFL_reachability_cycle_onesrc},
              {"CFL_reachability_tree_msrc", test_CFL_reachability_tree_msrc},
-             {"CFL_reachability_allin_1", test_CFL_reachability_allin_1},
+             {"CFL_reachability_allin_0", test_CFL_reachability_allin_0},
              {"CFL_reachability_allin_1_4", test_CFL_reachability_allin_1_4},
              {"CFL_reachability_allout_0", test_CFL_reachability_allout_0},
              {"CFL_reachability_allout_1", test_CFL_reachability_allout_1},

@@ -661,7 +661,7 @@ void test_CFL_reachability_cycle_onesrc(void) {
     teardown();
 }
 
-void test_CFL_reachability_allin_1(void) {
+void test_CFL_reachability_allin_0(void) {
     setup();
     GrB_Info retval;
     GrB_Index src[] = { 0 };
@@ -827,7 +827,7 @@ TEST_LIST = {
              //  Tests for some source vertices.
              {"CFL_reachability_cycle_onesrc", test_CFL_reachability_cycle_onesrc},
              {"CFL_reachability_tree_msrc", test_CFL_reachability_tree_msrc},
-             {"CFL_reachability_allin_1", test_CFL_reachability_allin_1},
+             {"CFL_reachability_allin_0", test_CFL_reachability_allin_0},
              {"CFL_reachability_allin_1_4", test_CFL_reachability_allin_1_4},
              {"CFL_reachability_allout_0", test_CFL_reachability_allout_0},
              {"CFL_reachability_allout_1", test_CFL_reachability_allout_1},
