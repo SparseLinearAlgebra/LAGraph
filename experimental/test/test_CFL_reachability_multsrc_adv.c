@@ -23,14 +23,16 @@
 #include <acutest.h>
 #include <stdio.h>
 
-#define run_algorithm()                                                                  \
+#define MAX_MASK 4
+
+#define run_algorithm(opt_mask)                                                                  \
     LAGraph_CFL_reachability_multsrc_adv(&output, adj_matrices, src, src_count,              \
         grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
-        msg, 4)
+        msg, opt_mask)
 
-#define check_error(error)                                                               \
+#define check_error(opt_mask, error)                                                               \
     {                                                                                    \
-        retval = run_algorithm();                                                        \
+        retval = run_algorithm(opt_mask);                                                        \
         TEST_CHECK(retval == error);                                                     \
         TEST_MSG("%d (retval) != %d (error) (%s)", retval, error, msg);                                       \
     }
@@ -496,12 +498,13 @@ void test_CFL_reachability_cycle_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aS();
     init_graph_one_cycle();
 
-    OK(run_algorithm());
-    check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 0) (0, 1) (0, 2) (1, 0) (1, 1) (1, 2) (2, 0) (2, 1) (2, 2)");
+    }
 
     free_workspace();
     teardown();
@@ -512,12 +515,13 @@ void test_CFL_reachability_two_cycle_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2, 3 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aSb();
     init_graph_double_cycle();
 
-    OK(run_algorithm());
-    check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 0) (0, 3) (1, 0) (1, 3) (2, 0) (2, 3)");
+    }
 
     free_workspace();
     teardown();
@@ -528,12 +532,13 @@ void test_CFL_reachability_labels_more_than_nonterms_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aSb();
     init_graph_2();
 
-    OK(run_algorithm());
-    check_result("(0, 1)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 1)");
+    }
 
     free_workspace();
     teardown();
@@ -544,12 +549,13 @@ void test_CFL_reachability_complex_grammar_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6, 7 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_complex();
     init_graph_1();
 
-    OK(run_algorithm());
-    check_result("(0, 7) (1, 6)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 7) (1, 6)");
+    }
 
     free_workspace();
     teardown();
@@ -560,13 +566,14 @@ void test_CFL_reachability_tree_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2, 3, 4, 5, 6 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aSb();
     init_graph_tree();
 
-    OK(run_algorithm());
-    check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
-                 "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 0) (0, 1) (0, 3) (0, 4) (1, 0) (1, 1) (1, 3) (1, 4) (2, 2) (2, 5) "
+                    "(3, 0) (3, 1) (3, 3) (3, 4) (4, 0) (4, 1) (4, 3) (4, 4) (5, 2) (5, 5)");
+    }
 
     free_workspace();
     teardown();
@@ -577,12 +584,13 @@ void test_CFL_reachability_line_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1, 2, 3, 4 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aSb();
     init_graph_line();
 
-    OK(run_algorithm());
-    check_result("(0, 4) (1, 3)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 4) (1, 3)");
+    }
 
     free_workspace();
     teardown();
@@ -593,12 +601,13 @@ void test_CFL_reachability_two_nodes_cycle_allsrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0, 1 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aSb();
     init_graph_3();
 
-    OK(run_algorithm());
-    check_result("(0, 0) (1, 0)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 0) (1, 0)");
+    }
 
     free_workspace();
     teardown();
@@ -613,12 +622,13 @@ void test_CFL_reachability_tree_msrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 2, 3 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aSb();
     init_graph_tree();
 
-    OK(run_algorithm());
-    check_result("(2, 2) (2, 5) (3, 0) (3, 1) (3, 3) (3, 4)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(2, 2) (2, 5) (3, 0) (3, 1) (3, 3) (3, 4)");
+    }
 
     free_workspace();
     teardown();
@@ -629,13 +639,13 @@ void test_CFL_reachability_allin_1_4(void) {
     GrB_Info retval;
     GrB_Index src[] = { 1, 4 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aS();
     init_graph_whirlpool();
 
-    OK(run_algorithm());
-    check_result(
-        "(1, 0) (1, 1) (1, 2) (1, 3) (1, 4) (1, 5) (4, 0) (4, 1) (4, 2) (4, 3) (4, 4) (4, 5)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(1, 0) (1, 1) (1, 2) (1, 3) (1, 4) (1, 5) (4, 0) (4, 1) (4, 2) (4, 3) (4, 4) (4, 5)");
+    }
 
     free_workspace();
     teardown();
@@ -650,12 +660,13 @@ void test_CFL_reachability_cycle_onesrc(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aS();
     init_graph_one_cycle();
 
-    OK(run_algorithm());
-    check_result("(0, 0) (0, 1) (0, 2)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 0) (0, 1) (0, 2)");
+    }
 
     free_workspace();
     teardown();
@@ -666,12 +677,13 @@ void test_CFL_reachability_allin_1(void) {
     GrB_Info retval;
     GrB_Index src[] = { 0 };
     int32_t src_count = sizeof(src) / sizeof(GrB_Index);
-
     init_grammar_aS();
     init_graph_whirlpool();
 
-    OK(run_algorithm());
-    check_result("");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("");
+    }
 
     free_workspace();
     teardown();
@@ -686,8 +698,10 @@ void test_CFL_reachability_allout_0(void) {
     init_grammar_aS();
     init_graph_allout();
 
-    OK(run_algorithm());
-    check_result("(0, 1) (0, 2) (0, 3) (0, 4)");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 1) (0, 2) (0, 3) (0, 4)");
+    }
 
     free_workspace();
     teardown();
@@ -702,8 +716,10 @@ void test_CFL_reachability_allout_1(void) {
     init_grammar_aS();
     init_graph_allout();
 
-    OK(run_algorithm());
-    check_result("");
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("");
+    }
 
     free_workspace();
     teardown();
@@ -723,25 +739,27 @@ void test_CFL_reachability_invalid_rules(void) {
     init_grammar_aSb_eps();
     init_graph_double_cycle();
 
-    // Rule [Variable -> _ B]
-    grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
-    check_error(GrB_INVALID_VALUE);
+    for (size_t mask = 0; mask < MAX_MASK; mask++) {
+        // Rule [Variable -> _ B]
+        grammar.rules[0] =
+            (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
+        check_error(mask, GrB_INVALID_VALUE);
 
-    // Rule [_ -> A B]
-    grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
-    check_error(GrB_INVALID_VALUE);
+        // Rule [_ -> A B]
+        grammar.rules[0] =
+            (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
+        check_error(mask, GrB_INVALID_VALUE);
 
-    // Rule [C -> A B], where C >= nonterms_count
-    grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
-    check_error(GrB_INVALID_VALUE);
+        // Rule [C -> A B], where C >= nonterms_count
+        grammar.rules[0] =
+            (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
+        check_error(mask, GrB_INVALID_VALUE);
 
-    // Rule [C -> t], where t >= terms_count
-    grammar.rules[0] =
-        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
-    check_error(GrB_INVALID_VALUE);
+        // Rule [C -> t], where t >= terms_count
+        grammar.rules[0] =
+            (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
+        check_error(mask, GrB_INVALID_VALUE);
+    }
 
     free_workspace();
     teardown();
@@ -753,24 +771,23 @@ void test_CFL_reachability_invalid_rules(void) {
 void test_CFL_reachability_invalid_params(void) {
     setup();
     GrB_Info retval;
-
     GrB_Index src[] = { 0, 1, 2 };
+    int32_t src_count = 0;
 
     init_grammar_aSb();
     init_graph_double_cycle();
 
-    int32_t src_count = 0;
-    check_error(GrB_INVALID_VALUE);
+    check_error(0, GrB_INVALID_VALUE);
     src_count = sizeof(src) / sizeof(GrB_Index);
 
     int32_t temp = grammar.nonterms_count;
     grammar.nonterms_count = 0;
-    check_error(GrB_INVALID_VALUE);
+    check_error(0, GrB_INVALID_VALUE);
     grammar.nonterms_count = temp;
 
     temp = grammar.rules_count;
     grammar.rules_count = 0;
-    check_error(GrB_INVALID_VALUE);
+    check_error(0, GrB_INVALID_VALUE);
     grammar.rules_count = temp;
 
     free_workspace();
@@ -791,28 +808,35 @@ void test_CFL_reachability_null_params(void) {
 
     GrB_Matrix *temp_m = adj_matrices;
     adj_matrices = NULL;
-    check_error(GrB_NULL_POINTER);
+    check_error(0, GrB_NULL_POINTER);
     adj_matrices = temp_m;
 
     GrB_Index *temp_src = src;
     src = NULL;
-    check_error(GrB_NULL_POINTER);
+    check_error(0, GrB_NULL_POINTER);
     src = temp_src;
 
     LAGraph_rule_WCNF *temp_rules = grammar.rules;
     grammar.rules = NULL;
-    check_error(GrB_NULL_POINTER);
+    check_error(0, GrB_NULL_POINTER);
     grammar.rules = temp_rules;
 
-    #define run_algorithm()                                                                  \
-    LAGraph_CFL_reachability_multsrc(NULL, adj_matrices, src, src_count,              \
+    #undef run_algorithm
+    #define run_algorithm(opt_mask)                                                                  \
+    LAGraph_CFL_reachability_multsrc_adv(NULL, adj_matrices, src, src_count,              \
         grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
-        msg)
-    check_error(GrB_NULL_POINTER);
+        msg, opt_mask)
+    check_error(0, GrB_NULL_POINTER);
 
     free_workspace();
     teardown();
 }
+
+#undef run_algorithm
+#define run_algorithm(opt_mask)                                                                  \
+    LAGraph_CFL_reachability_multsrc_adv(&output, adj_matrices, src, src_count,              \
+        grammar.terms_count, grammar.nonterms_count, grammar.rules, grammar.rules_count, \
+        msg, opt_mask)
 
 
 TEST_LIST = {
