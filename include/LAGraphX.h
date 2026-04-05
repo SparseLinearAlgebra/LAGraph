@@ -1447,16 +1447,14 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
                                     // adj_matrices[t]: (i, j) == 1 if and only if there
                                     // is an edge between nodes i and j with the label of
                                     // the terminal corresponding to index 't' (where t is
-                                    // in the range [0, terms_count - 1]).
-    GrB_Index *src,                 // Array of source vertices
-    // These parameters will become unsigned
-    int32_t src_count,              // The total number of source vertices
-    int32_t terms_count,            // The total number of terminal symbols in the CFG.
-    int32_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
-    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
-    size_t rules_count,             // The total number of rules in the CFG.
-    char *msg,                      // Message string for error reporting.
-    int8_t opt_mask                 // Optimizations mask
+                                    // in the range [0, symbols_amount - 1]).
+    GrB_Index *src,                  // Array of source vertices
+    size_t src_count,                // The total number of source vertices
+    size_t symbols_amount,           // The total number of terminals and nonterminals
+    const LAGraph_rule_EWCNF *rules, // The rules of the CFG.
+    size_t rules_count,              // The total number of rules in the CFG.
+    char *msg,                       // Message string for error reporting.
+    int8_t opt_mask                  // Optimizations mask
 );
 
 //------------------------------------------------------------------------------
