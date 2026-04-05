@@ -70,10 +70,10 @@ char *output_to_str(size_t nonterm) {
     LAGraph_Malloc ((void **) &col, nnz, sizeof (GrB_Index), msg) ;
     LAGraph_Malloc ((void **) &val, nnz, sizeof (GrB_Index), msg) ;
 
+    GrB_set(output, GrB_ROWMAJOR, GrB_STORAGE_ORIENTATION_HINT);
     OK(GrB_Matrix_extractTuples(row, col, val, &nnz, output));
 
     // 11 - size of " (%ld, %ld)"
-//  char *result_str = malloc(11 * nnz * sizeof(char));
     char *result_str = NULL ;
     LAGraph_Malloc ((void **) &result_str, 11*nnz, sizeof (char), msg) ;
 
