@@ -1028,6 +1028,9 @@ int LAGraph_SquareClustering
     int32_t index;   // For rules that can be grouped by index
  } LAGraph_rule_WCNF;
 
+
+typedef GrB_Info (*CFPQ_get_nvals)(GrB_Index *nvals, const GrB_Matrix A);
+
 typedef struct
 {
     GrB_Type type;
@@ -1036,6 +1039,7 @@ typedef struct
     GrB_BinaryOp mult;
     GrB_BinaryOp init_path; // Function for defining elements used to describe information about paths of length 0 and 1.
                             // Depends on the specific task, therefore it is included in this structure.
+    CFPQ_get_nvals get_nvals;
     GrB_Scalar bottom_scalar;
 } CFL_Semiring;
 
@@ -1095,6 +1099,35 @@ GrB_Info LAGraph_CFPQ_core
     const CFL_Semiring *semiring,   // The algebraic structure that defines operations on matrices for a specific problem
     char *msg // Message string for error reporting.
 );
+
+typedef struct
+{
+    GrB_Index n;
+    GrB_Index* middle;
+} AllPathsElem;
+
+// all_paths_ptr_t is a pointer to the type of elements of the outputs matrices.
+// Use GrB_free(all_paths_ptr_t) after you finish working with the outputs matrices.
+// Important: Do not free all_paths_ptr_t until all work with the output matrices is complete.
+// Accessing matrices after freeing their type is undefined behavior.
+GrB_Info LAGraph_CFL_AllPaths(
+    GrB_Matrix *outputs,            // Matrix elements are ordered arrays of intermediate vertices type AllPathsElem.
+                                    // Before free outputs[k], you need to free arrays from all matrix elements.
+                                    // For all values of M from the array of the matrix element
+                                    // outputs[k] on the I row of the J column:
+                                    // There are paths from I to M by nonterminal N1 and from M to J by nonterminal N2,
+                                    // and A->N1 N2 where outputs[k] corresponds to nonterminal A.
+                                    // GrB_INDEX_MAX in the array is a special value for A->eps and A->t.
+    const GrB_Matrix *adj_matrices,
+    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices.
+                                    // Pass a pointer to GrB_Type and
+                                    // free it after you finish working with outputs matrices.
+    int64_t terms_count,
+    int64_t nonterms_count,
+    const LAGraph_rule_WCNF *rules,
+    int64_t rules_count,
+    char *msg);
+
 
 // LAGraph_CFL_single_path: Context-Free Language Single Path Matrix-Based Algorithm
 //

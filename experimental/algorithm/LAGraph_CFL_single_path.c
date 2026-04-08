@@ -219,7 +219,8 @@ GrB_Info LAGraph_CFL_single_path(
                              .add = PathIndex_add,
                              .mult = PathIndex_mult,
                              .init_path = PathIndex_set,
-                             .bottom_scalar = bottom_scalar};
+                             .bottom_scalar = bottom_scalar,
+                             .get_nvals = GrB_Matrix_nvals};
     LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules,
                              rules_count, &semiring, msg));
     LG_FREE_WORK;

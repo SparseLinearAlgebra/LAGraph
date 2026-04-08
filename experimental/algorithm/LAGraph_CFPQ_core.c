@@ -151,7 +151,7 @@ GrB_Info LAGraph_CFPQ_core(
                             T[bin_rule.prod_A], T[bin_rule.prod_B], GrB_NULL))
 
             GrB_Index new_nnz;
-            GRB_TRY(GrB_Matrix_nvals(&new_nnz, T[bin_rule.nonterm]));
+            GRB_TRY(semiring->get_nvals(&new_nnz, T[bin_rule.nonterm]));
             if (new_nnz != 0)
                 t_empty_flags[bin_rule.nonterm] = false;
 

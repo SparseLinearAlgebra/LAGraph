@@ -96,7 +96,8 @@ GrB_Info LAGraph_CFL_reachability(
                              .add = GxB_ANY_BOOL,
                              .mult = GxB_PAIR_BOOL,
                              .init_path = GxB_PAIR_BOOL,
-                             .bottom_scalar = false_scalar};
+                             .bottom_scalar = false_scalar,
+                             .get_nvals = GrB_Matrix_nvals};
     LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules,
                              rules_count, &semiring, msg));
     LG_FREE_WORK;
