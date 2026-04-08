@@ -3,114 +3,69 @@
 //------------------------------------------------------------------------------
 
 /*
-Let:
+Initialize:
+    P := 0
+    M := 0
+    M[q_start, vs·V + vs] := 1
 
-    Q = {0, …, Q-1}                — set of RSM states
-    V = {0, …, V-1}                — set of graph vertices
-    Σ                              — terminal alphabet
-    N                              — set of nonterminals
+    For each S:
+        Stack[S] := 0              // (q_ret, v_before, v_entry)
+        graph_nt[S] := 0              // (v_entry, v_final)
 
-Boolean matrices:
+while M != 0 do
 
-    G_a ∈ {0,1}^{V×V}              — graph edges labeled by a ∈ Σ
-    N_a ∈ {0,1}^{Q×Q}              — RSM transitions labeled by a ∈ Σ
-    Call_S ∈ {0,1}^{Q×Q}           — call transitions for S ∈ N
-    Ret_S ∈ {0,1}^{Q×Q}            — return transitions for S ∈ N
-    N_S ∈ {0,1}^{Q×Q}              — internal nonterminal transitions
-    G_S ∈ {0,1}^{V×V}              — derived graph edges for S
+    // --------------------------------------------------
+    // 1. TERMINAL TRANSITIONS
+    // --------------------------------------------------
+    M_term := 0
+    for each label a do
+        for each q' do
+            M_term |= N_a^T @ M @ G_a
 
-    M ∈ {0,1}^{Q×V}
-    P ∈ {0,1}^{Q×V}
+    // --------------------------------------------------
+    // 2. CALL TRANSITIONS
+    // --------------------------------------------------
+    M_call := 0
+    for each box S do
+
+        // select call states
+        mask_call := call[S]^T @ M          // (q_start(S), v_start, v_entry)
+
+        if mask_call != 0:
+
+            // ---- push frames ----
+            frame := rsm_nt[S]^T @ M          // (q_ret, v_before, v_entry)
+            Stack[S] |= frame
+
+            // ---- activate callee ----
+            entry_vec := OR_rows(M[q_start]) // bcs exist only one q_start for each box
+            D := diag(entry_vec)
+            M_call[q_start] |= D
+
+    // --------------------------------------------------
+    // 3. RETURN TRANSITIONS
+    // --------------------------------------------------
+    M_return := 0
+    for each box S do
+
+        M contains (q_final_S + other states, ..., ...)
+        Mask them with final_states and get (q_final_S, v_start_S, v_final_S)
+        derive (v_start_S, v_final_S) edges to graph_nt[S]
+        M_return |= Stack[S] @ graph_nt[S] // restore traviersion from point (q_return, v_before,
+v_final_S)
 
 
-------------------------------------------------------------
-Phase 1: Saturation (computation of reachable configurations)
-------------------------------------------------------------
+    // --------------------------------------------------
+    // 4. MERGE
+    // --------------------------------------------------
+    M_new := (M_term | M_call | M_return) & ~P
 
-Initialization:
-    M[q₀, v₀] = 1  for all q₀ ∈ start_states
-    P[q₀, v₀] = 1  for all q₀ ∈ start_states
+    P |= M_new
+    M := M_new
 
-while M != 0:
+end while
 
-    Forward propagation:
-    M_new = 0
-    for all a ∈ Σ:
-        M_new ← M_new ∪ (N_aᵀ · M · G_a) ∧ ~P
-
-    For all S ∈ N:
-        M_new ← M_new ∪ (N_Sᵀ · M · G_S) ∧ ~P
-        M_new ← M_new ∪ (Call_Sᵀ · M) ∧ ~P
-
-    Backward propagation (summary edge construction):
-
-
-    For all S ∈ N:
-        M_ret = Ret_Sᵀ · M
-
-        if M_ret = 0: continue
-
-        Restore paths to matching call positions by computing
-        the least fixed point of:
-
-        X₀ = (Ret_S · M_ret) ∧ P
-        X_{i+1} =
-            ((⋁_{a∈Σ} N_a · X_i · G_aᵀ)
-          ∨ (⋁_{S1∈N} N_{S1} · X_i · G_{S1}ᵀ)) ∧ ~P
-
-        After reaching fixed point X:
-
-        X_call = (Call_S · X) ∧ P
-
-        if X_call = 0: continue
-
-        New summary edges:
-
-        G_S_new =
-            (X_callᵀ · N_S · M_ret) ∧ ~G_S
-
-        Update:
-        G_S ← G_S ∪ G_S_new
-        M_new = M_new ∪ M_ret
-
-    M = M_new
-    P = P ∪ M
-
-Iterate until no new configurations are added to P.
-
-------------------------------------------------------------
-Phase 2: Reachability restricted to valid CF paths
-------------------------------------------------------------
-
-M = 0
-
-Compute K ⊆ Q × V:
-    M[q₀, v₀] = 1
-    K[q₀, v₀] = 1  for start configurations
-
-while M != 0:
-
-    Forward propagation:
-    M_new = 0
-    for all a ∈ Σ:
-        M_new ← M_new ∪ (N_aᵀ · M · G_a)
-
-    For all S ∈ N:
-        M_new ← M_new ∪ (N_Sᵀ · M · G_S)
-
-    M = M_new
-    P = P ∪ M
-
-until fixed point.
-
-------------------------------------------------------------
-Result
-------------------------------------------------------------
-
-Let F ∈ {0,1}^{1×Q} be final-state selector.
-
-Output:
-    result = F · K
+return P
 
 */
 
