@@ -47,6 +47,7 @@ GrB_Info transitive_closure_inplace(GrB_Matrix A) {
 
 GrB_Info LAGraph_CFL_AllPaths_Kronecker
 (
+    GrB_Matrix *M_intersect_out,
     GrB_Matrix *outputs,
     const GrB_Matrix *adj_matrices,
     int64_t terms_count,
@@ -80,12 +81,10 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
         }
     }
 
-    GrB_Matrix BaseGraph = NULL;
     GrB_Matrix M_graph = NULL;
     GrB_Matrix CombinedGraph = NULL;
     GrB_Matrix DeltaM = NULL;
-
-    
+ 
     GrB_Matrix_new(&M_graph, GrB_BOOL, kronecker_dim, kronecker_dim);
 
     for (int64_t t = 0; t < terms_count; ++t) {
@@ -93,16 +92,7 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
                       rsm->terminal_matrices[t], adj_matrices[t], NULL);
     }
 
-    GrB_Matrix_new(&BaseGraph, GrB_BOOL, kronecker_dim, kronecker_dim);
     GrB_Matrix_new(&DeltaM, GrB_BOOL, kronecker_dim, kronecker_dim);
-
-    for (int64_t t = 0; t < terms_count; ++t) {
-        GrB_kronecker(BaseGraph, NULL, GrB_LOR, GxB_PAIR_BOOL,
-                      rsm->terminal_matrices[t], adj_matrices[t], NULL);
-    }
-    
-    // M_graph will store the "raw" Kronecker edges (without closure)
-    GrB_Matrix_dup(&M_graph, BaseGraph);
 
     GrB_Index max_finals = 0;
     for (int64_t nt = 0; nt < rsm->nonterminal_count; ++nt) {
@@ -196,10 +186,10 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker
     free(delta_outputs);
     
     GrB_free(&temp_output);
-    if (BaseGraph != NULL) GrB_free(&BaseGraph); 
-    if (M_graph != NULL) GrB_free(&M_graph); 
     if (CombinedGraph != NULL) GrB_free(&CombinedGraph); 
     if (DeltaM != NULL) GrB_free(&DeltaM);
+
+    *M_intersect_out = M_graph;
 
     return GrB_SUCCESS;
 }
