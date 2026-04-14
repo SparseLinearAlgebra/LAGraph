@@ -8,7 +8,7 @@
 #include <stdarg.h>
 
 #define run_algorithm()                                                                  \
-    LAGraph_CFL_AllPaths(outputs, adj_matrices, &all_paths_t, grammar.terms_count,       \
+    LAGraph_CFL_AllPaths(outputs, &all_paths_t, adj_matrices, grammar.terms_count,       \
                              grammar.nonterms_count, grammar.rules, grammar.rules_count, \
                              msg)
 
@@ -23,7 +23,7 @@
     {                                                                                    \
         char *expected = output_to_str(nonterm);                                         \
         TEST_CHECK(strcmp(result, expected) == 0);                                       \
-        TEST_MSG("Wrong result. Actual: %s", expected);                                  \
+        TEST_MSG("Wrong result. Expected: %s", expected);                                \
         LAGraph_Free ((void **) &expected, msg);                                         \
     }
 
@@ -100,44 +100,50 @@ char *output_to_str(size_t nonterm)
         }
 
         int wrote = 0;
-        if (val[i].n == 0 || val[i].middle == NULL)
+
+        if (i != 0) {
+            result_str[len++] = ' ';
+        }
+
+        wrote = sprintf(result_str + len, "(%" PRIu64 ", %" PRIu64 "):[",
+                        (uint64_t) row[i], (uint64_t) col[i]);
+        len += (size_t) wrote;
+
+        if (val[i].n == 1)
         {
-            wrote = sprintf(result_str + len,
-                    (i == 0 ? "(%" PRIu64 ", %" PRIu64 "):[]" : " (%" PRIu64 ", %" PRIu64 "):[]"),
-                    (uint64_t) row[i], (uint64_t) col[i]);
+            if (val[i].data.single_elem == GrB_INDEX_MAX) {
+                wrote = sprintf(result_str + len, "INDEX_MAX");
+            } else {
+                wrote = sprintf(result_str + len, "%" PRIu64, (uint64_t) val[i].data.single_elem);
+            }
             len += (size_t) wrote;
         }
-        else
+        else if (val[i].n > 1)
         {
-            wrote = sprintf(result_str + len,
-                    (i == 0 ? "(%" PRIu64 ", %" PRIu64 "):[" : " (%" PRIu64 ", %" PRIu64 "):["),
-                    (uint64_t) row[i], (uint64_t) col[i]);
-            len += (size_t) wrote;
-
             for (GrB_Index k = 0; k < val[i].n; k++)
             {
                 if (k == 0)
                 {
-                  if (val[i].middle[k] == GrB_INDEX_MAX) {
-                      wrote = sprintf(result_str + len, "INDEX_MAX");
-                  } else {
-                      wrote = sprintf(result_str + len, "%" PRIu64, (uint64_t)val[i].middle[k]);
-                  }
+                    if (val[i].data.middle[k] == GrB_INDEX_MAX) {
+                        wrote = sprintf(result_str + len, "INDEX_MAX");
+                    } else {
+                        wrote = sprintf(result_str + len, "%" PRIu64, (uint64_t)val[i].data.middle[k]);
+                    }
                 }
                 else
                 {
-                  if (val[i].middle[k] == GrB_INDEX_MAX) {
-                      wrote = sprintf(result_str + len, ",INDEX_MAX");
-                  } else {
-                      wrote = sprintf(result_str + len, ",%" PRIu64, (uint64_t)val[i].middle[k]);
-                  }
+                    if (val[i].data.middle[k] == GrB_INDEX_MAX) {
+                        wrote = sprintf(result_str + len, ",INDEX_MAX");
+                    } else {
+                        wrote = sprintf(result_str + len, ",%" PRIu64, (uint64_t)val[i].data.middle[k]);
+                    }
                 }
                 len += (size_t) wrote;
             }
-
-          result_str[len++] = ']';
-            result_str[len] = '\0';
         }
+
+        result_str[len++] = ']';
+        result_str[len] = '\0';
     }
 
     LAGraph_Free ((void **) &row, msg);
@@ -157,25 +163,6 @@ void print_outputs(void)
     }
 }
 
-//Cleaning of internal elements before free matrix
-void free_AllPaths_matrix(GrB_Matrix* ptr_output){
-  GrB_Matrix output = *ptr_output;
-  GxB_Iterator iterator;
-  GxB_Iterator_new(&iterator);
-  GrB_Info info = GxB_Matrix_Iterator_attach(iterator, output, NULL);
-  info = GxB_Matrix_Iterator_seek(iterator, 0);
-  AllPathsElem val;
-  while (info != GxB_EXHAUSTED)
-  {
-    GxB_Iterator_get_UDT(iterator, (void*) &val);
-    if (val.middle) free(val.middle);
-    info = GxB_Matrix_Iterator_next(iterator);
-  }
-  
-  GrB_free(&iterator);
-  GrB_free(ptr_output);
-}
-
 void free_workspace() {
 
     if (adj_matrices != NULL)
@@ -186,16 +173,7 @@ void free_workspace() {
         }
     }
     LAGraph_Free ((void **) &adj_matrices, msg);
-
-    if (outputs != NULL)
-    {
-        for (size_t i = 0; i < grammar.nonterms_count; i++)
-        {
-          free_AllPaths_matrix(&outputs[i]);
-        }
-    }
-    LAGraph_Free ((void **) &outputs, msg);
-    GrB_free(&all_paths_t);
+    LAGraph_CFL_AllPaths_free_outputs(outputs, grammar.nonterms_count, &all_paths_t);
     LAGraph_Free ((void **) &grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
 }

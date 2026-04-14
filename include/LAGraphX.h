@@ -1112,10 +1112,17 @@ typedef struct
 
 typedef struct
 {
-    GrB_Index n;
-    GrB_Index* middle;
+    size_t n;
+    union
+    {
+        GrB_Index single_elem;
+        GrB_Index* middle;
+    } data;
 } AllPathsElem;
 
+// Internal core function for context-free language path finding.
+// Computes path information for all non-terminals using matrix operations defined by the input semiring.
+// The semiring determines the specific problem variant being solved.
 GrB_Info LAGraph_CFPQ_core
 (
     // Output
@@ -1142,27 +1149,44 @@ GrB_Info LAGraph_CFPQ_core
     char *msg // Message string for error reporting.
 );
 
-// all_paths_ptr_t is a pointer to the type of elements of the outputs matrices.
-// Use GrB_free(all_paths_ptr_t) after you finish working with the outputs matrices.
-// Important: Do not free all_paths_ptr_t until all work with the output matrices is complete.
-// Accessing matrices after freeing their type is undefined behavior.
+// LAGraph_CFL_AllPaths: Context-Free Language All Paths Algorithm
+// Important: Do not free all_paths_ptr_t until all work with the output matrices is done, because elements of the output matrices may contain pointers to the data defined by all_paths_ptr_t.
+// Use LAGraph_CFL_AllPaths_free_outputs to free outputs and all_paths_ptr_t after you have finished working with the output matrices.
 GrB_Info LAGraph_CFL_AllPaths(
-    GrB_Matrix *outputs,            // Matrix elements are ordered arrays of intermediate vertices type AllPathsElem.
-                                    // Before free outputs[k], you need to free arrays from all matrix elements.
-                                    // For all values of M from the array of the matrix element
-                                    // outputs[k] on the I row of the J column:
-                                    // There are paths from I to M by nonterminal N1 and from M to J by nonterminal N2,
-                                    // and A->N1 N2 where outputs[k] corresponds to nonterminal A.
-                                    // GrB_INDEX_MAX in the array is a special value for A->eps and A->t.
-    const GrB_Matrix *adj_matrices,
-    GrB_Type *all_paths_ptr_t,      // AllPaths type - elements of the output matrices.
-                                    // Pass a pointer to GrB_Type and
-                                    // free it after you finish working with outputs matrices.
-    int64_t terms_count,
-    int64_t nonterms_count,
-    const LAGraph_rule_WCNF *rules,
-    int64_t rules_count,
-    char *msg);
+    // Output
+    GrB_Matrix *outputs, // Array of matrices containing results.
+                         // The size of the array must be equal to nonterms_count.
+                         // Matrix elements are ordered arrays of intermediate vertices type AllPathsElem.
+                         // Before free outputs[k], you need to free arrays from all matrix elements.
+                         // For all values of M from the array of the matrix element
+                         // outputs[k] on the I row of the J column:
+                         // There are paths from I to M by nonterminal N1 and from M to J by nonterminal N2,
+                         // and A->N1 N2 where outputs[k] corresponds to nonterminal A.
+                         // GrB_INDEX_MAX in the array is a special value for A->eps and A->t.
+    // AllPaths type - elements of the output matrices.
+    GrB_Type *all_paths_ptr_t,      // Pass a pointer to GrB_Type.
+    // Input
+    const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
+                                    // The length of this array is equal to the count of
+                                    // terminals (terms_count).
+                                    //
+                                    // adj_matrices[t]: (i, j) == 1 if and only if there
+                                    // is an edge between nodes i and j with the label of
+                                    // the terminal corresponding to index 't' (where t is
+                                    // in the range [0, terms_count - 1]).
+    int64_t terms_count,            // The total number of terminal symbols in the CFG.
+    int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
+    const LAGraph_rule_WCNF *rules, // The rules of the CFG.
+    int64_t rules_count,            // The total number of rules in the CFG.
+    char *msg                       // Message string for error reporting.
+);
+
+// Free outputs and all_paths_ptr_t after you have finished working with the output matrices from LAGraph_CFL_AllPaths.
+GrB_Info LAGraph_CFL_AllPaths_free_outputs(
+  GrB_Matrix* outputs,
+  int64_t nonterms_count,
+  GrB_Type* all_paths_ptr_t);
+
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
