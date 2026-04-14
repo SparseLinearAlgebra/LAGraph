@@ -174,6 +174,8 @@ void free_workspace() {
     }
     LAGraph_Free ((void **) &adj_matrices, msg);
     LAGraph_CFL_AllPaths_free_outputs(outputs, grammar.nonterms_count, &all_paths_t);
+    all_paths_t = NULL;
+    outputs = NULL;
     LAGraph_Free ((void **) &grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
 }
