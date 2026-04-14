@@ -348,6 +348,7 @@ static void free_AllPaths_matrix(GrB_Matrix* ptr_output)
 }
 
 // Free outputs and all_paths_ptr_t after you have finished working with the output matrices from LAGraph_CFL_AllPaths.
+// do outputs = NULL, all_paths_ptr_t = NULL after LAGraph_CFL_AllPaths_free_outputs
 GrB_Info LAGraph_CFL_AllPaths_free_outputs(GrB_Matrix* outputs, int64_t nonterms_count, GrB_Type* all_paths_ptr_t)
 {
 #if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
@@ -362,7 +363,6 @@ GrB_Info LAGraph_CFL_AllPaths_free_outputs(GrB_Matrix* outputs, int64_t nonterms
     }
     free(outputs);
   }
-  outputs = NULL;
   GrB_free(all_paths_ptr_t);
   return GrB_SUCCESS;
 #endif
