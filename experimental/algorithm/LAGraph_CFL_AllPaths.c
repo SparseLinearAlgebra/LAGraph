@@ -143,15 +143,8 @@ void mult_all_paths(AllPathsElem *z,
 
 void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exist)
 {
-  if (*edge_exist)
-  {
-    z->data.single_elem = GrB_INDEX_MAX; // A special value to indicate that this path corresponds to a terminal rule (A->t) or an epsilon rule (A->eps)
-    z->n = 1;
-  }
-  else{
-    z->n = x->n;
-    z->data.single_elem = x->data.single_elem;
-  }
+  z->data.single_elem = GrB_INDEX_MAX; // A special value to indicate that this path corresponds to a terminal rule (A->t) or an epsilon rule (A->eps)
+  z->n = 1;
 }
 
 #define MULT_PATH_INDEX_DEFN                                                   \
