@@ -93,7 +93,7 @@ static GrB_Index* insert_all_paths(size_t* n, const GrB_Index* arr, size_t len, 
     return tmp;
 }
 
-void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
+static void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
 {
     // temp is needed to avoid freeing the memory of z in case z == x or z == y
     AllPathsElem temp;
@@ -132,7 +132,7 @@ void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
     *z = temp;
 }
 
-void mult_all_paths(AllPathsElem *z,
+static void mult_all_paths(AllPathsElem *z,
                      const AllPathsElem *x, GrB_Index ix, GrB_Index jx,
                      const AllPathsElem *y, GrB_Index iy, GrB_Index jy,
                      const void *theta)
@@ -141,14 +141,14 @@ void mult_all_paths(AllPathsElem *z,
   z->n = 1;
 }
 
-void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exist)
+static void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exist)
 {
   z->data.single_elem = GrB_INDEX_MAX; // A special value to indicate that this path corresponds to a terminal rule (A->t) or an epsilon rule (A->eps)
   z->n = 1;
 }
 
 #define MULT_PATH_INDEX_DEFN                                                   \
-"void mult_all_paths(AllPathsElem *z, \n"      \
+"static void mult_all_paths(AllPathsElem *z, \n"      \
 "                     const AllPathsElem *x, GrB_Index ix, GrB_Index jx, \n"      \
 "                     const AllPathsElem *y, GrB_Index iy, GrB_Index jy, \n"      \
 "                     const void *theta) \n"      \
@@ -158,7 +158,7 @@ void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exis
 "}"
 
 //Adding the count of all internal vertices in a reduction
-void add_get_nvals_all_paths(AllPathsElem *z, const AllPathsElem *x, const AllPathsElem *y)
+static void add_get_nvals_all_paths(AllPathsElem *z, const AllPathsElem *x, const AllPathsElem *y)
 {
   z->n = x->n + y->n;
 }
