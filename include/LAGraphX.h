@@ -858,34 +858,6 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
 
 //****************************************************************************
 LAGRAPHX_PUBLIC
-int LAGraph_RSM_reachability(
-    // output:
-    GrB_Vector *reachable,
-
-    // input:
-    size_t num_terminals, // # terminal labels
-    LAGraph_Graph *G_a,   // terminal transitions
-    LAGraph_Graph *N_a,   // terminal transitions
-
-    size_t num_nonterminals, // # nonterminal labels
-    LAGraph_Graph *N_S,      // nonterminal RSM transitions
-    LAGraph_Graph *Call_S,   // call transition matrix
-    LAGraph_Graph *Ret_S,    // return transition matrix
-
-    const GrB_Index *QS, // staring states in RSM
-    size_t nqs,          // # starting states
-    const GrB_Index *QF, // final states in RSM
-    size_t nqf,          // # final states
-
-    const GrB_Index *Source, // sources vertices
-    size_t ns,               // # source vertices
-
-    char *msg
-
-);
-
-//****************************************************************************
-LAGRAPHX_PUBLIC
 int LAGraph_VertexCentrality_Triangle       // vertex triangle-centrality
 (
     // outputs:
@@ -1124,6 +1096,23 @@ GrB_Info LAGraph_CFL_reachability
     int64_t rules_count,            // The total number of rules in the CFG.
     char *msg                       // Message string for error reporting.
 ) ;
+
+int LAGraph_CFPQ_RSM(
+    // output:
+    GrB_Vector *reachable,
+
+    // RSM terminal input:
+    size_t num_terminals, GrB_Matrix *rsm_term, GrB_Matrix *graph_term,
+
+    // RSM non-terminal input:
+    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Matrix *rsm_call, GrB_Vector *rsm_start,
+    GrB_Vector *rsm_final,
+
+    size_t start_nonterm, GrB_Index start_vertex,
+
+    GrB_Index Q, GrB_Index V,
+
+    char *msg);
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
