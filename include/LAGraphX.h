@@ -1105,7 +1105,7 @@ int LAGraph_CFPQ_RSM(
     size_t num_terminals, GrB_Matrix *rsm_term, GrB_Matrix *graph_term,
 
     // RSM non-terminal input:
-    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Matrix *rsm_call, GrB_Vector *rsm_start,
+    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Vector *rsm_start,
     GrB_Vector *rsm_final,
 
     size_t start_nonterm, GrB_Index start_vertex,

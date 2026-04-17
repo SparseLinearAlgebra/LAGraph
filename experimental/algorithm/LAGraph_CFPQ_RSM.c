@@ -35,6 +35,12 @@
                 GrB_free(&graph_nt[_i]);                                                           \
             LAGraph_Free((void **)&graph_nt, GrB_NULL);                                            \
         }                                                                                          \
+        if (rsm_call != NULL)                                                                      \
+        {                                                                                          \
+            for (size_t _i = 0; _i < num_nonterminals; ++_i)                                       \
+                GrB_free(&rsm_call[_i]);                                                           \
+            LAGraph_Free((void **)&rsm_call, GrB_NULL);                                            \
+        }                                                                                          \
     }
 #define LG_FREE_ALL                                                                                \
     {                                                                                              \
@@ -79,6 +85,26 @@ static GrB_Info s_mxm_chain(GrB_Matrix C,     // output accumulator  |Q|*|V*V|
 
     return GrB_SUCCESS;
 }
+
+static GrB_Info build_call_matrix(GrB_Matrix *call, GrB_Matrix rsm_nt, GrB_Vector rsm_start,
+                                  GrB_Index Q)
+{
+    GrB_Vector q_call_mask = GrB_NULL;
+
+    H_TRY(GrB_Matrix_new(call, GrB_BOOL, Q, Q));
+    H_TRY(GrB_Vector_new(&q_call_mask, GrB_BOOL, Q));
+
+    // [q_call, q_ret] -> [q_call]
+    H_TRY(GrB_reduce(q_call_mask, GrB_NULL, GrB_NULL, GrB_LOR_MONOID_BOOL, rsm_nt, GrB_NULL));
+    // |Q|*1 * 1*|Q| -> |Q|*|Q|
+    H_TRY(GrB_mxm(*call, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL, (GrB_Matrix)q_call_mask,
+                  (GrB_Matrix)rsm_start, GrB_DESC_T1));
+
+    H_TRY(GrB_Vector_free(&q_call_mask));
+
+    return GrB_SUCCESS;
+}
+
 #undef H_TRY
 
 int LAGraph_CFPQ_RSM(
@@ -89,8 +115,7 @@ int LAGraph_CFPQ_RSM(
     size_t num_terminals, GrB_Matrix *rsm_term, GrB_Matrix *graph_term,
 
     // RSM non-terminal input:
-    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Matrix *rsm_call, GrB_Vector *rsm_start,
-    GrB_Vector *rsm_final,
+    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Vector *rsm_start, GrB_Vector *rsm_final,
 
     size_t start_nonterm, GrB_Index start_vertex,
 
@@ -119,11 +144,11 @@ int LAGraph_CFPQ_RSM(
 
     GrB_Matrix *Stack = NULL;
     GrB_Matrix *graph_nt = NULL;
+    GrB_Matrix *rsm_call = NULL;
 
     LG_ASSERT(reachable != NULL, GrB_NULL_POINTER);
     LG_ASSERT(rsm_term != NULL, GrB_NULL_POINTER);
     LG_ASSERT(rsm_nonterm != NULL, GrB_NULL_POINTER);
-    LG_ASSERT(rsm_call != NULL, GrB_NULL_POINTER);
     LG_ASSERT(rsm_start != NULL, GrB_NULL_POINTER);
     LG_ASSERT(rsm_final != NULL, GrB_NULL_POINTER);
     LG_ASSERT(start_nonterm < num_nonterminals, GrB_INVALID_VALUE);
@@ -136,17 +161,20 @@ int LAGraph_CFPQ_RSM(
     // allocate per-nonterminal arrays
     LG_TRY(LAGraph_Malloc((void **)&Stack, num_nonterminals, sizeof(GrB_Matrix), msg));
     LG_TRY(LAGraph_Malloc((void **)&graph_nt, num_nonterminals, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Malloc((void **)&rsm_call, num_nonterminals, sizeof(GrB_Matrix), msg));
 
     for (size_t i = 0; i < num_nonterminals; ++i)
     {
         Stack[i] = GrB_NULL;
         graph_nt[i] = GrB_NULL;
+        rsm_call[i] = GrB_NULL;
     }
 
     for (size_t i = 0; i < num_nonterminals; ++i)
     {
         GRB_TRY(GrB_Matrix_new(&Stack[i], GrB_BOOL, Q, VV));
         GRB_TRY(GrB_Matrix_new(&graph_nt[i], GrB_BOOL, V, V));
+        GRB_TRY(build_call_matrix(&rsm_call[i], rsm_nonterm[i], rsm_start[i], Q));
     }
 
     // allocate working matrices
