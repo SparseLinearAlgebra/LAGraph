@@ -44,15 +44,6 @@
         }                                                                 \
     }
 
-#define ADD_INDEX_TO_ERROR_RULE(rule, i)                     \
-    {                                                        \
-        rule.len_indexes_str += snprintf(                    \
-            rule.indexes_str + rule.len_indexes_str,         \
-            LAGRAPH_MSG_LEN - rule.len_indexes_str,          \
-            rule.count == 0 ? "%" PRId64 : ", %" PRId64, i); \
-        rule.count++;                                        \
-    }
-
 #include "LG_internal.h"
 #include <LAGraphX.h>
 
@@ -287,25 +278,25 @@ GrB_Info LAGraph_CFL_AllPaths(
     int8_t mode                     // mode = 0 - postprocessing(prefer), mode = 1 - CFPQ Core
 )
 {
-    LG_CLEAR_MSG;
-    size_t msg_len = 0; // For error formatting
-    GrB_Matrix* T = NULL;
-    GrB_Scalar false_scalar = NULL;
-    GrB_Matrix *outputs_reachability = NULL;
-    bool *t_empty_flags = NULL; // t_empty_flags[i] == true <=> T[i] is empty
-    // Arrays for processing rules
-    size_t *eps_rules = NULL, eps_rules_count = 0;   // [Variable -> eps]
-    size_t *term_rules = NULL, term_rules_count = 0; // [Variable -> term]
-    size_t *bin_rules = NULL, bin_rules_count = 0;   // [Variable -> AB]
+  LG_CLEAR_MSG;
+  size_t msg_len = 0; // For error formatting
+  GrB_Matrix* T = NULL;
+  GrB_Scalar false_scalar = NULL;
+  GrB_Matrix* outputs_reachability = NULL;
+  bool* t_empty_flags = NULL; // t_empty_flags[i] == true <=> T[i] is empty
+  // Arrays for processing rules
+  size_t* eps_rules = NULL, eps_rules_count = 0;   // [Variable -> eps]
+  size_t* term_rules = NULL, term_rules_count = 0; // [Variable -> term]
+  size_t* bin_rules = NULL, bin_rules_count = 0;   // [Variable -> AB]
 
 
-GrB_Matrix identity_matrix = NULL;
-GrB_Vector v_diag = NULL;
+  GrB_Matrix identity_matrix = NULL;
+  GrB_Vector v_diag = NULL;
 
 #if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
   return (GrB_NOT_IMPLEMENTED);
 #else
-// Create a semiring for the CFPQ core and postprocessing modes
+  // Create a semiring for the CFPQ core and postprocessing modes
   GrB_BinaryOp AllPaths_add = NULL;
   GrB_BinaryOp AllPaths_add_get_nvals = NULL;
   GrB_Monoid AllPaths_monoid = NULL;
@@ -315,87 +306,87 @@ GrB_Vector v_diag = NULL;
   GrB_BinaryOp AllPaths_set = NULL;
   GrB_Scalar Theta = NULL;
   GrB_Scalar bottom_scalar = NULL;
-  
+
   GrB_free(all_paths_ptr_t);
   GRB_TRY(GrB_Type_new(all_paths_ptr_t, sizeof(AllPathsElem)));
   AllPaths_type = *all_paths_ptr_t;
-  
+
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
   GRB_TRY(GrB_Scalar_setElement_BOOL(Theta, false));
-  
-  AllPathsElem bottom = {0};
+
+  AllPathsElem bottom = { 0 };
   GRB_TRY(GrB_Scalar_new(&bottom_scalar, AllPaths_type));
-  GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void *)(&bottom)));
-  
+  GRB_TRY(GrB_Scalar_setElement_UDT(bottom_scalar, (void*)(&bottom)));
+
   GRB_TRY(GrB_BinaryOp_new(
-                           &AllPaths_add,
-                           (void *)add_all_paths,
-                           AllPaths_type,
-                           AllPaths_type,
-                           AllPaths_type));
-  
+    &AllPaths_add,
+    (void*)add_all_paths,
+    AllPaths_type,
+    AllPaths_type,
+    AllPaths_type));
+
   GRB_TRY(GrB_Monoid_new(
-                         &AllPaths_monoid,
-                         AllPaths_add,
-                         (void *)(&bottom)));
+    &AllPaths_monoid,
+    AllPaths_add,
+    (void*)(&bottom)));
   //CFPQ core
-  if (mode == 1){
-  GRB_TRY(GxB_IndexBinaryOp_new(
-                                &IAllPaths_mult,
-                                (void *)mult_all_paths,
-                                AllPaths_type,
-                                AllPaths_type,
-                                AllPaths_type,
-                                GrB_BOOL,
-                                "mult_all_paths",
-                                MULT_PATH_INDEX_DEFN));
+  if (mode == 1) {
+    GRB_TRY(GxB_IndexBinaryOp_new(
+      &IAllPaths_mult,
+      (void*)mult_all_paths,
+      AllPaths_type,
+      AllPaths_type,
+      AllPaths_type,
+      GrB_BOOL,
+      "mult_all_paths",
+      MULT_PATH_INDEX_DEFN));
   }
   //postprocessing
-  else if (mode == 0){
-      GRB_TRY(GxB_IndexBinaryOp_new(
-                                &IAllPaths_mult,
-                                (void *)mult_all_paths_post,
-                                AllPaths_type,
-                                GrB_BOOL,
-                                GrB_BOOL,
-                                GrB_BOOL,
-                                "mult_all_paths_post",
-                                MULT_PATH_POST_INDEX_DEFN));
+  else if (mode == 0) {
+    GRB_TRY(GxB_IndexBinaryOp_new(
+      &IAllPaths_mult,
+      (void*)mult_all_paths_post,
+      AllPaths_type,
+      GrB_BOOL,
+      GrB_BOOL,
+      GrB_BOOL,
+      "mult_all_paths_post",
+      MULT_PATH_POST_INDEX_DEFN));
   }
   else {
     ADD_TO_MSG("Mode must be 0(postprocessing) or 1(CFPQ Core)");
     return GrB_INVALID_VALUE;
   }
-  
+
   GRB_TRY(GxB_BinaryOp_new_IndexOp(
-                                   &AllPaths_mult,
-                                   IAllPaths_mult,
-                                   Theta));
-  
+    &AllPaths_mult,
+    IAllPaths_mult,
+    Theta));
+
   GRB_TRY(GrB_Semiring_new(
-                           &AllPaths_semiring,
-                           AllPaths_monoid,
-                           AllPaths_mult));
-  
+    &AllPaths_semiring,
+    AllPaths_monoid,
+    AllPaths_mult));
+
   GRB_TRY(GrB_BinaryOp_new(
-                           &AllPaths_set,
-                           (void *)set_all_paths,
-                           AllPaths_type,
-                           AllPaths_type,
-                           GrB_BOOL));
-  
+    &AllPaths_set,
+    (void*)set_all_paths,
+    AllPaths_type,
+    AllPaths_type,
+    GrB_BOOL));
+
   GRB_TRY(GrB_BinaryOp_new(
-                           &AllPaths_add_get_nvals,
-                           (void *)add_get_nvals_all_paths,
-                           AllPaths_type,
-                           AllPaths_type,
-                           AllPaths_type));
-  
+    &AllPaths_add_get_nvals,
+    (void*)add_get_nvals_all_paths,
+    AllPaths_type,
+    AllPaths_type,
+    AllPaths_type));
+
   GRB_TRY(GrB_Monoid_new(
-                         &AllPaths_monoid_get_nvals,
-                         AllPaths_add_get_nvals,
-                         (void *)(&bottom)));
-  
+    &AllPaths_monoid_get_nvals,
+    AllPaths_add_get_nvals,
+    (void*)(&bottom)));
+
   CFL_Semiring semiring = {
       .type = AllPaths_type,
       .semiring = AllPaths_semiring,
@@ -403,10 +394,10 @@ GrB_Vector v_diag = NULL;
       .mult = AllPaths_mult,
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,
-      .get_nvals = get_nvals_all_paths};
-      
+      .get_nvals = get_nvals_all_paths };
+
   // CFPQ core mode
-  if(mode == 1){
+  if (mode == 1) {
     LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
   }
   // postprocessing mode
@@ -419,7 +410,7 @@ GrB_Vector v_diag = NULL;
     LG_TRY(LAGraph_CFL_reachability(outputs_reachability, adj_matrices, terms_count, \
       nonterms_count, rules, rules_count, \
       msg));
-      
+
     LG_TRY(LAGraph_Calloc((void**)&T, nonterms_count, sizeof(GrB_Matrix), msg));
     GRB_TRY(GrB_Scalar_new(&false_scalar, GrB_BOOL));
     GRB_TRY(GrB_Scalar_setElement_BOOL(false_scalar, false));
@@ -449,21 +440,18 @@ GrB_Vector v_diag = NULL;
       if (is_rule_eps)
       {
         eps_rules[eps_rules_count++] = i;
-
         continue;
       }
       // [Variable -> term]
       if (is_rule_term)
       {
         term_rules[term_rules_count++] = i;
-
         continue;
       }
       // [Variable -> A B]
       if (is_rule_bin)
       {
         bin_rules[bin_rules_count++] = i;
-
         continue;
       }
     }
@@ -519,10 +507,7 @@ GrB_Vector v_diag = NULL;
       LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
       // If one of matrices is empty then their product will be empty
-      if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B])
-      {
-        continue;
-      }
+      if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B]) continue;
 
       GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : semiring.add;
       GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op,
@@ -530,12 +515,12 @@ GrB_Vector v_diag = NULL;
         GrB_NULL))
     }
 
-      for (size_t i = 0; i < nonterms_count; i++)
-      {
-        outputs[i] = T[i];
-        GrB_free(&outputs_reachability[i]);
-      }
-    } // End of postprocessing mode
+    for (size_t i = 0; i < nonterms_count; i++)
+    {
+      outputs[i] = T[i];
+      GrB_free(&outputs_reachability[i]);
+    }
+  } // End of postprocessing mode
   LG_FREE_WORK;
   return GrB_SUCCESS;
 #endif
