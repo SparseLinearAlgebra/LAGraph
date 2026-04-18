@@ -24,7 +24,7 @@
 #include <stdio.h>
 
 #define MIN_MASK 0
-#define MAX_MASK 8
+#define MAX_MASK 15
 
 #define run_algorithm(opt_mask)                                                                  \
     LAGraph_CFL_reachability_multsrc_adv(&output, adj_matrices, src, src_count,              \
