@@ -203,11 +203,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     GRB_TRY(GrB_Vector_new(&a, GrB_BOOL, n));
     GRB_TRY(GrB_Matrix_new(&M, GrB_BOOL, n, n));
 
-    // #ifdef DEBUG_CFL_REACHABILITY
-    // printf("MSrc:\n");
-    // PRINT_MATRIX(MSrc);
-    // #endif
-
     // Arrays for processing rules
     size_t eps_rules[rules_count], eps_rules_count = 0;   // [Variable -> eps]
     size_t term_rules[rules_count], term_rules_count = 0; // [Variable -> term]
@@ -301,11 +296,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         );
 
         t_empty_flags[term_rule.nonterm] = false;
-
-        // #ifdef DEBUG_CFL_REACHABILITY
-        // GxB_Matrix_iso(&iso_flag, T[term_rule.nonterm]);
-        // printf("[TERM] eWiseUnion: NONTERM: %d (ISO: %d)\n", term_rule.nonterm, iso_flag);
-        // #endif
     }
 
     // Rule [Variable -> eps]
@@ -318,12 +308,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         );
         
         t_empty_flags[eps_rule.nonterm] = false;
-
-        // #ifdef DEBUG_CFL_REACHABILITY
-        // GxB_Matrix_iso(&iso_flag, T[eps_rule.nonterm]);
-        // printf("[EPS] eWiseUnion: NONTERM: %d (ISO: %d)\n",
-        //         eps_rule.nonterm, iso_flag);
-        // #endif
     }
 
     // Rule [Variable -> Variable1 Variable2]
@@ -375,22 +359,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc
         }
     }
 
-    // #ifdef DEBUG_CFL_REACHABILITY
-    // printf("Before MSrc = MSrc * T^S\n");
-    // printf("MSrc:\n");
-    // PRINT_MATRIX(MSrc)
-    // printf("T^S:\n");
-    // PRINT_MATRIX(T[0]);
-    // #endif
-
     GRB_TRY(GrB_mxm(MSrc, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
             MSrc, T[0], GrB_NULL));
-
-    // #ifdef DEBUG_CFL_REACHABILITY
-    // printf("After MSrc = MSrc * T^S\n");
-    // printf("MSrc, output:\n");
-    // PRINT_MATRIX(MSrc)
-    // #endif
 
     GRB_TRY(GrB_Matrix_dup(output, MSrc));
 

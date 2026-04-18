@@ -806,21 +806,16 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
 
             TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], dT[bin_rule.nonterm], false, opt_mask));
 
-            // ? <- this means that without this step, unit tests pass,
-            // although algorithm requires it.
-
             TRY(CFL_mxm(M2, TSrc[bin_rule.nonterm], dT[bin_rule.prod_A], false, false, opt_mask));
 
             TRY(CFL_mxm(Temp1, M1, dT[bin_rule.prod_B], false, false, opt_mask));
 
-            // ?
             TRY(CFL_mxm(Temp2, M2, T[bin_rule.prod_B], false, false, opt_mask));
 
             TRY(CFL_dup(dT[bin_rule.nonterm], Temp1, opt_mask));
 
             TRY(CFL_wise(dT[bin_rule.nonterm], dT[bin_rule.nonterm], Temp2, false, opt_mask));
 
-            // ?
             TRY(CFL_rsub(dT[bin_rule.nonterm], T[bin_rule.nonterm], opt_mask));
 
             // Update source vertices matrix to find appropriate paths only
