@@ -1178,7 +1178,8 @@ GrB_Info LAGraph_CFL_AllPaths(
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     int64_t rules_count,            // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    char *msg,                      // Message string for error reporting.
+    int8_t mode                     // mode = 0 - postprocessing(prefer), mode = 1 - CFPQ Core 
 );
 
 // Free outputs and all_paths_ptr_t after you have finished working with the output matrices from LAGraph_CFL_AllPaths.
@@ -1187,7 +1188,6 @@ GrB_Info LAGraph_CFL_AllPaths_free_outputs(
   GrB_Matrix* outputs,
   int64_t nonterms_count,
   GrB_Type* all_paths_ptr_t);
-
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm

@@ -1,16 +1,57 @@
-#define LG_FREE_WORK          \
-  {                           \
-    GrB_free(&AllPaths_semiring);   \
-    GrB_free(&AllPaths_monoid);     \
-    GrB_free(&AllPaths_monoid_get_nvals);     \
+#define LG_FREE_WORK \
+{ \
+    if (mode == 0) { \
+        if (outputs_reachability != NULL) { \
+            for (int64_t i = 0; i < nonterms_count; i++) { \
+                GrB_free(&outputs_reachability[i]); \
+            } \            
+        } \
+        LAGraph_Free((void**)&outputs_reachability, NULL); \
+        LAGraph_Free((void **)&T, NULL); \
+        GrB_free(&false_scalar); \
+        GrB_free(&identity_matrix); \
+        GrB_free(&v_diag); \
+        LAGraph_Free((void **)&t_empty_flags, NULL); \
+        LAGraph_Free((void **)&eps_rules, NULL); \
+        LAGraph_Free((void **)&term_rules, NULL); \
+        LAGraph_Free((void **)&bin_rules, NULL); \
+    } \
+    GrB_free(&AllPaths_semiring); \
+    GrB_free(&AllPaths_monoid); \
+    GrB_free(&AllPaths_monoid_get_nvals); \
     GrB_free(&bottom_scalar); \
-    GrB_free(&IAllPaths_mult);      \
-    GrB_free(&AllPaths_set);        \
-    GrB_free(&AllPaths_mult);       \
-    GrB_free(&AllPaths_add);        \
-    GrB_free(&AllPaths_add_get_nvals);        \
-    GrB_free(&Theta);         \
-  }
+    GrB_free(&IAllPaths_mult); \
+    GrB_free(&AllPaths_set); \
+    GrB_free(&AllPaths_mult); \
+    GrB_free(&AllPaths_add); \
+    GrB_free(&AllPaths_add_get_nvals); \
+    GrB_free(&Theta); \
+}
+
+#define ADD_TO_MSG(...)                                                   \
+    {                                                                     \
+        if (msg_len == 0)                                                 \
+        {                                                                 \
+            msg_len +=                                                    \
+                snprintf(msg, LAGRAPH_MSG_LEN,                            \
+                         "LAGraph failure (file %s, line %d): ",          \
+                         __FILE__, __LINE__);                             \
+        }                                                                 \
+        if (msg_len < LAGRAPH_MSG_LEN)                                    \
+        {                                                                 \
+            msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, \
+                                __VA_ARGS__);                             \
+        }                                                                 \
+    }
+
+#define ADD_INDEX_TO_ERROR_RULE(rule, i)                     \
+    {                                                        \
+        rule.len_indexes_str += snprintf(                    \
+            rule.indexes_str + rule.len_indexes_str,         \
+            LAGRAPH_MSG_LEN - rule.len_indexes_str,          \
+            rule.count == 0 ? "%" PRId64 : ", %" PRId64, i); \
+        rule.count++;                                        \
+    }
 
 #include "LG_internal.h"
 #include <LAGraphX.h>
@@ -141,6 +182,15 @@ static void mult_all_paths(AllPathsElem *z,
   z->n = 1;
 }
 
+static void mult_all_paths_post(AllPathsElem *z,
+                     const void *x, GrB_Index ix, GrB_Index jx,
+                     const void *y, GrB_Index iy, GrB_Index jy,
+                     const void *theta)
+{
+  z->data.single_elem = jx;
+  z->n = 1;
+}
+
 static void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *edge_exist)
 {
   z->data.single_elem = GrB_INDEX_MAX; // A special value to indicate that this path corresponds to a terminal rule (A->t) or an epsilon rule (A->eps)
@@ -151,6 +201,16 @@ static void set_all_paths(AllPathsElem *z, const AllPathsElem *x, const bool *ed
 "static void mult_all_paths(AllPathsElem *z, \n"      \
 "                     const AllPathsElem *x, GrB_Index ix, GrB_Index jx, \n"      \
 "                     const AllPathsElem *y, GrB_Index iy, GrB_Index jy, \n"      \
+"                     const void *theta) \n"      \
+"{ \n"      \
+"  z->data.single_elem = jx; \n"      \
+"  z->n = 1; \n"      \
+"}"
+
+#define MULT_PATH_POST_INDEX_DEFN                                                   \
+"static void mult_all_paths_post(AllPathsElem *z, \n"      \
+"                     const void *x, GrB_Index ix, GrB_Index jx, \n"      \
+"                     const void *y, GrB_Index iy, GrB_Index jy, \n"      \
 "                     const void *theta) \n"      \
 "{ \n"      \
 "  z->data.single_elem = jx; \n"      \
@@ -223,13 +283,29 @@ GrB_Info LAGraph_CFL_AllPaths(
     int64_t nonterms_count,         // The total number of non-terminal symbols in the CFG.
     const LAGraph_rule_WCNF *rules, // The rules of the CFG.
     int64_t rules_count,            // The total number of rules in the CFG.
-    char *msg                       // Message string for error reporting.
+    char *msg,                      // Message string for error reporting.
+    int8_t mode                     // mode = 0 - postprocessing(prefer), mode = 1 - CFPQ Core
 )
 {
+    LG_CLEAR_MSG;
+    size_t msg_len = 0; // For error formatting
+    GrB_Matrix* T = NULL;
+    GrB_Scalar false_scalar = NULL;
+    GrB_Matrix *outputs_reachability = NULL;
+    bool *t_empty_flags = NULL; // t_empty_flags[i] == true <=> T[i] is empty
+    // Arrays for processing rules
+    size_t *eps_rules = NULL, eps_rules_count = 0;   // [Variable -> eps]
+    size_t *term_rules = NULL, term_rules_count = 0; // [Variable -> term]
+    size_t *bin_rules = NULL, bin_rules_count = 0;   // [Variable -> AB]
+
+
+GrB_Matrix identity_matrix = NULL;
+GrB_Vector v_diag = NULL;
+
 #if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
   return (GrB_NOT_IMPLEMENTED);
 #else
-  // Semiring components
+// Create a semiring for the CFPQ core and postprocessing modes
   GrB_BinaryOp AllPaths_add = NULL;
   GrB_BinaryOp AllPaths_add_get_nvals = NULL;
   GrB_Monoid AllPaths_monoid = NULL;
@@ -262,7 +338,8 @@ GrB_Info LAGraph_CFL_AllPaths(
                          &AllPaths_monoid,
                          AllPaths_add,
                          (void *)(&bottom)));
-  
+  //CFPQ core
+  if (mode == 1){
   GRB_TRY(GxB_IndexBinaryOp_new(
                                 &IAllPaths_mult,
                                 (void *)mult_all_paths,
@@ -272,6 +349,23 @@ GrB_Info LAGraph_CFL_AllPaths(
                                 GrB_BOOL,
                                 "mult_all_paths",
                                 MULT_PATH_INDEX_DEFN));
+  }
+  //postprocessing
+  else if (mode == 0){
+      GRB_TRY(GxB_IndexBinaryOp_new(
+                                &IAllPaths_mult,
+                                (void *)mult_all_paths_post,
+                                AllPaths_type,
+                                GrB_BOOL,
+                                GrB_BOOL,
+                                GrB_BOOL,
+                                "mult_all_paths_post",
+                                MULT_PATH_POST_INDEX_DEFN));
+  }
+  else {
+    ADD_TO_MSG("Mode must be 0(postprocessing) or 1(CFPQ Core)");
+    return GrB_INVALID_VALUE;
+  }
   
   GRB_TRY(GxB_BinaryOp_new_IndexOp(
                                    &AllPaths_mult,
@@ -310,9 +404,138 @@ GrB_Info LAGraph_CFL_AllPaths(
       .init_path = AllPaths_set,
       .bottom_scalar = bottom_scalar,
       .get_nvals = get_nvals_all_paths};
-  
-  LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
-  
+      
+  // CFPQ core mode
+  if(mode == 1){
+    LG_TRY(LAGraph_CFPQ_core(outputs, adj_matrices, terms_count, nonterms_count, rules, rules_count, &semiring, msg));
+  }
+  // postprocessing mode
+  else if (mode == 0) {
+    LG_ASSERT_MSG(outputs != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
+    LG_CLEAR_MSG;
+    msg_len = 0;
+
+    LAGraph_Calloc((void**)&outputs_reachability, nonterms_count, sizeof(GrB_Matrix), msg);
+    LG_TRY(LAGraph_CFL_reachability(outputs_reachability, adj_matrices, terms_count, \
+      nonterms_count, rules, rules_count, \
+      msg));
+      
+    LG_TRY(LAGraph_Calloc((void**)&T, nonterms_count, sizeof(GrB_Matrix), msg));
+    GRB_TRY(GrB_Scalar_new(&false_scalar, GrB_BOOL));
+    GRB_TRY(GrB_Scalar_setElement_BOOL(false_scalar, false));
+    LG_TRY(LAGraph_Calloc((void**)&t_empty_flags, nonterms_count, sizeof(bool), msg));
+    GrB_Index n;
+    GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
+
+    // Create nonterms matrices
+    for (int64_t i = 0; i < nonterms_count; i++)
+    {
+      GRB_TRY(GrB_Matrix_new(&T[i], semiring.type, n, n));
+      t_empty_flags[i] = true;
+    }
+
+    LG_TRY(LAGraph_Calloc((void**)&eps_rules, rules_count, sizeof(size_t), msg));
+    LG_TRY(LAGraph_Calloc((void**)&term_rules, rules_count, sizeof(size_t), msg));
+    LG_TRY(LAGraph_Calloc((void**)&bin_rules, rules_count, sizeof(size_t), msg));
+
+    // Classify rules into three types: [Variable -> eps], [Variable -> term], and [Variable -> A B]
+    for (int64_t i = 0; i < rules_count; i++)
+    {
+      LAGraph_rule_WCNF rule = rules[i];
+      bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
+      bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
+      bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
+      // [Variable -> eps]
+      if (is_rule_eps)
+      {
+        eps_rules[eps_rules_count++] = i;
+
+        continue;
+      }
+      // [Variable -> term]
+      if (is_rule_term)
+      {
+        term_rules[term_rules_count++] = i;
+
+        continue;
+      }
+      // [Variable -> A B]
+      if (is_rule_bin)
+      {
+        bin_rules[bin_rules_count++] = i;
+
+        continue;
+      }
+    }
+
+    // Rule [Variable -> term]
+    for (int64_t i = 0; i < term_rules_count; i++)
+    {
+      LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
+      GrB_Index adj_matrix_nnz = 0;
+      GRB_TRY(GrB_Matrix_nvals(&adj_matrix_nnz, adj_matrices[term_rule.prod_A]));
+      if (adj_matrix_nnz == 0)
+      {
+        continue;
+      }
+      GxB_eWiseUnion(
+        T[term_rule.nonterm], GrB_NULL, GrB_NULL, semiring.init_path,
+        T[term_rule.nonterm], semiring.bottom_scalar, adj_matrices[term_rule.prod_A], false_scalar, GrB_NULL);
+
+      t_empty_flags[term_rule.nonterm] = false;
+    }
+
+    GRB_TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
+    GRB_TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
+    GRB_TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
+    GRB_TRY(GrB_free(&v_diag));
+
+    // Rule [Variable -> eps]
+    for (int64_t i = 0; i < eps_rules_count; i++)
+    {
+      LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
+      GrB_BinaryOp acc_op = t_empty_flags[eps_rule.nonterm] ? GrB_NULL : semiring.add;
+      GxB_eWiseUnion(
+        T[eps_rule.nonterm], GrB_NULL, acc_op, semiring.init_path,
+        T[eps_rule.nonterm], semiring.bottom_scalar, identity_matrix, false_scalar, GrB_NULL);
+
+      t_empty_flags[eps_rule.nonterm] = false;
+    }
+    GrB_free(&identity_matrix);
+
+    // Marking dont empty matrices after transitive closure
+    for (int64_t i = 0; i < nonterms_count; i++)
+    {
+      GrB_Index temp_nvals = 0;
+      GrB_Matrix_nvals(&temp_nvals, outputs_reachability[i]);
+      if (temp_nvals != 0) {
+        t_empty_flags[i] = false;
+      }
+    }
+
+    // Rule [Variable -> A B]
+    for (int64_t i = 0; i < bin_rules_count; i++)
+    {
+      LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
+
+      // If one of matrices is empty then their product will be empty
+      if (t_empty_flags[bin_rule.prod_A] || t_empty_flags[bin_rule.prod_B])
+      {
+        continue;
+      }
+
+      GrB_BinaryOp acc_op = t_empty_flags[bin_rule.nonterm] ? GrB_NULL : semiring.add;
+      GRB_TRY(GrB_mxm(T[bin_rule.nonterm], GrB_NULL, acc_op,
+        semiring.semiring, outputs_reachability[bin_rule.prod_A], outputs_reachability[bin_rule.prod_B],
+        GrB_NULL))
+    }
+
+      for (size_t i = 0; i < nonterms_count; i++)
+      {
+        outputs[i] = T[i];
+        GrB_free(&outputs_reachability[i]);
+      }
+    } // End of postprocessing mode
   LG_FREE_WORK;
   return GrB_SUCCESS;
 #endif
@@ -321,6 +544,9 @@ GrB_Info LAGraph_CFL_AllPaths(
 // Helper function to free the output matrix of LAGraph_CFL_AllPaths, which contains elements of type AllPathsElem with dynamically allocated arrays of intermediate vertices. 
 static void free_AllPaths_matrix(GrB_Matrix* ptr_output) 
 {
+  #if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
+  return (GrB_NOT_IMPLEMENTED);
+#else
   GxB_Iterator iterator;
   GxB_Iterator_new(&iterator);
   GrB_Info info = GxB_Matrix_Iterator_attach(iterator, *ptr_output, NULL);
@@ -338,6 +564,7 @@ static void free_AllPaths_matrix(GrB_Matrix* ptr_output)
 
   GrB_free(&iterator);
   GrB_free(ptr_output);
+  #endif
 }
 
 // Free outputs and all_paths_ptr_t after you have finished working with the output matrices from LAGraph_CFL_AllPaths.
