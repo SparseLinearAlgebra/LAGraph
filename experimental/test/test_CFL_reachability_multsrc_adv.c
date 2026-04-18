@@ -23,8 +23,8 @@
 #include <acutest.h>
 #include <stdio.h>
 
-#define MIN_MASK 0
-#define MAX_MASK 15
+#define MIN_MASK 0b0000
+#define MAX_MASK 0b1111
 
 #define run_algorithm(opt_mask)                                                                  \
     LAGraph_CFL_reachability_multsrc_adv(&output, adj_matrices, src, src_count,              \
