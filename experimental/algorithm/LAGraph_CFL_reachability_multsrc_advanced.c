@@ -575,7 +575,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     CFL_Matrix **T;
     CFL_Matrix **dT;
     CFL_Matrix **TSrc;
-    CFL_Matrix **Adj;
     CFL_Matrix *MSrc;
     CFL_Matrix *M1;
     CFL_Matrix *M2;
@@ -745,27 +744,28 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     TRY(LAGraph_Calloc((void **) &nnzs_TSrc_B, symbols_amount, sizeof(GrB_Index), msg));
     TRY(LAGraph_Calloc((void **) &nnzs_TSrc_C, symbols_amount, sizeof(GrB_Index), msg));
 
-    TRY(LAGraph_Calloc((void **) &Adj, symbols_amount, sizeof(CFL_Matrix), msg));
-
     TRY(GrB_Vector_new(&ones_vec, GrB_BOOL, n));
     TRY(GrB_Vector_assign_BOOL(ones_vec, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
 
     TRY(GrB_Matrix_diag(&identity_matrix, ones_vec, 0));
     TRY(CFL_matrix_from_base(&iden, identity_matrix));
 
-    for (int32_t i = 0; i < new_symbols_amount; i++) {
-        TRY(CFL_matrix_from_base(&Adj[i], new_adj_matrices[i]));
-    }
-
     // Create nonterms matrices
     for (int32_t i = 0; i < new_symbols_amount; i++) {
+        GrB_Matrix new_adj_matrix;
+        TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
+        TRY(CFL_matrix_from_base(&dT[i], new_adj_matrix));
+
+        TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
         if (opt_mask & OPT_LAZY) {
-            TRY(CFL_matrix_create_lazy(&T[i], n, n));
+            // TRY(CFL_matrix_create_lazy(&T[i], n, n));
+            CFL_matrix_from_base_lazy(&T[i], new_adj_matrix);
         } else {
-            TRY(CFL_matrix_create(&T[i], n, n));
+            // TRY(CFL_matrix_create(&T[i], n, n));
+            CFL_matrix_from_base(&T[i], new_adj_matrix);
         }
 
-        TRY(CFL_matrix_create(&dT[i], n, n));
+        // TRY(CFL_matrix_create(&dT[i], n, n));
 
         TRY(CFL_matrix_create(&TSrc[i], n, n));
     }
@@ -791,8 +791,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         LAGraph_rule_EWCNF term_rule = new_rules[term_rules[i]];
 
         // I'd like to get rid of double operation
-        GRB_TRY(CFL_wise(T[term_rule.nonterm], T[term_rule.nonterm], Adj[term_rule.prod_A], true, opt_mask));
-        GRB_TRY(CFL_wise(dT[term_rule.nonterm], dT[term_rule.nonterm], Adj[term_rule.prod_A], true, opt_mask));
+        GRB_TRY(CFL_wise(T[term_rule.nonterm], T[term_rule.nonterm], dT[term_rule.prod_A], true, opt_mask));
+        GRB_TRY(CFL_wise(dT[term_rule.nonterm], dT[term_rule.nonterm], dT[term_rule.prod_A], true, opt_mask));
     }
 
     // Rule [Variable -> eps]
