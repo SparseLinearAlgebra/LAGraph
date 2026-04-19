@@ -2,8 +2,15 @@
 #include "LAGraphX.h"
 #include "LAGraph_test.h"
 #include <GraphBLAS.h>
+#include <stddef.h>
 
 char msg[LAGRAPH_MSG_LEN];
+
+static RSM *rsm = NULL;
+static size_t V = 0;
+static size_t n_graph_term = 0;
+static GrB_Matrix *graph_term = NULL;
+static GrB_Vector result = GrB_NULL;
 
 //==============================================================================
 // test setup / teardown
@@ -11,16 +18,85 @@ char msg[LAGRAPH_MSG_LEN];
 
 static void setup(void)
 {
-    OK(LAGraph_Init(msg));
+    LAGraph_Init(msg);
 }
 
 static void teardown(void)
 {
-    OK(LAGraph_Finalize(msg));
+    LAGraph_Finalize(msg);
 }
 
-static void check_reachable(GrB_Vector result, GrB_Index *expected, GrB_Index n_expected,
-                            GrB_Index V, const char *test_name)
+static RSM *alloc_rsm(GrB_Index state_count, GrB_Index term_count, GrB_Index nonterm_count,
+                      GrB_Index start_nonterm)
+{
+    RSM *r = NULL;
+    LAGraph_Malloc((void **)&r, 1, sizeof(RSM), msg);
+    if (r == NULL)
+        return NULL;
+
+    r->state_count = state_count;
+    r->terminal_count = term_count;
+    r->nonterminal_count = nonterm_count;
+    r->start_nonterminal = start_nonterm;
+
+    LAGraph_Calloc((void **)&r->terminal_matrices, term_count, sizeof(GrB_Matrix), msg);
+    LAGraph_Calloc((void **)&r->nonterminal_matrices, nonterm_count, sizeof(GrB_Matrix), msg);
+    LAGraph_Calloc((void **)&r->start_states, nonterm_count, sizeof(GrB_Index), msg);
+    LAGraph_Calloc((void **)&r->final_states, nonterm_count, sizeof(GrB_Vector), msg);
+
+    return r;
+}
+
+static void free_rsm(void)
+{
+    if (rsm == NULL)
+        return;
+
+    if (rsm->terminal_matrices != NULL)
+    {
+        for (size_t i = 0; i < rsm->terminal_count; ++i)
+            GrB_free(&rsm->terminal_matrices[i]);
+        LAGraph_Free((void **)&rsm->terminal_matrices, msg);
+    }
+    if (rsm->nonterminal_matrices != NULL)
+    {
+        for (size_t i = 0; i < rsm->nonterminal_count; ++i)
+            GrB_free(&rsm->nonterminal_matrices[i]);
+        LAGraph_Free((void **)&rsm->nonterminal_matrices, msg);
+    }
+
+    if (rsm->nonterminal_matrices != NULL)
+    {
+        for (size_t i = 0; i < rsm->nonterminal_count; ++i)
+        {
+            GrB_free(&rsm->final_states[i]);
+        }
+        LAGraph_Free((void **)&rsm->final_states, msg);
+    }
+
+    LAGraph_Free((void **)&rsm->start_states, msg);
+    LAGraph_Free((void **)&rsm, msg);
+}
+
+static void free_graph(void)
+{
+    if (graph_term == NULL)
+        return;
+    for (size_t i = 0; i < n_graph_term; ++i)
+        GrB_free(&graph_term[i]);
+    LAGraph_Free((void **)&graph_term, msg);
+    n_graph_term = 0;
+    V = 0;
+}
+
+static void free_workspace(void)
+{
+    GrB_free(&result);
+    free_rsm();
+    free_graph();
+}
+
+static void check_reachable(GrB_Index *expected, GrB_Index n_expected, const char *test_name)
 {
     GrB_Index nvals = 0;
     OK(GrB_Vector_nvals(&nvals, result));
@@ -46,6 +122,8 @@ static void check_reachable(GrB_Vector result, GrB_Index *expected, GrB_Index n_
         for (GrB_Index k = 0; k < nvals; ++k)
             if (val[k])
                 got[idx[k]] = true;
+        free(idx);
+        free(val);
     }
 
     // every expected vertex must be reachable
@@ -65,91 +143,209 @@ static void check_reachable(GrB_Vector result, GrB_Index *expected, GrB_Index n_
              (unsigned long long)n_expected, (unsigned long long)actual_count);
 
     free(got);
-    free(idx);
-    free(val);
 }
 
 //==============================================================================
 // RSM builders
 //==============================================================================
 // Grammar 1:  S -> a S b | a b
-static void rsm_aSb_ab(GrB_Matrix *term, GrB_Matrix *nt, GrB_Vector *start, GrB_Vector *final)
+static void init_rsm_aSb_ab(void)
 {
     GrB_Index Q = 4;
-    OK(GrB_Matrix_new(&term[0], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&term[1], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&nt[0], GrB_BOOL, Q, Q));
-    OK(GrB_Vector_new(&start[0], GrB_BOOL, Q));
-    OK(GrB_Vector_new(&final[0], GrB_BOOL, Q));
+    rsm = alloc_rsm(Q, /*term_count=*/2, /*nonterm_count=*/1, /*start_nonterm=*/0);
 
-    OK(GrB_Matrix_setElement_BOOL(term[0], true, 0, 1)); // 0 -a-> 1
-    OK(GrB_Matrix_setElement_BOOL(term[1], true, 1, 3)); // 1 -b-> 3
-    OK(GrB_Matrix_setElement_BOOL(term[1], true, 2, 3)); // 2 -b-> 3
-    OK(GrB_Matrix_setElement_BOOL(nt[0], true, 1, 2));   // 1 -S-> 2
-    OK(GrB_Vector_setElement_BOOL(start[0], true, 0));
-    OK(GrB_Vector_setElement_BOOL(final[0], true, 3));
+    OK(GrB_Matrix_new(&rsm->terminal_matrices[0], GrB_BOOL, Q, Q));
+    OK(GrB_Matrix_new(&rsm->terminal_matrices[1], GrB_BOOL, Q, Q));
+    OK(GrB_Matrix_new(&rsm->nonterminal_matrices[0], GrB_BOOL, Q, Q));
+    OK(GrB_Vector_new(&rsm->final_states[0], GrB_BOOL, Q));
+
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -a-> 1
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 1, 3));    // 1 -b-> 3
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 2, 3));    // 2 -b-> 3
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 1, 2)); // 1 -S-> 2
+    rsm->start_states[0] = 0;
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[0], true, 3));
 }
 
 // Grammar 2:  S -> a S b | c
-static void rsm_aSb_c(GrB_Matrix *term, GrB_Matrix *nt, GrB_Vector *start, GrB_Vector *final)
+static void init_rsm_aSb_c(void)
 {
     GrB_Index Q = 4;
-    OK(GrB_Matrix_new(&term[0], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&term[1], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&term[2], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&nt[0], GrB_BOOL, Q, Q));
-    OK(GrB_Vector_new(&start[0], GrB_BOOL, Q));
-    OK(GrB_Vector_new(&final[0], GrB_BOOL, Q));
+    rsm = alloc_rsm(Q, /*term_count=*/3, /*nonterm_count=*/1, /*start_nonterm=*/0);
 
-    OK(GrB_Matrix_setElement_BOOL(term[0], true, 0, 1)); // 0 -a-> 1
-    OK(GrB_Matrix_setElement_BOOL(term[2], true, 0, 3)); // 1 -c-> 3
-    OK(GrB_Matrix_setElement_BOOL(term[1], true, 2, 3)); // 2 -b-> 3
-    OK(GrB_Matrix_setElement_BOOL(nt[0], true, 1, 2));   // 1 -S-> 2
-    OK(GrB_Vector_setElement_BOOL(start[0], true, 0));
-    OK(GrB_Vector_setElement_BOOL(final[0], true, 3));
+    OK(GrB_Matrix_new(&rsm->terminal_matrices[0], GrB_BOOL, Q, Q));
+    OK(GrB_Matrix_new(&rsm->terminal_matrices[1], GrB_BOOL, Q, Q));
+    OK(GrB_Matrix_new(&rsm->terminal_matrices[2], GrB_BOOL, Q, Q));
+    OK(GrB_Matrix_new(&rsm->nonterminal_matrices[0], GrB_BOOL, Q, Q));
+
+    OK(GrB_Vector_new(&rsm->final_states[0], GrB_BOOL, Q));
+
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -a-> 1
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 0, 3));    // 0 -c-> 3
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 2, 3));    // 2 -b-> 3
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 1, 2)); // 1 -S-> 2
+    rsm->start_states[0] = 0;
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[0], true, 3));
 }
 
 // Grammar 3: S -> X | Y | S X | S Y
 //            X -> a S b | a b
 //            Y -> c S d | c d
-static void rsm_complex(GrB_Matrix *term, GrB_Matrix *nt, GrB_Vector *start, GrB_Vector *final)
+static void init_rsm_complex(void)
 {
     GrB_Index Q = 11;
+    rsm = alloc_rsm(Q, /*term_count=*/4, /*nonterm_count=*/3, /*start_nonterm=*/0);
     for (int t = 0; t < 4; ++t)
-        OK(GrB_Matrix_new(&term[t], GrB_BOOL, Q, Q));
+        OK(GrB_Matrix_new(&rsm->terminal_matrices[t], GrB_BOOL, Q, Q));
     for (int n = 0; n < 3; ++n)
     {
-        OK(GrB_Matrix_new(&nt[n], GrB_BOOL, Q, Q));
-        OK(GrB_Vector_new(&start[n], GrB_BOOL, Q));
-        OK(GrB_Vector_new(&final[n], GrB_BOOL, Q));
+        OK(GrB_Matrix_new(&rsm->nonterminal_matrices[n], GrB_BOOL, Q, Q));
+        OK(GrB_Vector_new(&rsm->final_states[n], GrB_BOOL, Q));
     }
 
     // --- S Component (States 0-2) ---
     // S -> X | Y | S X | S Y
-    OK(GrB_Matrix_setElement_BOOL(nt[1], true, 0, 2)); // 0 -X-> 2
-    OK(GrB_Matrix_setElement_BOOL(nt[2], true, 0, 2)); // 0 -Y-> 2
-    OK(GrB_Matrix_setElement_BOOL(nt[0], true, 0, 1)); // 0 -S-> 1
-    OK(GrB_Matrix_setElement_BOOL(nt[1], true, 1, 2)); // 1 -X-> 2
-    OK(GrB_Matrix_setElement_BOOL(nt[2], true, 1, 2)); // 1 -Y-> 2
-    OK(GrB_Vector_setElement_BOOL(start[0], true, 0));
-    OK(GrB_Vector_setElement_BOOL(final[0], true, 2));
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[1], true, 0, 2)); // 0 -X-> 2
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[2], true, 0, 2)); // 0 -Y-> 2
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 0, 1)); // 0 -S-> 1
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[1], true, 1, 2)); // 1 -X-> 2
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[2], true, 1, 2)); // 1 -Y-> 2
+    rsm->start_states[0] = 0;
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[0], true, 2));
 
     // --- X Component (States 3-6) ---
-    OK(GrB_Matrix_setElement_BOOL(term[0], true, 3, 4)); // 3 -a-> 4
-    OK(GrB_Matrix_setElement_BOOL(term[1], true, 4, 6)); // 4 -b-> 6
-    OK(GrB_Matrix_setElement_BOOL(term[1], true, 5, 6)); // 5 -b-> 6
-    OK(GrB_Matrix_setElement_BOOL(nt[0], true, 4, 5));   // 4 -S-> 5
-    OK(GrB_Vector_setElement_BOOL(start[1], true, 3));
-    OK(GrB_Vector_setElement_BOOL(final[1], true, 6));
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 3, 4));    // 3 -a-> 4
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 4, 6));    // 4 -b-> 6
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 5, 6));    // 5 -b-> 6
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 4, 5)); // 4 -S-> 5
+    rsm->start_states[1] = 3;
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[1], true, 6));
 
     // --- Y Component (States 7-10)
-    OK(GrB_Matrix_setElement_BOOL(term[2], true, 7, 8));  // 7 -c-> 8
-    OK(GrB_Matrix_setElement_BOOL(term[3], true, 8, 10)); // 8 -d-> 10
-    OK(GrB_Matrix_setElement_BOOL(term[3], true, 9, 10)); // 9 -d-> 10
-    OK(GrB_Matrix_setElement_BOOL(nt[0], true, 8, 9));    // 8 -S-> 9
-    OK(GrB_Vector_setElement_BOOL(start[2], true, 7));
-    OK(GrB_Vector_setElement_BOOL(final[2], true, 10));
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 7, 8));    // 7 -c-> 8
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[3], true, 8, 10));   // 8 -d-> 10
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[3], true, 9, 10));   // 9 -d-> 10
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 8, 9)); // 8 -S-> 9
+    rsm->start_states[2] = 7;
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[2], true, 10));
 }
+
+//==============================================================================
+// Graph builders
+//==============================================================================
+// 0-a->1; 1-a->2; 2-a->0; 0-b->3; 3-b->0 (V=4, 2 labels: a=0, b=1)
+static void init_graph_double_cycle_ab(void)
+{
+    V = 4;
+    n_graph_term = 2;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 1, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 2, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 0, 3));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 3, 0));
+}
+
+// 0-a->0; 0-a->1; 1-b->1 (V=2, 2 labels: a=0, b=1)
+static void init_graph_self_loops(void)
+{
+    V = 2;
+    n_graph_term = 2;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 1, 1));
+}
+
+// 0-a->0; 0-b->0 (V=2, 2 labels: a=0, b=1)
+static void init_graph_single_node(void)
+{
+    V = 2;
+    n_graph_term = 2;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 0, 0));
+}
+
+// 0-a->0; 0-c->1; 1-b->1   (V=2, 3 labels: a=0, b=1, c=2)
+static void init_graph_loops_abc(void)
+{
+    V = 2;
+    n_graph_term = 3;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 0, 0));
+}
+
+// 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->2   (V=4, 3 labels: a=0, b=1, c=2)
+static void init_graph_loops_abc_1(void)
+{
+    V = 4;
+    n_graph_term = 3;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 1, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 0, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 2, 3));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 3, 2));
+}
+
+// 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->4; 4-b->2   (V=5, 3 labels: a=0, b=1, c=2)
+static void init_graph_loops_abc_2(void)
+{
+    V = 5;
+    n_graph_term = 3;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 1, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 0, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 2, 3));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 3, 4));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 4, 2));
+}
+
+// a-cycle(0,1,2), b-cycle(2,3), c-cycle(3,4,5), d-edges(2<->5)   (V=6, 4 labels)
+static void init_graph_multi_cycle(void)
+{
+    V = 6;
+    n_graph_term = 4;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 1, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 2, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 2, 3));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 3, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 3, 4));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 4, 5));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 5, 3));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[3], true, 5, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[3], true, 2, 5));
+}
+
+#define run_algorithm(start_vertex)                                                                \
+    LAGraph_CFPQ_RSM(&result, rsm, graph_term, (start_vertex), V, msg);
 
 //==============================================================================
 // test cases
@@ -164,48 +360,18 @@ void test_TC1_cyclic_ab(void)
 {
     setup();
 
-    GrB_Matrix term[2], nt[1];
-    GrB_Vector start[1], final[1];
+    init_rsm_aSb_ab();
+    init_graph_double_cycle_ab();
 
-    term[0] = term[1] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_ab(term, nt, start, final);
-
-    GrB_Index V = 4;
-    GrB_Matrix gterm[2];
-    gterm[0] = gterm[1] = GrB_NULL;
-    OK(GrB_Matrix_new(&gterm[0], GrB_BOOL, V, V));
-    OK(GrB_Matrix_new(&gterm[1], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 1, 2));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 2, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 0, 3));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 3, 0));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 2, term, gterm, 1, nt, start, final, 0, 1, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {0, 3};
-        check_reachable(result, expected, 2, V, "TC1");
+        check_reachable(expected, /*n_expected=*/2, "TC1");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 2; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -217,47 +383,18 @@ void test_TC1_cyclic_ab(void)
 void test_TC2_self_loops(void)
 {
     setup();
+    init_rsm_aSb_ab();
+    init_graph_self_loops();
 
-    GrB_Matrix term[2], nt[1];
-    GrB_Vector start[1], final[1];
-
-    term[0] = term[1] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_ab(term, nt, start, final);
-
-    GrB_Index V = 2;
-    GrB_Matrix gterm[2];
-    gterm[0] = gterm[1] = GrB_NULL;
-    OK(GrB_Matrix_new(&gterm[0], GrB_BOOL, V, V));
-    OK(GrB_Matrix_new(&gterm[1], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 1, 1));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 2, term, gterm, 1, nt, start, final, 0, 0, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/0);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {1};
-        check_reachable(result, expected, 1, V, "TC2");
+        check_reachable(expected, /*n_expected=*/1, "TC2");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 2; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -269,46 +406,18 @@ void test_TC2_self_loops(void)
 void test_TC3_single_node(void)
 {
     setup();
+    init_rsm_aSb_ab();
+    init_graph_single_node();
 
-    GrB_Matrix term[2], nt[1];
-    GrB_Vector start[1], final[1];
-
-    term[0] = term[1] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_ab(term, nt, start, final);
-
-    GrB_Index V = 1;
-    GrB_Matrix gterm[2];
-    gterm[0] = gterm[1] = GrB_NULL;
-    OK(GrB_Matrix_new(&gterm[0], GrB_BOOL, V, V));
-    OK(GrB_Matrix_new(&gterm[1], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 0, 0));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 2, term, gterm, 1, nt, start, final, 0, 0, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/0);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {0};
-        check_reachable(result, expected, 1, V, "TC3");
+        check_reachable(expected, /*n_expected=*/1, "TC3");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 2; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -320,47 +429,18 @@ void test_TC3_single_node(void)
 void test_TC4_aSb_c_loops(void)
 {
     setup();
+    init_rsm_aSb_c();
+    init_graph_loops_abc();
 
-    GrB_Matrix term[3], nt[1];
-    GrB_Vector start[1], final[1];
-
-    term[0] = term[1] = term[2] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_c(term, nt, start, final);
-
-    GrB_Index V = 2;
-    GrB_Matrix gterm[3];
-    gterm[0] = gterm[1] = gterm[2] = GrB_NULL;
-    for (int i = 0; i < 3; ++i)
-        OK(GrB_Matrix_new(&gterm[i], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 1, 1));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 3, term, gterm, 1, nt, start, final, 0, 0, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/0);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {1};
-        check_reachable(result, expected, 1, V, "TC4");
+        check_reachable(expected, 1, "TC4");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 3; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -372,49 +452,18 @@ void test_TC4_aSb_c_loops(void)
 void test_TC5_aSb_c_cycle1(void)
 {
     setup();
+    init_rsm_aSb_c();
+    init_graph_loops_abc_1();
 
-    GrB_Matrix term[3], nt[1];
-    GrB_Vector start[1], final[1];
-
-    term[0] = term[1] = term[2] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_c(term, nt, start, final);
-
-    GrB_Index V = 4;
-    GrB_Matrix gterm[3];
-    gterm[0] = gterm[1] = gterm[2] = GrB_NULL;
-    for (int i = 0; i < 3; ++i)
-        OK(GrB_Matrix_new(&gterm[i], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 1, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 0, 2));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 2, 3));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 3, 2));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 3, term, gterm, 1, nt, start, final, 0, 1, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {3};
-        check_reachable(result, expected, 1, V, "TC5");
+        check_reachable(expected, 1, "TC5");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 3; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 //------------------------------------------------------------------------------
@@ -425,110 +474,51 @@ void test_TC5_aSb_c_cycle1(void)
 void test_TC6_aSb_c_cycle2(void)
 {
     setup();
+    init_rsm_aSb_c();
 
-    GrB_Matrix term[3], nt[1];
-    GrB_Vector start[1], final[1];
+    V = 3;
+    n_graph_term = 3;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
 
-    term[0] = term[1] = term[2] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 1, 0));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 0, 2));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 2, 2));
 
-    rsm_aSb_c(term, nt, start, final);
-
-    GrB_Index V = 3;
-    GrB_Matrix gterm[3];
-    gterm[0] = gterm[1] = gterm[2] = GrB_NULL;
-    for (int i = 0; i < 3; ++i)
-        OK(GrB_Matrix_new(&gterm[i], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 1, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 0, 2));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 2, 2));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 3, term, gterm, 1, nt, start, final, 0, 1, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2};
-        check_reachable(result, expected, 1, V, "TC6");
+        check_reachable(expected, 1, "TC6");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 3; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
-}
-
-// Graph: 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->4; 4-b->2
-static void graph_tc7_8(GrB_Matrix gterm[3])
-{
-    GrB_Index V = 5;
-    for (int i = 0; i < 3; ++i)
-        OK(GrB_Matrix_new(&gterm[i], GrB_BOOL, V, V));
-
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 1, 0));
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 0, 2));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 2, 3));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 3, 4));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 4, 2));
 }
 
 //------------------------------------------------------------------------------
 // TC7: S -> a S b | c
-// same graph as TC7/8 above
+// Graph: 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->4; 4-b->2
 // Source: 0   Expected: {2, 3, 4}
 //------------------------------------------------------------------------------
 void test_TC7_aSb_c_cycle3(void)
 {
     setup();
+    init_rsm_aSb_c();
+    init_graph_loops_abc_2();
 
-    GrB_Matrix term[3], nt[1];
-    GrB_Vector start[1], final[1];
-
-    term[0] = term[1] = term[2] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_c(term, nt, start, final);
-
-    GrB_Index V = 5;
-    GrB_Matrix gterm[3];
-    gterm[0] = gterm[1] = gterm[2] = GrB_NULL;
-    graph_tc7_8(gterm);
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 3, term, gterm, 1, nt, start, final, 0, 0, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/0);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2, 3, 4};
-        check_reachable(result, expected, 3, V, "TC7");
+        check_reachable(expected, 3, "TC7");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 3; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -540,44 +530,18 @@ void test_TC7_aSb_c_cycle3(void)
 void test_TC8_aSb_c_cycle4(void)
 {
     setup();
+    init_rsm_aSb_c();
+    init_graph_loops_abc_2();
 
-    GrB_Matrix term[3], nt[1], call[1];
-    GrB_Vector start[1], final[1];
-
-    term[0] = term[1] = term[2] = GrB_NULL;
-    nt[0] = GrB_NULL;
-    call[0] = GrB_NULL;
-    start[0] = final[0] = GrB_NULL;
-
-    rsm_aSb_c(term, nt, start, final);
-
-    GrB_Index V = 5;
-    GrB_Matrix gterm[3];
-    gterm[0] = gterm[1] = gterm[2] = GrB_NULL;
-    graph_tc7_8(gterm);
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info = LAGraph_CFPQ_RSM(&result, 3, term, gterm, 1, nt, start, final, 0, 1, 4, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2, 3, 4};
-        check_reachable(result, expected, 3, V, "TC8");
+        check_reachable(expected, 3, "TC8");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 3; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    GrB_free(&nt[0]);
-    GrB_free(&call[0]);
-    GrB_free(&start[0]);
-    GrB_free(&final[0]);
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -585,62 +549,18 @@ void test_TC9_mult_recursive_cycles(void)
 {
     setup();
 
-    GrB_Matrix term[4], nt[3];
-    GrB_Vector start[3], final[3];
+    init_rsm_complex();
+    init_graph_multi_cycle();
 
-    term[0] = term[1] = term[2] = term[3] = GrB_NULL;
-    nt[0] = nt[1] = nt[2] = GrB_NULL;
-    start[0] = start[1] = start[2] = GrB_NULL;
-    final[0] = final[1] = final[2] = GrB_NULL;
-
-    rsm_complex(term, nt, start, final);
-
-    GrB_Index V = 6;
-    GrB_Matrix gterm[4];
-    gterm[0] = gterm[1] = gterm[2] = gterm[3] = GrB_NULL;
-    for (int i = 0; i < 4; ++i)
-        OK(GrB_Matrix_new(&gterm[i], GrB_BOOL, V, V));
-
-    // a-cycle (0,1,2)
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 0, 1));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 1, 2));
-    OK(GrB_Matrix_setElement_BOOL(gterm[0], true, 2, 0));
-    // b-cycle (2,3)
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 2, 3));
-    OK(GrB_Matrix_setElement_BOOL(gterm[1], true, 3, 2));
-    // c-cycle (3,4,5)
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 3, 4));
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 4, 5));
-    OK(GrB_Matrix_setElement_BOOL(gterm[2], true, 5, 3));
-    // d-cycle
-    OK(GrB_Matrix_setElement_BOOL(gterm[3], true, 5, 2));
-    OK(GrB_Matrix_setElement_BOOL(gterm[3], true, 2, 5));
-
-    GrB_Vector result = GrB_NULL;
-
-    GrB_Info info =
-        LAGraph_CFPQ_RSM(&result, 4, term, gterm, 3, nt, start, final, 0, 0, 11, V, msg);
+    GrB_Info info = run_algorithm(/*start_vertex=*/0);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2, 3, 5};
-        check_reachable(result, expected, 3, V, "TC9");
+        check_reachable(expected, 3, "TC9");
     }
 
-    GrB_free(&result);
-    for (int i = 0; i < 4; ++i)
-    {
-        GrB_free(&term[i]);
-        GrB_free(&gterm[i]);
-    }
-    for (int i = 0; i < 3; ++i)
-    {
-        GrB_free(&nt[i]);
-        GrB_free(&start[i]);
-        GrB_free(&final[i]);
-    }
-
+    free_workspace();
     OK(info);
-
     teardown();
 }
 
@@ -649,7 +569,7 @@ TEST_LIST = {{"TC1_cyclic_ab", test_TC1_cyclic_ab},
              {"TC3_single_node", test_TC3_single_node},
              {"TC4_aSb_c_loops", test_TC4_aSb_c_loops},
              {"TC5_aSb_c_cycle1", test_TC5_aSb_c_cycle1},
-             {"TC4_aSb_c_loops", test_TC4_aSb_c_loops},
+             {"TC6_aSb_c_cycle2", test_TC6_aSb_c_cycle2},
              {"TC7_aSb_c_cycle3", test_TC7_aSb_c_cycle3},
              {"TC8_aSb_c_cycle4", test_TC8_aSb_c_cycle4},
              {"TC9_mult_recursive_cycles", test_TC9_mult_recursive_cycles},

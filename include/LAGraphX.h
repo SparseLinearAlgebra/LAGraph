@@ -1097,22 +1097,20 @@ GrB_Info LAGraph_CFL_reachability
     char *msg                       // Message string for error reporting.
 ) ;
 
-int LAGraph_CFPQ_RSM(
-    // output:
-    GrB_Vector *reachable,
+typedef struct
+{
+    GrB_Index state_count;        
+    GrB_Index terminal_count;       
+    GrB_Index nonterminal_count;     
+    GrB_Index start_nonterminal;    
+    GrB_Matrix *terminal_matrices;   
+    GrB_Matrix *nonterminal_matrices; 
+    GrB_Index *start_states;          
+    GrB_Vector *final_states;         
+} RSM;
 
-    // RSM terminal input:
-    size_t num_terminals, GrB_Matrix *rsm_term, GrB_Matrix *graph_term,
-
-    // RSM non-terminal input:
-    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Vector *rsm_start,
-    GrB_Vector *rsm_final,
-
-    size_t start_nonterm, GrB_Index start_vertex,
-
-    GrB_Index Q, GrB_Index V,
-
-    char *msg);
+int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
+                     GrB_Index start_vertex, GrB_Index V, char *msg);
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm

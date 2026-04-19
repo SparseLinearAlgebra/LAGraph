@@ -25,21 +25,27 @@
         GrB_free(&entry_vec);                                                                      \
         if (Stack != NULL)                                                                         \
         {                                                                                          \
-            for (size_t _i = 0; _i < num_nonterminals; ++_i)                                       \
+            for (size_t _i = 0; _i < num_nonterm; ++_i)                                            \
                 GrB_free(&Stack[_i]);                                                              \
-            LAGraph_Free((void **)&Stack, GrB_NULL);                                               \
+            LAGraph_Free((void **)&Stack, msg);                                                    \
         }                                                                                          \
         if (graph_nt != NULL)                                                                      \
         {                                                                                          \
-            for (size_t _i = 0; _i < num_nonterminals; ++_i)                                       \
+            for (size_t _i = 0; _i < num_nonterm; ++_i)                                            \
                 GrB_free(&graph_nt[_i]);                                                           \
-            LAGraph_Free((void **)&graph_nt, GrB_NULL);                                            \
+            LAGraph_Free((void **)&graph_nt, msg);                                                 \
+        }                                                                                          \
+        if (rsm_start != NULL)                                                                     \
+        {                                                                                          \
+            for (size_t _i = 0; _i < num_nonterm; ++_i)                                            \
+                GrB_free(&rsm_start[_i]);                                                          \
+            LAGraph_Free((void **)&rsm_start, msg);                                                \
         }                                                                                          \
         if (rsm_call != NULL)                                                                      \
         {                                                                                          \
-            for (size_t _i = 0; _i < num_nonterminals; ++_i)                                       \
+            for (size_t _i = 0; _i < num_nonterm; ++_i)                                            \
                 GrB_free(&rsm_call[_i]);                                                           \
-            LAGraph_Free((void **)&rsm_call, GrB_NULL);                                            \
+            LAGraph_Free((void **)&rsm_call, msg);                                                 \
         }                                                                                          \
     }
 #define LG_FREE_ALL                                                                                \
@@ -89,41 +95,50 @@ static GrB_Info s_mxm_chain(GrB_Matrix C,     // output accumulator  |Q|*|V*V|
 static GrB_Info build_call_matrix(GrB_Matrix *call, GrB_Matrix rsm_nt, GrB_Vector rsm_start,
                                   GrB_Index Q)
 {
-    GrB_Vector q_call_mask = GrB_NULL;
+    GrB_Vector call_mask = GrB_NULL;
 
     H_TRY(GrB_Matrix_new(call, GrB_BOOL, Q, Q));
-    H_TRY(GrB_Vector_new(&q_call_mask, GrB_BOOL, Q));
+    H_TRY(GrB_Vector_new(&call_mask, GrB_BOOL, Q));
 
     // [q_call, q_ret] -> [q_call]
-    H_TRY(GrB_reduce(q_call_mask, GrB_NULL, GrB_NULL, GrB_LOR_MONOID_BOOL, rsm_nt, GrB_NULL));
+    H_TRY(GrB_reduce(call_mask, GrB_NULL, GrB_NULL, GrB_LOR_MONOID_BOOL, rsm_nt, GrB_NULL));
     // |Q|*1 * 1*|Q| -> |Q|*|Q|
-    H_TRY(GrB_mxm(*call, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL, (GrB_Matrix)q_call_mask,
+    H_TRY(GrB_mxm(*call, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL, (GrB_Matrix)call_mask,
                   (GrB_Matrix)rsm_start, GrB_DESC_T1));
 
-    H_TRY(GrB_Vector_free(&q_call_mask));
+    H_TRY(GrB_Vector_free(&call_mask));
 
     return GrB_SUCCESS;
 }
 
 #undef H_TRY
+typedef struct
+{
+    GrB_Index state_count;            // Q
+    GrB_Index terminal_count;         // num_terminals
+    GrB_Index nonterminal_count;      // num_nonterminals
+    GrB_Index start_nonterminal;      // start_nonterm
+    GrB_Matrix *terminal_matrices;    // rsm_term
+    GrB_Matrix *nonterminal_matrices; // rsm_nonterm
+    GrB_Index *start_states;          // rsm_start
+    GrB_Vector *final_states;         // rsm_final
+} RSM;
 
-int LAGraph_CFPQ_RSM(
-    // output:
-    GrB_Vector *reachable,
-
-    // RSM terminal input:
-    size_t num_terminals, GrB_Matrix *rsm_term, GrB_Matrix *graph_term,
-
-    // RSM non-terminal input:
-    size_t num_nonterminals, GrB_Matrix *rsm_nonterm, GrB_Vector *rsm_start, GrB_Vector *rsm_final,
-
-    size_t start_nonterm, GrB_Index start_vertex,
-
-    GrB_Index Q, GrB_Index V,
-
-    char *msg)
+int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
+                     GrB_Index start_vertex, GrB_Index V, char *msg)
 {
     LG_CLEAR_MSG;
+
+    // shortcuts
+    GrB_Index VV = V * V;
+    GrB_Index Q = rsm->state_count;
+    GrB_Index num_term = rsm->terminal_count;
+    GrB_Index num_nonterm = rsm->nonterminal_count;
+    GrB_Index start_nonterm = rsm->start_nonterminal;
+    GrB_Matrix *rsm_term = rsm->terminal_matrices;
+    GrB_Matrix *rsm_nonterm = rsm->nonterminal_matrices;
+    GrB_Index *start_states = rsm->start_states;
+    GrB_Vector *final_states = rsm->final_states;
 
     // working matrices / vectors
     GrB_Matrix M = GrB_NULL;
@@ -145,35 +160,40 @@ int LAGraph_CFPQ_RSM(
     GrB_Matrix *Stack = NULL;
     GrB_Matrix *graph_nt = NULL;
     GrB_Matrix *rsm_call = NULL;
+    GrB_Vector *rsm_start = NULL; // rsm_start[S][i] = true, iff start_states[S] = i
 
     LG_ASSERT(reachable != NULL, GrB_NULL_POINTER);
     LG_ASSERT(rsm_term != NULL, GrB_NULL_POINTER);
     LG_ASSERT(rsm_nonterm != NULL, GrB_NULL_POINTER);
-    LG_ASSERT(rsm_start != NULL, GrB_NULL_POINTER);
-    LG_ASSERT(rsm_final != NULL, GrB_NULL_POINTER);
-    LG_ASSERT(start_nonterm < num_nonterminals, GrB_INVALID_VALUE);
+    LG_ASSERT(start_states != NULL, GrB_NULL_POINTER);
+    LG_ASSERT(final_states != NULL, GrB_NULL_POINTER);
+    LG_ASSERT(start_nonterm < num_nonterm, GrB_INVALID_VALUE);
     LG_ASSERT(start_vertex < V, GrB_INVALID_VALUE);
 
     *reachable = GrB_NULL;
 
-    GrB_Index VV = V * V;
-
     // allocate per-nonterminal arrays
-    LG_TRY(LAGraph_Malloc((void **)&Stack, num_nonterminals, sizeof(GrB_Matrix), msg));
-    LG_TRY(LAGraph_Malloc((void **)&graph_nt, num_nonterminals, sizeof(GrB_Matrix), msg));
-    LG_TRY(LAGraph_Malloc((void **)&rsm_call, num_nonterminals, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Malloc((void **)&Stack, rsm->nonterminal_count, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Malloc((void **)&graph_nt, rsm->nonterminal_count, sizeof(GrB_Matrix), msg));
+    LG_TRY(LAGraph_Malloc((void **)&rsm_start, rsm->nonterminal_count, sizeof(GrB_Vector), msg));
+    LG_TRY(LAGraph_Malloc((void **)&rsm_call, rsm->nonterminal_count, sizeof(GrB_Matrix), msg));
 
-    for (size_t i = 0; i < num_nonterminals; ++i)
+    for (size_t i = 0; i < num_nonterm; ++i)
     {
         Stack[i] = GrB_NULL;
         graph_nt[i] = GrB_NULL;
+        rsm_start[i] = GrB_NULL;
         rsm_call[i] = GrB_NULL;
     }
 
-    for (size_t i = 0; i < num_nonterminals; ++i)
+    for (size_t i = 0; i < num_nonterm; ++i)
     {
         GRB_TRY(GrB_Matrix_new(&Stack[i], GrB_BOOL, Q, VV));
         GRB_TRY(GrB_Matrix_new(&graph_nt[i], GrB_BOOL, V, V));
+
+        GRB_TRY(GrB_Vector_new(&rsm_start[i], GrB_BOOL, Q));
+        GrB_Vector_setElement_BOOL(rsm_start[i], true, start_states[i]);
+
         GRB_TRY(build_call_matrix(&rsm_call[i], rsm_nonterm[i], rsm_start[i], Q));
     }
 
@@ -231,13 +251,12 @@ int LAGraph_CFPQ_RSM(
     // main fixed-point loop
     GrB_Index m_nvals = 0;
     GRB_TRY(GrB_Matrix_nvals(&m_nvals, M));
-
     while (m_nvals > 0)
     {
 
         // PHASE 1: TERMINAL TRANSITIONS
         GRB_TRY(GrB_Matrix_clear(M_term));
-        for (size_t i = 0; i < num_terminals; ++i)
+        for (size_t i = 0; i < num_term; ++i)
         {
             if (rsm_term[i] == GrB_NULL || graph_term[i] == GrB_NULL)
                 continue;
@@ -246,7 +265,7 @@ int LAGraph_CFPQ_RSM(
 
         // PHASE 2: NON-TERMINAL TRANSITIONS
         GRB_TRY(GrB_Matrix_clear(M_nonterm));
-        for (size_t i = 0; i < num_nonterminals; ++i)
+        for (size_t i = 0; i < num_nonterm; ++i)
         {
             if (rsm_nonterm[i] == GrB_NULL)
                 continue;
@@ -255,7 +274,7 @@ int LAGraph_CFPQ_RSM(
 
         // PHASE 3: CALL TRANSITIONS
         GRB_TRY(GrB_Matrix_clear(M_call));
-        for (size_t i = 0; i < num_nonterminals; ++i)
+        for (size_t i = 0; i < num_nonterm; ++i)
         {
             if (rsm_call[i] == GrB_NULL || rsm_nonterm[i] == GrB_NULL)
                 continue;
@@ -309,15 +328,15 @@ int LAGraph_CFPQ_RSM(
 
         // PHASE 4: RETURN TRANSITIONS
         GRB_TRY(GrB_Matrix_clear(M_return));
-        for (size_t i = 0; i < num_nonterminals; ++i)
+        for (size_t i = 0; i < num_nonterm; ++i)
         {
-            if (rsm_final[i] == GrB_NULL)
+            if (final_states[i] == GrB_NULL)
                 continue;
 
             // 1*|Q| * |Q|*|V*V| -> 1*|V*V|
             GRB_TRY(GrB_Matrix_clear(new_edges));
             GRB_TRY(GrB_mxm(new_edges, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL,
-                            (GrB_Matrix)rsm_final[i], M, GrB_DESC_T0));
+                            (GrB_Matrix)final_states[i], M, GrB_DESC_T0));
 
             GRB_TRY(GxB_Matrix_reshape(new_edges, false, V, V, GrB_NULL));
 
