@@ -48,7 +48,7 @@
 #include <LAGraphX.h>
 
 //Merging two ordered arrays of internal vertices in the add function
-static GrB_Index* merge_all_paths(GrB_Index* n, const GrB_Index* a, const size_t na, const GrB_Index* b, const size_t nb)
+static GrB_Index* merge_all_paths(size_t* n, const GrB_Index* a, const size_t na, const GrB_Index* b, const size_t nb)
 {  
   GrB_Index *tmp = malloc((na + nb) * sizeof(GrB_Index));
   
@@ -529,9 +529,7 @@ GrB_Info LAGraph_CFL_AllPaths(
 // Helper function to free the output matrix of LAGraph_CFL_AllPaths, which contains elements of type AllPathsElem with dynamically allocated arrays of intermediate vertices. 
 static void free_AllPaths_matrix(GrB_Matrix* ptr_output) 
 {
-  #if GxB_IMPLEMENTATION < GxB_VERSION(9, 4, 5)
-  return (GrB_NOT_IMPLEMENTED);
-#else
+  #if GxB_IMPLEMENTATION >= GxB_VERSION(9, 4, 5)
   GxB_Iterator iterator;
   GxB_Iterator_new(&iterator);
   GrB_Info info = GxB_Matrix_Iterator_attach(iterator, *ptr_output, NULL);
