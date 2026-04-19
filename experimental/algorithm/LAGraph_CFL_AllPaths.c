@@ -518,7 +518,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     for (size_t i = 0; i < nonterms_count; i++)
     {
       outputs[i] = T[i];
-      GrB_free(&outputs_reachability[i]);
+      GrB_Matrix_wait(outputs[i], GrB_MATERIALIZE);
     }
   } // End of postprocessing mode
   LG_FREE_WORK;
