@@ -23,6 +23,7 @@
         GrB_free(&diag_entry);                                                                     \
         GrB_free(&outer_result);                                                                   \
         GrB_free(&entry_vec);                                                                      \
+        GrB_free(&source_mask);                                                                    \
         if (Stack != NULL)                                                                         \
         {                                                                                          \
             for (size_t _i = 0; _i < num_nonterm; ++_i)                                            \
@@ -124,8 +125,8 @@ typedef struct
     GrB_Vector *final_states;         // rsm_final
 } RSM;
 
-int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
-                     GrB_Index start_vertex, GrB_Index V, char *msg)
+int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *graph_term,
+                     const GrB_Index *sources, size_t num_sources, GrB_Index V, char *msg)
 {
     LG_CLEAR_MSG;
 
@@ -156,6 +157,7 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
     GrB_Matrix diag_entry = GrB_NULL;   // add diagonal matrix for entry_vec
     GrB_Matrix outer_result = GrB_NULL; // additional matrix
     GrB_Vector entry_vec = GrB_NULL;
+    GrB_Vector source_mask = GrB_NULL;
 
     GrB_Matrix *Stack = NULL;
     GrB_Matrix *graph_nt = NULL;
@@ -168,7 +170,7 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
     LG_ASSERT(start_states != NULL, GrB_NULL_POINTER);
     LG_ASSERT(final_states != NULL, GrB_NULL_POINTER);
     LG_ASSERT(start_nonterm < num_nonterm, GrB_INVALID_VALUE);
-    LG_ASSERT(start_vertex < V, GrB_INVALID_VALUE);
+    LG_ASSERT(num_sources <= V, GrB_INVALID_VALUE);
 
     *reachable = GrB_NULL;
 
@@ -213,39 +215,43 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
     // GRB_TRY(GrB_Matrix_new(&diag_entry, GrB_BOOL, V, V));
     GRB_TRY(GrB_Matrix_new(&outer_result, GrB_BOOL, Q, VV));
     GRB_TRY(GrB_Vector_new(&entry_vec, GrB_BOOL, V));
+    GRB_TRY(GrB_Vector_new(&source_mask, GrB_BOOL, V));
     GRB_TRY(GrB_Vector_new(reachable, GrB_BOOL, V));
 
     // seed initial frontier M and Stack
     {
-        GrB_Index seed_col = start_vertex * V + start_vertex;
 
         GrB_Index nstart = 0;
         GRB_TRY(GrB_Vector_nvals(&nstart, rsm_start[start_nonterm]));
 
-        GrB_Index *start_states = NULL;
-        bool *start_vals = NULL;
-        LG_TRY(LAGraph_Malloc((void **)&start_states, nstart, sizeof(GrB_Index), msg));
-        LG_TRY(LAGraph_Malloc((void **)&start_vals, nstart, sizeof(bool), msg));
+        GrB_Index *seed_states = NULL;
+        bool *seed_vals = NULL;
+        LG_TRY(LAGraph_Malloc((void **)&seed_states, nstart, sizeof(GrB_Index), msg));
+        LG_TRY(LAGraph_Malloc((void **)&seed_vals, nstart, sizeof(bool), msg));
 
-        GrB_Info info = GrB_Vector_extractTuples_BOOL(start_states, start_vals, &nstart,
+        GrB_Info info = GrB_Vector_extractTuples_BOOL(seed_states, seed_vals, &nstart,
                                                       rsm_start[start_nonterm]);
-        LAGraph_Free((void **)&start_vals, GrB_NULL);
+        LAGraph_Free((void **)&seed_vals, GrB_NULL);
 
         if (info != GrB_SUCCESS)
         {
-            LAGraph_Free((void **)&start_states, GrB_NULL);
+            LAGraph_Free((void **)&seed_states, GrB_NULL);
             LG_FREE_ALL;
             return info;
         }
 
-        for (GrB_Index k = 0; k < nstart; ++k)
+        for (size_t i = 0; i < num_sources; ++i)
         {
-            GrB_Index q = start_states[k];
-            GRB_TRY(GrB_Matrix_setElement_BOOL(M, true, q, seed_col));
-            GRB_TRY(GrB_Matrix_setElement_BOOL(Stack[start_nonterm], true, q, seed_col));
+            GrB_Index seed_col = sources[i] * V + sources[i];
+            for (GrB_Index k = 0; k < nstart; ++k)
+            {
+                GrB_Index q = seed_states[k];
+                GRB_TRY(GrB_Matrix_setElement_BOOL(M, true, q, seed_col));
+                GRB_TRY(GrB_Matrix_setElement_BOOL(Stack[start_nonterm], true, q, seed_col));
+            }
         }
 
-        LAGraph_Free((void **)&start_states, GrB_NULL);
+        LAGraph_Free((void **)&seed_states, GrB_NULL);
     }
 
     // main fixed-point loop
@@ -388,9 +394,22 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
         GRB_TRY(GrB_Matrix_nvals(&m_nvals, M));
     }
 
-    // GrB_DESC_T0 transposes graph_nt so Col_extract gives row start_vertex
-    GRB_TRY(GrB_Col_extract(*reachable, GrB_NULL, GrB_NULL, graph_nt[start_nonterm], GrB_ALL, V,
-                            start_vertex, GrB_DESC_T0));
+    // Extract all reachable vertices
+
+    {
+        bool *vals = NULL;
+        LG_TRY(LAGraph_Malloc((void **)&vals, num_sources, sizeof(bool), msg));
+        for (size_t i = 0; i < num_sources; ++i)
+            vals[i] = true;
+
+        GrB_Info _bi =
+            GrB_Vector_build_BOOL(source_mask, sources, vals, num_sources, GrB_SECOND_BOOL);
+        LAGraph_Free((void **)&vals, GrB_NULL);
+        GRB_TRY(_bi);
+    }
+
+    GRB_TRY(GrB_mxv(*reachable, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL,
+                    graph_nt[start_nonterm], source_mask, GrB_DESC_T0));
 
     LG_FREE_WORK;
     return GrB_SUCCESS;

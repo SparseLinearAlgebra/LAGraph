@@ -1109,8 +1109,8 @@ typedef struct
     GrB_Vector *final_states;         
 } RSM;
 
-int LAGraph_CFPQ_RSM(GrB_Vector *reachable, RSM *rsm, GrB_Matrix *graph_term,
-                     GrB_Index start_vertex, GrB_Index V, char *msg);
+int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *graph_term,
+                     const GrB_Index *sources, size_t num_sources, GrB_Index V, char *msg);
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm

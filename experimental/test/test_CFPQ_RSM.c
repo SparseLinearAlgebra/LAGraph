@@ -65,7 +65,7 @@ static void free_rsm(void)
         LAGraph_Free((void **)&rsm->nonterminal_matrices, msg);
     }
 
-    if (rsm->nonterminal_matrices != NULL)
+    if (rsm->final_states != NULL)
     {
         for (size_t i = 0; i < rsm->nonterminal_count; ++i)
         {
@@ -344,8 +344,8 @@ static void init_graph_multi_cycle(void)
     OK(GrB_Matrix_setElement_BOOL(graph_term[3], true, 2, 5));
 }
 
-#define run_algorithm(start_vertex)                                                                \
-    LAGraph_CFPQ_RSM(&result, rsm, graph_term, (start_vertex), V, msg);
+#define run_algorithm(sources, num_sources)                                                        \
+    LAGraph_CFPQ_RSM(&result, rsm, graph_term, (sources), (num_sources), V, msg);
 
 //==============================================================================
 // test cases
@@ -363,7 +363,8 @@ void test_TC1_cyclic_ab(void)
     init_rsm_aSb_ab();
     init_graph_double_cycle_ab();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/1);
+    GrB_Index sources = {1};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {0, 3};
@@ -386,7 +387,8 @@ void test_TC2_self_loops(void)
     init_rsm_aSb_ab();
     init_graph_self_loops();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/0);
+    GrB_Index sources = {0};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {1};
@@ -409,7 +411,8 @@ void test_TC3_single_node(void)
     init_rsm_aSb_ab();
     init_graph_single_node();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/0);
+    GrB_Index sources = {0};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {0};
@@ -432,7 +435,8 @@ void test_TC4_aSb_c_loops(void)
     init_rsm_aSb_c();
     init_graph_loops_abc();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/0);
+    GrB_Index sources = {0};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {1};
@@ -455,7 +459,8 @@ void test_TC5_aSb_c_cycle1(void)
     init_rsm_aSb_c();
     init_graph_loops_abc_1();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/1);
+    GrB_Index sources = {1};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {3};
@@ -487,7 +492,8 @@ void test_TC6_aSb_c_cycle2(void)
     OK(GrB_Matrix_setElement_BOOL(graph_term[2], true, 0, 2));
     OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 2, 2));
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/1);
+    GrB_Index sources = {1};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2};
@@ -510,7 +516,8 @@ void test_TC7_aSb_c_cycle3(void)
     init_rsm_aSb_c();
     init_graph_loops_abc_2();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/0);
+    GrB_Index sources = {0};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2, 3, 4};
@@ -533,7 +540,8 @@ void test_TC8_aSb_c_cycle4(void)
     init_rsm_aSb_c();
     init_graph_loops_abc_2();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/1);
+    GrB_Index sources = {1};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2, 3, 4};
@@ -552,7 +560,8 @@ void test_TC9_mult_recursive_cycles(void)
     init_rsm_complex();
     init_graph_multi_cycle();
 
-    GrB_Info info = run_algorithm(/*start_vertex=*/0);
+    GrB_Index sources = {1};
+    GrB_Info info = run_algorithm(&sources, 1);
     if (info == GrB_SUCCESS)
     {
         GrB_Index expected[] = {2, 3, 5};
