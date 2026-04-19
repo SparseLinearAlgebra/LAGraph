@@ -529,7 +529,6 @@ GrB_Info LAGraph_CFL_AllPaths(
 // Helper function to free the output matrix of LAGraph_CFL_AllPaths, which contains elements of type AllPathsElem with dynamically allocated arrays of intermediate vertices. 
 static void free_AllPaths_matrix(GrB_Matrix* ptr_output) 
 {
-  #if GxB_IMPLEMENTATION >= GxB_VERSION(9, 4, 5)
   GxB_Iterator iterator;
   GxB_Iterator_new(&iterator);
   GrB_Info info = GxB_Matrix_Iterator_attach(iterator, *ptr_output, NULL);
@@ -547,7 +546,6 @@ static void free_AllPaths_matrix(GrB_Matrix* ptr_output)
 
   GrB_free(&iterator);
   GrB_free(ptr_output);
-  #endif
 }
 
 // Free outputs and all_paths_ptr_t after you have finished working with the output matrices from LAGraph_CFL_AllPaths.
