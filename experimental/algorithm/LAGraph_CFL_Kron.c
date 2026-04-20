@@ -4,16 +4,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-typedef struct {
-    GrB_Index state_count;
-    GrB_Index terminal_count;
-    GrB_Index nonterminal_count;
-    GrB_Index start_nonterminal;
-    GrB_Matrix *terminal_matrices;
-    GrB_Matrix *nonterminal_matrices;
-    GrB_Index *start_states;
-    GrB_Vector *final_states;
-} RSM;
 
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
