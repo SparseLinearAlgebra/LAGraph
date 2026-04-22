@@ -8,9 +8,9 @@
 #include <stdio.h>
 
 #define run_algorithm()                                                                  \
-    LAGraph_CFL_AllPaths(outputs, adj_matrices, &all_paths_t, grammar.terms_count,       \
+    LAGraph_CFL_AllPaths(outputs, &all_paths_t, adj_matrices, grammar.terms_count,       \
                          grammar.nonterms_count, grammar.rules, grammar.rules_count,     \
-                         msg)
+                         msg, mode)
 
 #define check_error(error)                                                               \
     {                                                                                    \
@@ -23,7 +23,7 @@
     {                                                                                    \
         char *expected = output_to_str(nonterm);                                         \
         TEST_CHECK(strcmp(result, expected) == 0);                                       \
-        TEST_MSG("Wrong result. Actual: %s", expected);                                  \
+        TEST_MSG("Wrong result. Actual mode: %d, Expected: %s", mode, expected);         \
         LAGraph_Free((void **)&expected, msg);                                           \
     }
 
@@ -34,6 +34,7 @@ typedef struct {
     LAGraph_rule_WCNF *rules;
 } grammar_t;
 
+int8_t mode = 0;
 GrB_Type all_paths_t = NULL;
 GrB_Matrix *adj_matrices = NULL;
 int n_adj_matrices = 0;
@@ -94,41 +95,46 @@ char *output_to_str(size_t nonterm) {
         }
 
         int wrote = 0;
-        if (val[i].n == 0 || val[i].middle == NULL) {
-            wrote = sprintf(result_str + len,
-                            (i == 0 ? "(%" PRIu64 ", %" PRIu64 "):[]"
-                                    : " (%" PRIu64 ", %" PRIu64 "):[]"),
-                            (uint64_t)row[i], (uint64_t)col[i]);
-            len += (size_t)wrote;
-        } else {
-            wrote = sprintf(result_str + len,
-                            (i == 0 ? "(%" PRIu64 ", %" PRIu64 "):["
-                                    : " (%" PRIu64 ", %" PRIu64 "):["),
-                            (uint64_t)row[i], (uint64_t)col[i]);
-            len += (size_t)wrote;
 
+        if (i != 0) {
+            result_str[len++] = ' ';
+        }
+
+        wrote = sprintf(result_str + len, "(%" PRIu64 ", %" PRIu64 "):[",
+                        (uint64_t)row[i], (uint64_t)col[i]);
+        len += (size_t)wrote;
+
+        if (val[i].n == 1) {
+            if (val[i].data.single_elem == GrB_INDEX_MAX) {
+                wrote = sprintf(result_str + len, "INDEX_MAX");
+            } else {
+                wrote = sprintf(result_str + len, "%" PRIu64,
+                                (uint64_t)val[i].data.single_elem);
+            }
+            len += (size_t)wrote;
+        } else if (val[i].n > 1) {
             for (GrB_Index k = 0; k < val[i].n; k++) {
                 if (k == 0) {
-                    if (val[i].middle[k] == GrB_INDEX_MAX) {
+                    if (val[i].data.middle[k] == GrB_INDEX_MAX) {
                         wrote = sprintf(result_str + len, "INDEX_MAX");
                     } else {
                         wrote = sprintf(result_str + len, "%" PRIu64,
-                                        (uint64_t)val[i].middle[k]);
+                                        (uint64_t)val[i].data.middle[k]);
                     }
                 } else {
-                    if (val[i].middle[k] == GrB_INDEX_MAX) {
+                    if (val[i].data.middle[k] == GrB_INDEX_MAX) {
                         wrote = sprintf(result_str + len, ",INDEX_MAX");
                     } else {
                         wrote = sprintf(result_str + len, ",%" PRIu64,
-                                        (uint64_t)val[i].middle[k]);
+                                        (uint64_t)val[i].data.middle[k]);
                     }
                 }
                 len += (size_t)wrote;
             }
-
-            result_str[len++] = ']';
-            result_str[len] = '\0';
         }
+
+        result_str[len++] = ']';
+        result_str[len] = '\0';
     }
 
     LAGraph_Free((void **)&row, msg);
@@ -146,25 +152,6 @@ void print_outputs(void) {
     }
 }
 
-// Cleaning of internal elements before free matrix
-void free_AllPaths_matrix(GrB_Matrix *ptr_output) {
-    GrB_Matrix output = *ptr_output;
-    GxB_Iterator iterator;
-    GxB_Iterator_new(&iterator);
-    GrB_Info info = GxB_Matrix_Iterator_attach(iterator, output, NULL);
-    info = GxB_Matrix_Iterator_seek(iterator, 0);
-    AllPathsElem val;
-    while (info != GxB_EXHAUSTED) {
-        GxB_Iterator_get_UDT(iterator, (void *)&val);
-        if (val.middle)
-            free(val.middle);
-        info = GxB_Matrix_Iterator_next(iterator);
-    }
-
-    GrB_free(&iterator);
-    GrB_free(ptr_output);
-}
-
 void free_workspace() {
 
     if (adj_matrices != NULL) {
@@ -173,14 +160,9 @@ void free_workspace() {
         }
     }
     LAGraph_Free((void **)&adj_matrices, msg);
-
-    if (outputs != NULL) {
-        for (size_t i = 0; i < grammar.nonterms_count; i++) {
-            free_AllPaths_matrix(&outputs[i]);
-        }
-    }
-    LAGraph_Free((void **)&outputs, msg);
-    GrB_free(&all_paths_t);
+    LAGraph_CFL_AllPaths_free_outputs(outputs, grammar.nonterms_count, &all_paths_t);
+    all_paths_t = NULL;
+    outputs = NULL;
     LAGraph_Free((void **)&grammar.rules, msg);
     grammar = (grammar_t){0, 0, 0, NULL};
 }
@@ -511,6 +493,7 @@ void init_graph_4() {
 
 void test_CFL_AllPaths_cycle(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -530,6 +513,7 @@ void test_CFL_AllPaths_cycle(void) {
 
 void test_CFL_AllPaths_two_cycle(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -548,6 +532,7 @@ void test_CFL_AllPaths_two_cycle(void) {
 
 void test_CFL_AllPaths_labels_more_than_nonterms(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -568,6 +553,7 @@ void test_CFL_AllPaths_labels_more_than_nonterms(void) {
 
 void test_CFL_AllPaths_complex_grammar(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -589,6 +575,7 @@ void test_CFL_AllPaths_complex_grammar(void) {
 
 void test_CFL_AllPaths_tree(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -611,6 +598,7 @@ void test_CFL_AllPaths_tree(void) {
 
 void test_CFL_AllPaths_line(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -631,6 +619,7 @@ void test_CFL_AllPaths_line(void) {
 
 void test_CFL_AllPaths_two_nodes_cycle(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -651,6 +640,7 @@ void test_CFL_AllPaths_two_nodes_cycle(void) {
 
 void test_CFL_AllPaths_with_empty_adj_matrix(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -672,6 +662,7 @@ void test_CFL_AllPaths_with_empty_adj_matrix(void) {
 
 void test_CFL_AllPaths_invalid_rules(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
     setup();
     GrB_Info retval;
 
@@ -711,6 +702,7 @@ void test_CFL_AllPaths_invalid_rules(void) {
 
 void test_CFL_AllPaths_null_pointers(void) {
 #if LAGRAPH_SUITESPARSE
+    mode = 1;
 
     setup();
     GrB_Info retval;
@@ -753,6 +745,259 @@ void test_CFL_AllPaths_null_pointers(void) {
 #endif
 }
 
+void test_CFL_AllPathsPost_cycle(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aS();
+    init_graph_one_cycle();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[0,1,2,INDEX_MAX] (0, 1):[0,1,2,INDEX_MAX] (0, 2):[0,1,2] "
+                    "(1, 0):[0,1,2] (1, 1):[0,1,2,INDEX_MAX] (1, 2):[0,1,2,INDEX_MAX] "
+                    "(2, 0):[0,1,2,INDEX_MAX] (2, 1):[0,1,2] (2, 2):[0,1,2,INDEX_MAX]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_two_cycle(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[1] (0, 3):[1] (1, 0):[2] (1, 3):[2] (2, 0):[0] (2, 3):[0]");
+    check_result(1, "(0, 1):[INDEX_MAX] (1, 2):[INDEX_MAX] (2, 0):[INDEX_MAX]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_labels_more_than_nonterms(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_2();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 1):[0]");
+    check_result(1, "(0, 0):[INDEX_MAX]");
+    check_result(2, "(0, 1):[INDEX_MAX]");
+    check_result(3, "");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_complex_grammar(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_complex();
+    init_graph_1();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 7):[1,4] (1, 6):[2]");
+    check_result(1, "(0, 4):[2]");
+    check_result(6, "(3, 6):[5] (4, 5):[3] (5, 7):[6]");
+    check_result(
+        7, "(0, 1):[INDEX_MAX] (1, 2):[INDEX_MAX] (2, 3):[INDEX_MAX] (3, 4):[INDEX_MAX]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_tree(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_tree();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(
+        0, "(0, 0):[2] (0, 1):[2] (0, 3):[2] (0, 4):[2] (1, 0):[2] (1, 1):[2] (1, 3):[2] "
+           "(1, 4):[2] (2, 2):[6] (2, 5):[6] (3, 0):[5] (3, 1):[5] (3, 3):[5] (3, 4):[5] "
+           "(4, 0):[5] (4, 1):[5] (4, 3):[5] (4, 4):[5] (5, 2):[6] (5, 5):[6]");
+    check_result(1, "(0, 2):[INDEX_MAX] (1, 2):[INDEX_MAX] (2, 6):[INDEX_MAX] (3, "
+                    "5):[INDEX_MAX] (4, 5):[INDEX_MAX] (5, 6):[INDEX_MAX]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_line(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_line();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 4):[1] (1, 3):[2]");
+    check_result(1, "(0, 1):[INDEX_MAX] (1, 2):[INDEX_MAX]");
+    check_result(2, "(2, 3):[INDEX_MAX] (3, 4):[INDEX_MAX]");
+    check_result(3, "(1, 4):[3]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_two_nodes_cycle(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_3();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[1] (1, 0):[0]");
+    check_result(1, "(0, 1):[INDEX_MAX] (1, 0):[INDEX_MAX]");
+    check_result(2, "(0, 0):[INDEX_MAX]");
+    check_result(3, "(0, 0):[0] (1, 0):[0]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_with_empty_adj_matrix(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aS();
+    init_graph_4();
+    init_outputs();
+
+    OK(run_algorithm());
+    check_result(0, "(0, 0):[0,INDEX_MAX] (1, 1):[1,INDEX_MAX]");
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+//====================
+// Tests with invalid result
+//====================
+
+void test_CFL_AllPathsPost_invalid_rules(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    // Rule [Variable -> _ B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [_ -> A B]
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> A B], where C >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [S -> A B], where A >= nonterms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    // Rule [C -> t], where t >= terms_count
+    grammar.rules[0] =
+        (LAGraph_rule_WCNF){.nonterm = 0, .prod_A = 10, .prod_B = -1, .index = 0};
+    check_error(GrB_INVALID_VALUE);
+
+    free_workspace();
+    teardown();
+#endif
+}
+
+void test_CFL_AllPathsPost_null_pointers(void) {
+#if LAGRAPH_SUITESPARSE
+    mode = 0;
+
+    setup();
+    GrB_Info retval;
+
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    //  adj_matrices[0] = NULL;
+    //  adj_matrices[1] = NULL;
+    GrB_free(&adj_matrices[0]);
+    GrB_free(&adj_matrices[1]);
+
+    check_error(GrB_NULL_POINTER);
+
+    //  adj_matrices = NULL;
+    LAGraph_Free((void **)&adj_matrices, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    //  outputs = NULL;
+    LAGraph_Free((void **)&outputs, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    init_grammar_aSb();
+    init_graph_double_cycle();
+    init_outputs();
+
+    //  grammar.rules = NULL;
+    LAGraph_Free((void **)&grammar.rules, msg);
+    check_error(GrB_NULL_POINTER);
+
+    free_workspace();
+    teardown();
+#endif
+}
 TEST_LIST = {
 #if GxB_IMPLEMENTATION >= GxB_VERSION(9, 4, 5)
     {"CFL_AllPaths_complex_grammar", test_CFL_AllPaths_complex_grammar},
@@ -766,5 +1011,17 @@ TEST_LIST = {
     {"CFL_AllPaths_basic_invalid_rules", test_CFL_AllPaths_invalid_rules},
     {"CFL_AllPaths_with_empty_adj_matrix", test_CFL_AllPaths_with_empty_adj_matrix},
     {"CFL_AllPaths_null_pointers", test_CFL_AllPaths_null_pointers},
+    {"CFL_AllPathsPost_complex_grammar", test_CFL_AllPathsPost_complex_grammar},
+    {"CFL_AllPathsPost_cycle", test_CFL_AllPathsPost_cycle},
+    {"CFL_AllPathsPost_two_cycle", test_CFL_AllPathsPost_two_cycle},
+    {"CFL_AllPathsPost_labels_more_than_nonterms",
+     test_CFL_AllPathsPost_labels_more_than_nonterms},
+    {"CFL_AllPathsPost_tree", test_CFL_AllPathsPost_tree},
+    {"CFL_AllPathsPost_line", test_CFL_AllPathsPost_line},
+    {"CFL_AllPathsPost_two_nodes_cycle", test_CFL_AllPathsPost_two_nodes_cycle},
+    {"CFL_AllPathsPost_basic_invalid_rules", test_CFL_AllPathsPost_invalid_rules},
+    {"CFL_AllPathsPost_with_empty_adj_matrix",
+     test_CFL_AllPathsPost_with_empty_adj_matrix},
+    {"CFL_AllPathsPost_null_pointers", test_CFL_AllPathsPost_null_pointers},
 #endif
     {NULL, NULL}};
