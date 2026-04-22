@@ -28,7 +28,7 @@
     GrB_free(&Theta); \
 }
 
-#define ADD_TO_MSG(...)                                                   \
+#define ADD_TO_MSG_ALL_PATHS(...)                                                   \
     {                                                                     \
         if (msg_len == 0)                                                 \
         {                                                                 \
@@ -354,7 +354,7 @@ GrB_Info LAGraph_CFL_AllPaths(
       MULT_PATH_POST_INDEX_DEFN));
   }
   else {
-    ADD_TO_MSG("Mode must be 0(postprocessing) or 1(CFPQ Core)");
+    ADD_TO_MSG_ALL_PATHS("Mode must be 0(postprocessing) or 1(CFPQ Core)");
     return GrB_INVALID_VALUE;
   }
 
