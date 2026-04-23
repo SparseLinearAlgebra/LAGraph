@@ -44,6 +44,15 @@ static RSM *alloc_rsm(GrB_Index state_count, GrB_Index term_count, GrB_Index non
     LAGraph_Calloc((void **)&r->start_states, nonterm_count, sizeof(GrB_Index), msg);
     LAGraph_Calloc((void **)&r->final_states, nonterm_count, sizeof(GrB_Vector), msg);
 
+    for (size_t i = 0; i < term_count; ++i)
+        GrB_Matrix_new(&r->terminal_matrices[i], GrB_BOOL, state_count, state_count);
+
+    for (size_t i = 0; i < nonterm_count; ++i)
+    {
+        GrB_Matrix_new(&r->nonterminal_matrices[i], GrB_BOOL, state_count, state_count);
+        GrB_Vector_new(&r->final_states[i], GrB_BOOL, state_count);
+    }
+
     return r;
 }
 
@@ -154,11 +163,6 @@ static void init_rsm_aSb_ab(void)
     GrB_Index Q = 4;
     rsm = alloc_rsm(Q, /*term_count=*/2, /*nonterm_count=*/1, /*start_nonterm=*/0);
 
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[0], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[1], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->nonterminal_matrices[0], GrB_BOOL, Q, Q));
-    OK(GrB_Vector_new(&rsm->final_states[0], GrB_BOOL, Q));
-
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -a-> 1
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 1, 3));    // 1 -b-> 3
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 2, 3));    // 2 -b-> 3
@@ -172,13 +176,6 @@ static void init_rsm_aSb_c(void)
 {
     GrB_Index Q = 4;
     rsm = alloc_rsm(Q, /*term_count=*/3, /*nonterm_count=*/1, /*start_nonterm=*/0);
-
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[0], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[1], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[2], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->nonterminal_matrices[0], GrB_BOOL, Q, Q));
-
-    OK(GrB_Vector_new(&rsm->final_states[0], GrB_BOOL, Q));
 
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -a-> 1
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 0, 3));    // 0 -c-> 3
@@ -195,13 +192,6 @@ static void init_rsm_complex(void)
 {
     GrB_Index Q = 11;
     rsm = alloc_rsm(Q, /*term_count=*/4, /*nonterm_count=*/3, /*start_nonterm=*/0);
-    for (int t = 0; t < 4; ++t)
-        OK(GrB_Matrix_new(&rsm->terminal_matrices[t], GrB_BOOL, Q, Q));
-    for (int n = 0; n < 3; ++n)
-    {
-        OK(GrB_Matrix_new(&rsm->nonterminal_matrices[n], GrB_BOOL, Q, Q));
-        OK(GrB_Vector_new(&rsm->final_states[n], GrB_BOOL, Q));
-    }
 
     // --- S Component (States 0-2) ---
     // S -> X | Y | S X | S Y

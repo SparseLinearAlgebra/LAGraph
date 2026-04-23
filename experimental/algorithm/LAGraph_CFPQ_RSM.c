@@ -3,6 +3,7 @@
 #include <GraphBLAS.h>
 
 #include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -247,6 +248,7 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
             {
                 GrB_Index q = seed_states[k];
                 GRB_TRY(GrB_Matrix_setElement_BOOL(M, true, q, seed_col));
+                GRB_TRY(GrB_Matrix_setElement_BOOL(P, true, q, seed_col));
                 GRB_TRY(GrB_Matrix_setElement_BOOL(Stack[start_nonterm], true, q, seed_col));
             }
         }
@@ -275,6 +277,12 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
         {
             if (rsm_nonterm[i] == GrB_NULL)
                 continue;
+
+            GrB_Index gnt_nvals = 0;
+            GRB_TRY(GrB_Matrix_nvals(&gnt_nvals, graph_nt[i]));
+            if (gnt_nvals == 0)
+                continue;
+
             LG_TRY(s_mxm_chain(M_nonterm, rsm_nonterm[i], M, graph_nt[i], temp1, temp2, Q, V));
         }
 
@@ -287,7 +295,7 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
 
             // mask_call = rsm_call[i]^T * M -> |Q|*|V*V|
             GRB_TRY(GrB_Matrix_clear(mask_call));
-            GRB_TRY(GrB_mxm(mask_call, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, rsm_call[i],
+            GRB_TRY(GrB_mxm(mask_call, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL, rsm_call[i],
                             M, GrB_DESC_T0));
 
             GrB_Index mc_nvals = 0;
@@ -295,27 +303,26 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
             if (mc_nvals == 0)
                 continue;
 
-            // frame = rsm_nonterm[i]^T * M, accumulated into Stack[i]
-            GRB_TRY(GrB_Matrix_clear(frame));
-            GRB_TRY(GrB_mxm(frame, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, rsm_nonterm[i], M,
-                            GrB_DESC_T0));
-            GRB_TRY(GrB_eWiseAdd(Stack[i], GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, Stack[i],
-                                 frame, GrB_NULL));
-
             // entry_vec = column-OR of mask_call reshaped to |Q*V|*|V|
             GRB_TRY(GrB_Matrix_clear(temp1));
-            GRB_TRY(GrB_eWiseAdd(temp1, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, temp1,
+            GRB_TRY(GrB_eWiseAdd(temp1, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL, temp1,
                                  mask_call, GrB_NULL));
             GRB_TRY(GxB_Matrix_reshape(temp1, false, Q * V, V, GrB_NULL));
 
             GRB_TRY(GrB_Vector_clear(entry_vec));
             // column OR = row OR of transpose
             GRB_TRY(
-                GrB_reduce(entry_vec, GrB_NULL, GrB_LOR, GrB_LOR_MONOID_BOOL, temp1, GrB_DESC_T0));
+                GrB_reduce(entry_vec, GrB_NULL, GrB_NULL, GrB_LOR_MONOID_BOOL, temp1, GrB_DESC_T0));
 
             GRB_TRY(GxB_Matrix_reshape(temp1, false, Q, VV, GrB_NULL));
 
+            GrB_Index ev_nvals = 0;
+            GRB_TRY(GrB_Vector_nvals(&ev_nvals, entry_vec));
+            if (ev_nvals == 0)
+                continue;
+
             // Build diag(entry_vec) reshaped to 1*|V*V|
+            GRB_TRY(GrB_Matrix_free(&diag_entry));
             diag_entry = GrB_NULL;
             GRB_TRY(GrB_Matrix_diag(&diag_entry, entry_vec, 0)); // |V|*|V|
             GRB_TRY(GxB_Matrix_reshape(diag_entry, false, 1, VV, GrB_NULL));
@@ -326,17 +333,15 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
                             (GrB_Matrix)rsm_start[i], diag_entry, GrB_NULL));
 
             // M_call |= outer_result
-            GRB_TRY(GrB_eWiseAdd(M_call, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, M_call,
-                                 outer_result, GrB_NULL));
-
-            GRB_TRY(GrB_Matrix_free(&diag_entry));
+            GRB_TRY(
+                GrB_eWiseAdd(M_call, GrB_NULL, GrB_LOR, GrB_LOR, M_call, outer_result, GrB_NULL));
         }
 
         // PHASE 4: RETURN TRANSITIONS
         GRB_TRY(GrB_Matrix_clear(M_return));
         for (size_t i = 0; i < num_nonterm; ++i)
         {
-            if (final_states[i] == GrB_NULL)
+            if (final_states[i] == GrB_NULL || rsm_nonterm[i] == GrB_NULL)
                 continue;
 
             // 1*|Q| * |Q|*|V*V| -> 1*|V*V|
@@ -346,25 +351,19 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
 
             GRB_TRY(GxB_Matrix_reshape(new_edges, false, V, V, GrB_NULL));
 
-            GRB_TRY(GrB_eWiseAdd(graph_nt[i], GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL,
-                                 graph_nt[i], new_edges, GrB_NULL));
+            GrB_Index ne_vals = 0;
+            GRB_TRY(GrB_Matrix_nvals(&ne_vals, new_edges));
+            if (ne_vals == 0)
+            {
+                GRB_TRY(GxB_Matrix_reshape(new_edges, false, 1, VV, GrB_NULL));
+                continue;
+            }
 
-            GRB_TRY(GrB_Matrix_clear(temp1));
-            GRB_TRY(GrB_eWiseAdd(temp1, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, temp1,
-                                 Stack[i], GrB_NULL));
-            GRB_TRY(GxB_Matrix_reshape(temp1, false, Q * V, V, GrB_NULL));
+            GRB_TRY(GrB_eWiseAdd(graph_nt[i], GrB_NULL, GrB_LOR, GrB_LOR, graph_nt[i], new_edges,
+                                 GrB_NULL));
 
-            GRB_TRY(GrB_Matrix_clear(temp2));
-            GRB_TRY(GxB_Matrix_reshape(temp2, false, Q * V, V, GrB_NULL));
-            // |Q*V|*|V| * |V|*|V| -> |Q*V|*|V|
-            GRB_TRY(GrB_mxm(temp2, GrB_NULL, GrB_NULL, GrB_LOR_LAND_SEMIRING_BOOL, temp1, new_edges,
-                            GrB_NULL));
+            LG_TRY(s_mxm_chain(M_return, rsm_nonterm[i], P, new_edges, temp1, temp2, Q, V));
 
-            GRB_TRY(GxB_Matrix_reshape(temp1, false, Q, VV, GrB_NULL));
-            GRB_TRY(GxB_Matrix_reshape(temp2, false, Q, VV, GrB_NULL));
-
-            GRB_TRY(GrB_eWiseAdd(M_return, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, M_return,
-                                 temp2, GrB_NULL));
             GRB_TRY(GxB_Matrix_reshape(new_edges, false, 1, VV, GrB_NULL));
         }
 
@@ -372,20 +371,16 @@ int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *gr
         // GrB_assign has big overhead
         // M_new = (M_term | M_nonterm | M_call | M_return) & ~P
         GRB_TRY(GrB_Matrix_clear(M_new));
-        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, M_new, M_term,
-                             GrB_NULL));
-        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, M_new, M_nonterm,
-                             GrB_NULL));
-        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, M_new, M_call,
-                             GrB_NULL));
-        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, M_new, M_return,
-                             GrB_NULL));
+        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR, M_new, M_term, GrB_NULL));
+        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR, M_new, M_nonterm, GrB_NULL));
+        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR, M_new, M_call, GrB_NULL));
+        GRB_TRY(GrB_eWiseAdd(M_new, GrB_NULL, GrB_LOR, GrB_LOR, M_new, M_return, GrB_NULL));
 
         // M_new &= ~P
         GRB_TRY(GrB_assign(M_new, P, GrB_NULL, M_new, GrB_ALL, Q, GrB_ALL, VV, GrB_DESC_RSC));
 
         // P |= M_new
-        GRB_TRY(GrB_eWiseAdd(P, GrB_NULL, GrB_LOR, GrB_LOR_LAND_SEMIRING_BOOL, P, M_new, GrB_NULL));
+        GRB_TRY(GrB_eWiseAdd(P, GrB_NULL, GrB_LOR, GrB_LOR, P, M_new, GrB_NULL));
 
         GrB_Matrix swap = M;
         M = M_new;
