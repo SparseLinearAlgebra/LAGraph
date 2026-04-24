@@ -803,15 +803,20 @@ int LAGraph_2RegularPathQuery   // nodes reachable from the starting by the
     char *msg                   // LAGraph output message
 );
 //****************************************************************************
-#define QUICK_PATH_LENGTH 14
-#define QUICK_PATH_COUNT 2
+#define QUICK_PATH_LENGTH 20
+#define QUICK_PATH_COUNT 1
 
 typedef uint64_t Vertex ;
+
+typedef struct PathExtra {
+    size_t len;
+    Vertex vertices[0];
+} PathExtra ;
 
 typedef struct {
         Vertex vertices[QUICK_PATH_LENGTH];
         size_t vertex_count;
-        Vertex *extra_vertices;
+        PathExtra *extra;
 } Path ;
 
 void Path_print (const Path *x);

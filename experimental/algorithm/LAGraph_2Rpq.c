@@ -15,12 +15,44 @@
 #include <assert.h>
 #include <limits.h>
 
+
+#define MAX_MEM (1 * 1024 * 1024 * 1024)
+
+const char memory_arena[MAX_MEM];
+size_t cntr = 0;
+bool oom = false;
+void *xalloc(size_t size) {
+    assert(size % sizeof(int64_t) == 0);
+    if (cntr + size > MAX_MEM) {
+        // OOM: loop back to the beggining and flag the answer as wrong.
+        oom = true;
+        cntr = 0;
+    }
+
+    void *ptr = (void*) &(memory_arena[cntr]);
+    cntr += size;
+    return ptr;
+}
+void xfree(void) {
+#ifdef NDEBUG
+    printf("2RPQ arena allocator stats: allocated=%llu memory_limit=%llu\n", cntr, MAX_MEM);
+#endif
+    oom = false;
+    cntr = 0;
+}
+
+
 #define PATH_LIMIT 100000
+
+typedef struct MultiplePathsExtra {
+    size_t count;
+    Path paths[0];
+} MultiplePathsExtra;
 
 typedef struct {
     Path paths[QUICK_PATH_COUNT];
     size_t path_count;
-    Path *extra_paths;
+    MultiplePathsExtra *extra;
 } MultiplePaths ;
 
 MultiplePaths multiple_paths_identity ;
@@ -38,7 +70,7 @@ void Path_print (const Path *x)
         // Increase the vertex by 1 since usually user expects the same
         // numbering as in the input determined by MTX file in which the
         // entries are enumerated starting from 1.
-        printf ("(%ld)", (i < QUICK_PATH_LENGTH ? x->vertices[i] : x->extra_vertices[i - QUICK_PATH_LENGTH]) + 1) ;
+        printf ("(%llu)", (i < QUICK_PATH_LENGTH ? x->vertices[i] : x->extra->vertices[i - QUICK_PATH_LENGTH]) + 1) ;
 
         if (i != x->vertex_count - 1)
         {
@@ -81,23 +113,65 @@ void second_multiple_paths_f(MultiplePaths *z, bool *_x, MultiplePaths *y)
     *z = *y;
 }
 
+static inline MultiplePathsExtra *multiple_paths_extra_alloc(size_t count) {
+    MultiplePathsExtra *extra = xalloc(sizeof(MultiplePathsExtra) + count * sizeof(Path));
+    extra->count = count;
+    return extra;
+}
+
+#define nth_path(x, j) (((j) < QUICK_PATH_COUNT) ? ((x)->paths[j]) : ((x)->extra->paths[j - QUICK_PATH_COUNT]))
+#define set_nth_path(x, j, v) \
+    do { \
+        if (j < QUICK_PATH_COUNT) { \
+            x->paths[j] = v; \
+        } else { \
+            x->extra->paths[j - QUICK_PATH_COUNT] = v; \
+        } \
+    } while (0)
+
 void combine_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, const MultiplePaths *y)
 {
-    z->path_count = x->path_count + y->path_count ;
-    assert (z->path_count < QUICK_PATH_COUNT) ;
+    size_t path_count = x->path_count + y->path_count ;
+    z->path_count = path_count ;
 
-    for (size_t i = 0 ; i < x->path_count ; i++)
-    {
-        z->paths[i] = x->paths[i] ;
+
+    if (path_count <= QUICK_PATH_COUNT) {
+        size_t i = 0;
+        for (size_t j = 0 ; j < x->path_count ; j++)
+        {
+            z->paths[i++] = x->paths[j] ;
+        }
+
+        for (size_t j = 0 ; j < y->path_count ; j++)
+        {
+            z->paths[i++] = y->paths[j] ;
+        }
+        return;
+    } else {
+        MultiplePathsExtra *extra = multiple_paths_extra_alloc (path_count - QUICK_PATH_COUNT);
+        z->extra = extra;
+
+        size_t i = 0;
+        for (size_t j = 0 ; j < x->path_count ; j++)
+        {
+            Path path = nth_path(x, j);
+            set_nth_path(z, i, path);
+            i++;
+        }
+
+        for (size_t j = 0 ; j < y->path_count ; j++)
+        {
+            Path path = nth_path(y, j) ;
+            set_nth_path(z, i, path);
+            i++;
+        }
     }
 
-    for (size_t i = 0 ; i < y->path_count ; i++)
-    {
-        z->paths[x->path_count + i] = y->paths[i] ;
-    }
+
 
     // TODO: Support more than QUICK_PATH_COUNT paths.
 }
+
 
 static inline void path_extend(Path *path, Vertex vertex)
 {
@@ -112,11 +186,12 @@ static inline void path_extend(Path *path, Vertex vertex)
     }
     else
     {
-        if (path->extra_vertices == NULL)
+        if (path->extra == NULL)
         {
-            LG_TRY (LAGraph_Calloc ((void **) &path->extra_vertices, 64, sizeof (Vertex), NULL)) ;
+            LAGraph_Calloc ((void **) &path->extra, 64, sizeof (Vertex), NULL) ;
         }
-        path->extra_vertices [(path->vertex_count++) - QUICK_PATH_LENGTH] = vertex ;
+
+        path->extra->vertices [(path->vertex_count++) - QUICK_PATH_LENGTH] = vertex ;
     }
 
     // TODO: Support more than QUICK_PATH_LENGTH vertices.
@@ -655,7 +730,12 @@ static int LAGraph_2Rpq
 
     }
 
+    if (oom) {
+        // RODION, PLEASE HANDLE SOMEHOW
+    }
+
     //LG_FREE_WORK ;
+    xfree();
     return (GrB_SUCCESS) ;
 }
 
