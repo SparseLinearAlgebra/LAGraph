@@ -16,19 +16,12 @@ static GrB_Vector result = GrB_NULL;
 // test setup / teardown
 //==============================================================================
 
-static void setup(void)
-{
-    LAGraph_Init(msg);
-}
+static void setup(void) { LAGraph_Init(msg); }
 
-static void teardown(void)
-{
-    LAGraph_Finalize(msg);
-}
+static void teardown(void) { LAGraph_Finalize(msg); }
 
-static RSM *alloc_rsm(GrB_Index state_count, GrB_Index term_count, GrB_Index nonterm_count,
-                      GrB_Index start_nonterm)
-{
+static RSM *alloc_rsm(GrB_Index state_count, GrB_Index term_count,
+                      GrB_Index nonterm_count, GrB_Index start_nonterm) {
     RSM *r = NULL;
     LAGraph_Malloc((void **)&r, 1, sizeof(RSM), msg);
     if (r == NULL)
@@ -40,35 +33,39 @@ static RSM *alloc_rsm(GrB_Index state_count, GrB_Index term_count, GrB_Index non
     r->start_nonterminal = start_nonterm;
 
     LAGraph_Calloc((void **)&r->terminal_matrices, term_count, sizeof(GrB_Matrix), msg);
-    LAGraph_Calloc((void **)&r->nonterminal_matrices, nonterm_count, sizeof(GrB_Matrix), msg);
+    LAGraph_Calloc((void **)&r->nonterminal_matrices, nonterm_count, sizeof(GrB_Matrix),
+                   msg);
     LAGraph_Calloc((void **)&r->start_states, nonterm_count, sizeof(GrB_Index), msg);
     LAGraph_Calloc((void **)&r->final_states, nonterm_count, sizeof(GrB_Vector), msg);
+
+    for (size_t i = 0; i < term_count; ++i)
+        GrB_Matrix_new(&r->terminal_matrices[i], GrB_BOOL, state_count, state_count);
+
+    for (size_t i = 0; i < nonterm_count; ++i) {
+        GrB_Matrix_new(&r->nonterminal_matrices[i], GrB_BOOL, state_count, state_count);
+        GrB_Vector_new(&r->final_states[i], GrB_BOOL, state_count);
+    }
 
     return r;
 }
 
-static void free_rsm(void)
-{
+static void free_rsm(void) {
     if (rsm == NULL)
         return;
 
-    if (rsm->terminal_matrices != NULL)
-    {
+    if (rsm->terminal_matrices != NULL) {
         for (size_t i = 0; i < rsm->terminal_count; ++i)
             GrB_free(&rsm->terminal_matrices[i]);
         LAGraph_Free((void **)&rsm->terminal_matrices, msg);
     }
-    if (rsm->nonterminal_matrices != NULL)
-    {
+    if (rsm->nonterminal_matrices != NULL) {
         for (size_t i = 0; i < rsm->nonterminal_count; ++i)
             GrB_free(&rsm->nonterminal_matrices[i]);
         LAGraph_Free((void **)&rsm->nonterminal_matrices, msg);
     }
 
-    if (rsm->final_states != NULL)
-    {
-        for (size_t i = 0; i < rsm->nonterminal_count; ++i)
-        {
+    if (rsm->final_states != NULL) {
+        for (size_t i = 0; i < rsm->nonterminal_count; ++i) {
             GrB_free(&rsm->final_states[i]);
         }
         LAGraph_Free((void **)&rsm->final_states, msg);
@@ -78,8 +75,7 @@ static void free_rsm(void)
     LAGraph_Free((void **)&rsm, msg);
 }
 
-static void free_graph(void)
-{
+static void free_graph(void) {
     if (graph_term == NULL)
         return;
     for (size_t i = 0; i < n_graph_term; ++i)
@@ -89,15 +85,14 @@ static void free_graph(void)
     V = 0;
 }
 
-static void free_workspace(void)
-{
+static void free_workspace(void) {
     GrB_free(&result);
     free_rsm();
     free_graph();
 }
 
-static void check_reachable(GrB_Index *expected, GrB_Index n_expected, const char *test_name)
-{
+static void check_reachable(GrB_Index *expected, GrB_Index n_expected,
+                            const char *test_name) {
     GrB_Index nvals = 0;
     OK(GrB_Vector_nvals(&nvals, result));
 
@@ -107,12 +102,10 @@ static void check_reachable(GrB_Index *expected, GrB_Index n_expected, const cha
     GrB_Index *idx = GrB_NULL;
     bool *val = GrB_NULL;
 
-    if (nvals > 0)
-    {
+    if (nvals > 0) {
         idx = (GrB_Index *)malloc(nvals * sizeof(GrB_Index));
         val = (bool *)malloc(nvals * sizeof(bool));
-        if (!TEST_CHECK(idx != NULL && val != NULL))
-        {
+        if (!TEST_CHECK(idx != NULL && val != NULL)) {
             free(got);
             free(idx);
             free(val);
@@ -127,10 +120,10 @@ static void check_reachable(GrB_Index *expected, GrB_Index n_expected, const cha
     }
 
     // every expected vertex must be reachable
-    for (GrB_Index k = 0; k < n_expected; ++k)
-    {
+    for (GrB_Index k = 0; k < n_expected; ++k) {
         TEST_CHECK(got[expected[k]]);
-        TEST_MSG("%s: vertex %llu should be reachable", test_name, (unsigned long long)expected[k]);
+        TEST_MSG("%s: vertex %llu should be reachable", test_name,
+                 (unsigned long long)expected[k]);
     }
 
     GrB_Index actual_count = 0;
@@ -149,15 +142,9 @@ static void check_reachable(GrB_Index *expected, GrB_Index n_expected, const cha
 // RSM builders
 //==============================================================================
 // Grammar 1:  S -> a S b | a b
-static void init_rsm_aSb_ab(void)
-{
+static void init_rsm_aSb_ab(void) {
     GrB_Index Q = 4;
     rsm = alloc_rsm(Q, /*term_count=*/2, /*nonterm_count=*/1, /*start_nonterm=*/0);
-
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[0], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[1], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->nonterminal_matrices[0], GrB_BOOL, Q, Q));
-    OK(GrB_Vector_new(&rsm->final_states[0], GrB_BOOL, Q));
 
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -a-> 1
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 1, 3));    // 1 -b-> 3
@@ -168,17 +155,9 @@ static void init_rsm_aSb_ab(void)
 }
 
 // Grammar 2:  S -> a S b | c
-static void init_rsm_aSb_c(void)
-{
+static void init_rsm_aSb_c(void) {
     GrB_Index Q = 4;
     rsm = alloc_rsm(Q, /*term_count=*/3, /*nonterm_count=*/1, /*start_nonterm=*/0);
-
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[0], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[1], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->terminal_matrices[2], GrB_BOOL, Q, Q));
-    OK(GrB_Matrix_new(&rsm->nonterminal_matrices[0], GrB_BOOL, Q, Q));
-
-    OK(GrB_Vector_new(&rsm->final_states[0], GrB_BOOL, Q));
 
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -a-> 1
     OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 0, 3));    // 0 -c-> 3
@@ -191,17 +170,9 @@ static void init_rsm_aSb_c(void)
 // Grammar 3: S -> X | Y | S X | S Y
 //            X -> a S b | a b
 //            Y -> c S d | c d
-static void init_rsm_complex(void)
-{
+static void init_rsm_complex(void) {
     GrB_Index Q = 11;
     rsm = alloc_rsm(Q, /*term_count=*/4, /*nonterm_count=*/3, /*start_nonterm=*/0);
-    for (int t = 0; t < 4; ++t)
-        OK(GrB_Matrix_new(&rsm->terminal_matrices[t], GrB_BOOL, Q, Q));
-    for (int n = 0; n < 3; ++n)
-    {
-        OK(GrB_Matrix_new(&rsm->nonterminal_matrices[n], GrB_BOOL, Q, Q));
-        OK(GrB_Vector_new(&rsm->final_states[n], GrB_BOOL, Q));
-    }
 
     // --- S Component (States 0-2) ---
     // S -> X | Y | S X | S Y
@@ -234,8 +205,7 @@ static void init_rsm_complex(void)
 // Graph builders
 //==============================================================================
 // 0-a->1; 1-a->2; 2-a->0; 0-b->3; 3-b->0 (V=4, 2 labels: a=0, b=1)
-static void init_graph_double_cycle_ab(void)
-{
+static void init_graph_double_cycle_ab(void) {
     V = 4;
     n_graph_term = 2;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -250,8 +220,7 @@ static void init_graph_double_cycle_ab(void)
 }
 
 // 0-a->0; 0-a->1; 1-b->1 (V=2, 2 labels: a=0, b=1)
-static void init_graph_self_loops(void)
-{
+static void init_graph_self_loops(void) {
     V = 2;
     n_graph_term = 2;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -264,8 +233,7 @@ static void init_graph_self_loops(void)
 }
 
 // 0-a->0; 0-b->0 (V=2, 2 labels: a=0, b=1)
-static void init_graph_single_node(void)
-{
+static void init_graph_single_node(void) {
     V = 2;
     n_graph_term = 2;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -277,8 +245,7 @@ static void init_graph_single_node(void)
 }
 
 // 0-a->0; 0-c->1; 1-b->1   (V=2, 3 labels: a=0, b=1, c=2)
-static void init_graph_loops_abc(void)
-{
+static void init_graph_loops_abc(void) {
     V = 2;
     n_graph_term = 3;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -291,8 +258,7 @@ static void init_graph_loops_abc(void)
 }
 
 // 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->2   (V=4, 3 labels: a=0, b=1, c=2)
-static void init_graph_loops_abc_1(void)
-{
+static void init_graph_loops_abc_1(void) {
     V = 4;
     n_graph_term = 3;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -307,8 +273,7 @@ static void init_graph_loops_abc_1(void)
 }
 
 // 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->4; 4-b->2   (V=5, 3 labels: a=0, b=1, c=2)
-static void init_graph_loops_abc_2(void)
-{
+static void init_graph_loops_abc_2(void) {
     V = 5;
     n_graph_term = 3;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -324,8 +289,7 @@ static void init_graph_loops_abc_2(void)
 }
 
 // a-cycle(0,1,2), b-cycle(2,3), c-cycle(3,4,5), d-edges(2<->5)   (V=6, 4 labels)
-static void init_graph_multi_cycle(void)
-{
+static void init_graph_multi_cycle(void) {
     V = 6;
     n_graph_term = 4;
     LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
@@ -344,7 +308,7 @@ static void init_graph_multi_cycle(void)
     OK(GrB_Matrix_setElement_BOOL(graph_term[3], true, 2, 5));
 }
 
-#define run_algorithm(sources, num_sources)                                                        \
+#define run_algorithm(sources, num_sources)                                              \
     LAGraph_CFPQ_RSM(&result, rsm, graph_term, (sources), (num_sources), V, msg);
 
 //==============================================================================
@@ -356,8 +320,7 @@ static void init_graph_multi_cycle(void)
 // Graph: 0-a->1; 1-a->2; 2-a->0; 0-b->3; 3-b->0
 // Source: 1   Expected: {0, 3}
 //------------------------------------------------------------------------------
-void test_TC1_cyclic_ab(void)
-{
+void test_TC1_cyclic_ab(void) {
     setup();
 
     init_rsm_aSb_ab();
@@ -365,8 +328,7 @@ void test_TC1_cyclic_ab(void)
 
     GrB_Index sources = {1};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {0, 3};
         check_reachable(expected, /*n_expected=*/2, "TC1");
     }
@@ -381,16 +343,14 @@ void test_TC1_cyclic_ab(void)
 // Graph: 0-a->0; 0-a->1; 1-b->1
 // Source: 0   Expected: {1}
 //------------------------------------------------------------------------------
-void test_TC2_self_loops(void)
-{
+void test_TC2_self_loops(void) {
     setup();
     init_rsm_aSb_ab();
     init_graph_self_loops();
 
     GrB_Index sources = {0};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {1};
         check_reachable(expected, /*n_expected=*/1, "TC2");
     }
@@ -405,16 +365,14 @@ void test_TC2_self_loops(void)
 // Graph: 0-a->0; 0-b->0
 // Source: 0   Expected: {0}
 //------------------------------------------------------------------------------
-void test_TC3_single_node(void)
-{
+void test_TC3_single_node(void) {
     setup();
     init_rsm_aSb_ab();
     init_graph_single_node();
 
     GrB_Index sources = {0};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {0};
         check_reachable(expected, /*n_expected=*/1, "TC3");
     }
@@ -429,16 +387,14 @@ void test_TC3_single_node(void)
 // Graph: 0-a->0; 0-c->1; 1-b->1
 // Source: 0   Expected: {1}
 //------------------------------------------------------------------------------
-void test_TC4_aSb_c_loops(void)
-{
+void test_TC4_aSb_c_loops(void) {
     setup();
     init_rsm_aSb_c();
     init_graph_loops_abc();
 
     GrB_Index sources = {0};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {1};
         check_reachable(expected, 1, "TC4");
     }
@@ -453,16 +409,14 @@ void test_TC4_aSb_c_loops(void)
 // Graph: 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->2
 // Source: 1   Expected: {3}
 //------------------------------------------------------------------------------
-void test_TC5_aSb_c_cycle1(void)
-{
+void test_TC5_aSb_c_cycle1(void) {
     setup();
     init_rsm_aSb_c();
     init_graph_loops_abc_1();
 
     GrB_Index sources = {1};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {3};
         check_reachable(expected, 1, "TC5");
     }
@@ -476,8 +430,7 @@ void test_TC5_aSb_c_cycle1(void)
 // Graph: 0-a->1; 1-a->0; 0-c->2; 2-b->2
 // Source: 1   Expected: {2}
 //------------------------------------------------------------------------------
-void test_TC6_aSb_c_cycle2(void)
-{
+void test_TC6_aSb_c_cycle2(void) {
     setup();
     init_rsm_aSb_c();
 
@@ -494,8 +447,7 @@ void test_TC6_aSb_c_cycle2(void)
 
     GrB_Index sources = {1};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {2};
         check_reachable(expected, 1, "TC6");
     }
@@ -510,16 +462,14 @@ void test_TC6_aSb_c_cycle2(void)
 // Graph: 0-a->1; 1-a->0; 0-c->2; 2-b->3; 3-b->4; 4-b->2
 // Source: 0   Expected: {2, 3, 4}
 //------------------------------------------------------------------------------
-void test_TC7_aSb_c_cycle3(void)
-{
+void test_TC7_aSb_c_cycle3(void) {
     setup();
     init_rsm_aSb_c();
     init_graph_loops_abc_2();
 
     GrB_Index sources = {0};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {2, 3, 4};
         check_reachable(expected, 3, "TC7");
     }
@@ -534,16 +484,14 @@ void test_TC7_aSb_c_cycle3(void)
 // same graph, different source vertex
 // Source: 1   Expected: {2, 3, 4}
 //------------------------------------------------------------------------------
-void test_TC8_aSb_c_cycle4(void)
-{
+void test_TC8_aSb_c_cycle4(void) {
     setup();
     init_rsm_aSb_c();
     init_graph_loops_abc_2();
 
     GrB_Index sources = {1};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {2, 3, 4};
         check_reachable(expected, 3, "TC8");
     }
@@ -553,8 +501,7 @@ void test_TC8_aSb_c_cycle4(void)
     teardown();
 }
 
-void test_TC9_mult_recursive_cycles(void)
-{
+void test_TC9_mult_recursive_cycles(void) {
     setup();
 
     init_rsm_complex();
@@ -562,8 +509,7 @@ void test_TC9_mult_recursive_cycles(void)
 
     GrB_Index sources = {1};
     GrB_Info info = run_algorithm(&sources, 1);
-    if (info == GrB_SUCCESS)
-    {
+    if (info == GrB_SUCCESS) {
         GrB_Index expected[] = {2, 3, 5};
         check_reachable(expected, 3, "TC9");
     }
