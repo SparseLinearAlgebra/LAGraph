@@ -308,7 +308,8 @@ GrB_Info LAGraph_CFL_AllPaths(
   GrB_Scalar bottom_scalar = NULL;
 
   GrB_free(all_paths_ptr_t);
-  GRB_TRY(GrB_Type_new(all_paths_ptr_t, sizeof(AllPathsElem)));
+  GRB_TRY(GxB_Type_new(all_paths_ptr_t, sizeof(AllPathsElem), "AllPathsElem",
+  "typedef struct{size_t n;union{GrB_Index single_elem;GrB_Index* middle;}data;}AllPathsElem;"));
   AllPaths_type = *all_paths_ptr_t;
 
   GRB_TRY(GrB_Scalar_new(&Theta, GrB_BOOL));
