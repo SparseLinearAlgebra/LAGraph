@@ -4,7 +4,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
-
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         GrB_free(&CombinedGraph);                                                        \
@@ -50,6 +49,10 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker(GrB_Matrix *M_intersect_out, GrB_Matrix 
     GrB_Matrix temp_output;
     GrB_Matrix_new(&temp_output, GrB_BOOL, g_dim, g_dim);
 
+    GrB_Vector v_diag;
+    GrB_Vector_new(&v_diag, GrB_BOOL, g_dim);
+    GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, g_dim, NULL);
+
     for (int64_t nt = 0; nt < rsm->nonterminal_count; ++nt) {
         GrB_Matrix_new(&outputs[nt], GrB_BOOL, g_dim, g_dim);
         GrB_Matrix_new(&delta_outputs[nt], GrB_BOOL, g_dim, g_dim);
@@ -59,12 +62,11 @@ GrB_Info LAGraph_CFL_AllPaths_Kronecker(GrB_Matrix *M_intersect_out, GrB_Matrix 
         GrB_Vector_extractElement_BOOL(&is_final, rsm->final_states[nt], s);
 
         if (is_final) {
-            for (GrB_Index v = 0; v < g_dim; ++v) {
-                GrB_Matrix_setElement_BOOL(outputs[nt], true, v, v);
-                GrB_Matrix_setElement_BOOL(delta_outputs[nt], true, v, v);
-            }
+            GrB_Matrix_diag(&outputs[nt], v_diag, 0);
+            GrB_Matrix_diag(&delta_outputs[nt], v_diag, 0);
         }
     }
+    GrB_free(&v_diag);
 
     GrB_Matrix M_graph = NULL;
     GrB_Matrix CombinedGraph = NULL;
