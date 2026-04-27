@@ -1431,6 +1431,10 @@ typedef struct
 int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *graph_term,
                      const GrB_Index *sources, size_t num_sources, GrB_Index V, char *msg);
 
+GrB_Info LAGraph_CFL_AllPaths_Kronecker(GrB_Matrix *M_intersect_out, GrB_Matrix *outputs,
+                                        const GrB_Matrix *adj_matrices,
+                                        int64_t terms_count, RSM *rsm, char *msg);
+
 // LAGraph_CFL_reachability_multsrc: Multiple-Source Context-Free Language Reachability
 // Matrix-Based Algorithm
 //
