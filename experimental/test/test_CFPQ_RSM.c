@@ -19,6 +19,12 @@ static GrB_Vector result = GrB_NULL;
 static void setup(void)
 {
     LAGraph_Init(msg);
+<<<<<<< Updated upstream
+=======
+    // All new matrices will use 64-bit indices by default:
+    GxB_Global_Option_set(GxB_ROWINDEX_INTEGER_BITS, 64);
+    GxB_Global_Option_set(GxB_COLINDEX_INTEGER_BITS, 64);
+>>>>>>> Stashed changes
 }
 
 static void teardown(void)
@@ -220,6 +226,37 @@ static void init_rsm_complex(void)
     OK(GrB_Vector_setElement_BOOL(rsm->final_states[2], true, 10));
 }
 
+static void init_c_alias_rsm(void)
+{
+    GrB_Index Q = 8;
+    rsm = alloc_rsm(Q, /*term_count=*/4, /*nonterm_count=*/2, /*start_nonterm=*/0);
+    // alphabet: d_r=0; d=1, a=2, a_r=3
+
+    // --- S Component (States 0-3) ---
+    // S -> d_r V d
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[0], true, 0, 1));    // 0 -d_r-> 1
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[1], true, 1, 2)); // 1 -V-> 2
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[1], true, 2, 3));    // 2 -d-> 3
+    rsm->start_states[0] = 0;
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[0], true, 3));
+
+    // --- V Component (States 4-7) ---
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 4, 6));    // 4 -a->   6
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[3], true, 4, 4));    // 4 -a_r-> 4
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 4, 5)); // 4 -S->   5
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[3], true, 5, 4));    // 5 -a_r-> 4
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 5, 6));    // 5 -a->   6
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 6, 6));    // 6 -a->   6
+    OK(GrB_Matrix_setElement_BOOL(rsm->nonterminal_matrices[0], true, 6, 7)); // 6 -S->   7
+    OK(GrB_Matrix_setElement_BOOL(rsm->terminal_matrices[2], true, 7, 6));    // 7 -a-> 6
+    rsm->start_states[1] = 4;
+    // All states are final
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[1], true, 4));
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[1], true, 5));
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[1], true, 6));
+    OK(GrB_Vector_setElement_BOOL(rsm->final_states[1], true, 7));
+}
+
 //==============================================================================
 // Graph builders
 //==============================================================================
@@ -334,6 +371,21 @@ static void init_graph_multi_cycle(void)
     OK(GrB_Matrix_setElement_BOOL(graph_term[3], true, 2, 5));
 }
 
+<<<<<<< Updated upstream
+=======
+static void init_graph_c_alias_overflow(void)
+{
+    V = 65537;
+    n_graph_term = 4;
+    LAGraph_Calloc((void **)&graph_term, n_graph_term, sizeof(GrB_Matrix), msg);
+    for (size_t i = 0; i < n_graph_term; ++i)
+        OK(GrB_Matrix_new(&graph_term[i], GrB_BOOL, V, V));
+
+    OK(GrB_Matrix_setElement_BOOL(graph_term[0], true, 0, 65536));
+    OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 65536, 0));
+}
+
+>>>>>>> Stashed changes
 #define run_algorithm(sources, num_sources)                                                        \
     LAGraph_CFPQ_RSM(&result, rsm, graph_term, (sources), (num_sources), V, msg);
 
@@ -563,6 +615,30 @@ void test_TC9_mult_recursive_cycles(void)
     teardown();
 }
 
+//------------------------------------------------------------------------------
+// TC11: c_alias_rsm
+// Graph: 65536 -d-> 0, 0 -d_r-> 65536
+// Source: 0   Expected: {0}
+//------------------------------------------------------------------------------
+void test_TC10_c_alias_overflow(void)
+{
+    setup();
+    init_c_alias_rsm();
+    init_graph_c_alias_overflow();
+
+    GrB_Index sources = {0};
+    GrB_Info info = run_algorithm(&sources, /*num_sources=*/1);
+    if (info == GrB_SUCCESS)
+    {
+        GrB_Index expected[] = {0};
+        check_reachable(expected, /*n_expected=*/1, "TC10");
+    }
+
+    free_workspace();
+    OK(info);
+    teardown();
+}
+
 TEST_LIST = {{"TC1_cyclic_ab", test_TC1_cyclic_ab},
              {"TC2_self_loops", test_TC2_self_loops},
              {"TC3_single_node", test_TC3_single_node},
@@ -572,4 +648,9 @@ TEST_LIST = {{"TC1_cyclic_ab", test_TC1_cyclic_ab},
              {"TC7_aSb_c_cycle3", test_TC7_aSb_c_cycle3},
              {"TC8_aSb_c_cycle4", test_TC8_aSb_c_cycle4},
              {"TC9_mult_recursive_cycles", test_TC9_mult_recursive_cycles},
+<<<<<<< Updated upstream
              {NULL, NULL}};
+=======
+             {"TC10_c_alias_overflow", test_TC10_c_alias_overflow},
+             {NULL, NULL}};
+>>>>>>> Stashed changes
