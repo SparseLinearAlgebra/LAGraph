@@ -854,7 +854,8 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
     char *msg                   // LAGraph output message
-);
+) ;
+
 //****************************************************************************
 LAGRAPHX_PUBLIC
 int LAGraph_VertexCentrality_Triangle       // vertex triangle-centrality
@@ -1095,6 +1096,21 @@ GrB_Info LAGraph_CFL_reachability
     int64_t rules_count,            // The total number of rules in the CFG.
     char *msg                       // Message string for error reporting.
 ) ;
+
+typedef struct
+{
+    GrB_Index state_count;        
+    GrB_Index terminal_count;       
+    GrB_Index nonterminal_count;     
+    GrB_Index start_nonterminal;    
+    GrB_Matrix *terminal_matrices;   
+    GrB_Matrix *nonterminal_matrices; 
+    GrB_Index *start_states;          
+    GrB_Vector *final_states;         
+} RSM;
+
+int LAGraph_CFPQ_RSM(GrB_Vector *reachable, const RSM *rsm, const GrB_Matrix *graph_term,
+                     const GrB_Index *sources, size_t num_sources, GrB_Index V, char *msg);
 
 //------------------------------------------------------------------------------
 // a simple example of an algorithm
