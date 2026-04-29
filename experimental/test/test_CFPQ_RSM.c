@@ -19,12 +19,6 @@ static GrB_Vector result = GrB_NULL;
 static void setup(void)
 {
     LAGraph_Init(msg);
-<<<<<<< Updated upstream
-=======
-    // All new matrices will use 64-bit indices by default:
-    GxB_Global_Option_set(GxB_ROWINDEX_INTEGER_BITS, 64);
-    GxB_Global_Option_set(GxB_COLINDEX_INTEGER_BITS, 64);
->>>>>>> Stashed changes
 }
 
 static void teardown(void)
@@ -371,8 +365,6 @@ static void init_graph_multi_cycle(void)
     OK(GrB_Matrix_setElement_BOOL(graph_term[3], true, 2, 5));
 }
 
-<<<<<<< Updated upstream
-=======
 static void init_graph_c_alias_overflow(void)
 {
     V = 65537;
@@ -385,7 +377,6 @@ static void init_graph_c_alias_overflow(void)
     OK(GrB_Matrix_setElement_BOOL(graph_term[1], true, 65536, 0));
 }
 
->>>>>>> Stashed changes
 #define run_algorithm(sources, num_sources)                                                        \
     LAGraph_CFPQ_RSM(&result, rsm, graph_term, (sources), (num_sources), V, msg);
 
@@ -648,9 +639,5 @@ TEST_LIST = {{"TC1_cyclic_ab", test_TC1_cyclic_ab},
              {"TC7_aSb_c_cycle3", test_TC7_aSb_c_cycle3},
              {"TC8_aSb_c_cycle4", test_TC8_aSb_c_cycle4},
              {"TC9_mult_recursive_cycles", test_TC9_mult_recursive_cycles},
-<<<<<<< Updated upstream
-             {NULL, NULL}};
-=======
              {"TC10_c_alias_overflow", test_TC10_c_alias_overflow},
              {NULL, NULL}};
->>>>>>> Stashed changes
