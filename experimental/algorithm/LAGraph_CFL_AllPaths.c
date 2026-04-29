@@ -2,7 +2,7 @@
 { \
     if (mode == 0) { \
         if (outputs_reachability != NULL) { \
-            for (int64_t i = 0; i < nonterms_count; i++) { \
+            for (size_t i = 0; i < nonterms_count; i++) { \
                 GrB_free(&outputs_reachability[i]); \
             } \            
         } \
@@ -420,7 +420,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
     // Create nonterms matrices
-    for (int64_t i = 0; i < nonterms_count; i++)
+    for (size_t i = 0; i < nonterms_count; i++)
     {
       GRB_TRY(GrB_Matrix_new(&T[i], semiring.type, n, n));
       t_empty_flags[i] = true;
@@ -431,7 +431,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     LG_TRY(LAGraph_Calloc((void**)&bin_rules, rules_count, sizeof(size_t), msg));
 
     // Classify rules into three types: [Variable -> eps], [Variable -> term], and [Variable -> A B]
-    for (int64_t i = 0; i < rules_count; i++)
+    for (size_t i = 0; i < rules_count; i++)
     {
       LAGraph_rule_WCNF rule = rules[i];
       bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
@@ -458,15 +458,13 @@ GrB_Info LAGraph_CFL_AllPaths(
     }
 
     // Rule [Variable -> term]
-    for (int64_t i = 0; i < term_rules_count; i++)
+    for (size_t i = 0; i < term_rules_count; i++)
     {
       LAGraph_rule_WCNF term_rule = rules[term_rules[i]];
       GrB_Index adj_matrix_nnz = 0;
       GRB_TRY(GrB_Matrix_nvals(&adj_matrix_nnz, adj_matrices[term_rule.prod_A]));
-      if (adj_matrix_nnz == 0)
-      {
-        continue;
-      }
+      if (adj_matrix_nnz == 0) continue; 
+      
       GxB_eWiseUnion(
         T[term_rule.nonterm], GrB_NULL, GrB_NULL, semiring.init_path,
         T[term_rule.nonterm], semiring.bottom_scalar, adj_matrices[term_rule.prod_A], false_scalar, GrB_NULL);
@@ -480,7 +478,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     GRB_TRY(GrB_free(&v_diag));
 
     // Rule [Variable -> eps]
-    for (int64_t i = 0; i < eps_rules_count; i++)
+    for (size_t i = 0; i < eps_rules_count; i++)
     {
       LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
       GrB_BinaryOp acc_op = t_empty_flags[eps_rule.nonterm] ? GrB_NULL : semiring.add;
@@ -493,7 +491,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     GrB_free(&identity_matrix);
 
     // Marking dont empty matrices after transitive closure
-    for (int64_t i = 0; i < nonterms_count; i++)
+    for (size_t i = 0; i < nonterms_count; i++)
     {
       GrB_Index temp_nvals = 0;
       GrB_Matrix_nvals(&temp_nvals, outputs_reachability[i]);
@@ -503,7 +501,7 @@ GrB_Info LAGraph_CFL_AllPaths(
     }
 
     // Rule [Variable -> A B]
-    for (int64_t i = 0; i < bin_rules_count; i++)
+    for (size_t i = 0; i < bin_rules_count; i++)
     {
       LAGraph_rule_WCNF bin_rule = rules[bin_rules[i]];
 
