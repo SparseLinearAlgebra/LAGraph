@@ -874,6 +874,9 @@ typedef struct {
         PathExtra *extra;
 } Path ;
 
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_FreePaths(Path **paths, size_t path_count, char *msg);
+
 void Path_print (const Path *x);
 
 LAGRAPHX_PUBLIC
