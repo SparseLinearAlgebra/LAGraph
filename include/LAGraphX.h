@@ -958,6 +958,30 @@ int LAGraph_2Rpq_AllPaths       // All paths satisfying regular expression
     uint64_t limit,             // maximum path count
     char *msg                   // LAGraph output message
 );
+
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_AllShortestPaths // All shortest paths satisfying regular expression
+(
+    // output:
+    Path **paths,               // paths from one of the starting nodes
+                                // satisfying regular constraints
+    size_t *path_count,         // resulting path count
+    // input:
+    LAGraph_Graph *R,           // input non-deterministic finite automaton
+                                // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
+    size_t nl,                  // total label count, # of matrices graph and
+                                // NFA adjacency matrix decomposition
+    const GrB_Index *QS,        // starting states in NFA
+    size_t nqs,                 // number of starting states in NFA
+    const GrB_Index *QF,        // final states in NFA
+    size_t nqf,                 // number of final states in NFA
+    LAGraph_Graph *G,           // input graph adjacency matrix decomposition
+    const GrB_Index *S,         // source vertices to start searching paths
+    size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    char *msg                   // LAGraph output message
+);
 //****************************************************************************
 LAGRAPHX_PUBLIC
 int LAGraph_VertexCentrality_Triangle       // vertex triangle-centrality

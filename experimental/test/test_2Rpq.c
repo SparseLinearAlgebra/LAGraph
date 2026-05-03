@@ -225,6 +225,26 @@ void test_Rpq_Simple (void)
         }
         printf("\n");
 
+        // Cleanup
+        OK (LAGraph_Free ((void **) &paths, NULL)) ;
+
+        res = LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R, inverse_labels,
+                                            MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
+                                            inverse, msg) ;
+
+        // Compare the results with expected values
+        //TEST_CHECK (nvals == files[k].expected_count) ;
+        //for (uint64_t i = 0 ; i < nvals ; i++)
+        //    TEST_CHECK (reachable[i] + 1 == files[k].expected[i]) ;
+
+        printf("ALL SHORTEST PATHS:\n");
+        for (size_t i = 0 ; i < path_count ; i++)
+        {
+            Path_print (&paths[i]);
+        }
+        printf("\n");
+
+        // Cleanup
         OK (LAGraph_Free ((void **) &paths, NULL)) ;
 
         for (uint64_t i = 0 ; i < MAX_LABELS ; i++)

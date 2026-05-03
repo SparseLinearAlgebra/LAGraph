@@ -1080,6 +1080,7 @@ static int ensure_result_capacity
     LAGraph_Free ((void **) &BT, NULL) ;        \
     LAGraph_Free ((void **) &X, NULL) ;         \
     LAGraph_Free ((void **) &I, NULL) ;         \
+    LAGraph_Free ((void **) &J, NULL) ;         \
     temp_arena_destroy () ;                     \
 }
 
@@ -1111,6 +1112,7 @@ static int LAGraph_2Rpq
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
     bool inverse,               // inverse the whole query
+    bool ignore_visited,        // use mask to avoid processing the same (q, v)
     uint64_t limit,             // maximum path count
     char *msg,                  // LAGraph output message
     GrB_IndexUnaryOp op         // index unary op for a specific semantic
@@ -1129,6 +1131,7 @@ static int LAGraph_2Rpq
                                          // specific label
     GrB_Matrix next_frontier = NULL ;    // frontier value on the next
                                          // traversal step
+    GrB_Matrix visited = NULL ;          // visited pairs (state, vertex)
     GrB_Vector final_reducer = NULL ;    // auxiliary vector for reducing the
                                          // visited matrix to an answer
 
@@ -1150,6 +1153,7 @@ static int LAGraph_2Rpq
 
     MultiplePaths *X = NULL ;
     GrB_Index *I = NULL ;
+    GrB_Index *J = NULL ;
     size_t result_capacity = 0 ;
 
     if (paths == NULL || path_count == NULL || G == NULL || R == NULL ||
@@ -1314,6 +1318,11 @@ static int LAGraph_2Rpq
 
     GRB_TRY (GrB_Matrix_new (&next_frontier, multiple_paths, nr, ng)) ;
 
+    if (ignore_visited)
+    {
+        GRB_TRY (GrB_Matrix_new (&visited, GrB_BOOL, nr, ng)) ;
+    }
+
     // Initialize frontier with the source nodes
 
     for (size_t i = 0 ; i < ns ; i++)
@@ -1339,6 +1348,11 @@ static int LAGraph_2Rpq
         }
     }
 
+    if (ignore_visited)
+    {
+        GrB_assign (visited, NULL, NULL, true, QS, nqs, S, ns, NULL) ;
+    }
+
     // Initialize a few utility matrices
     GRB_TRY (GrB_Matrix_new (&frontier, multiple_paths, nr, ng)) ;
     GRB_TRY (GrB_Matrix_new (&symbol_frontier, multiple_paths, nr, ng)) ;
@@ -1354,9 +1368,10 @@ static int LAGraph_2Rpq
 
         LG_TRY (LAGraph_Calloc ((void **) &X, nvals, sizeof (MultiplePaths), msg)) ;
         LG_TRY (LAGraph_Calloc ((void **) &I, nvals, sizeof (GrB_Index), msg)) ;
+        LG_TRY (LAGraph_Calloc ((void **) &J, nvals, sizeof (GrB_Index), msg)) ;
 
         // TODO: Change to a generic call.
-        GRB_TRY (GrB_Matrix_extractTuples_UDT (I, GrB_NULL, (void**) X, &nvals, next_frontier)) ;
+        GRB_TRY (GrB_Matrix_extractTuples_UDT (I, J, (void**) X, &nvals, next_frontier)) ;
         //printf("Next frontier with %d entries\n", nvals);
 
         for (size_t i = 0 ; i < nvals ; i++)
@@ -1382,6 +1397,20 @@ static int LAGraph_2Rpq
                 }
             }
             //printf("Path at %ld final is %b", I[i], final) ;
+
+            // HACK: only for all_shortest_paths
+            if (ignore_visited) {
+                GrB_Vector w;
+                GRB_TRY (GrB_Vector_new (&w, GrB_BOOL, nr)) ;
+                GrB_Col_extract(w, GrB_NULL, GrB_NULL, visited, QF, nqf, J[i], GrB_NULL);
+                GrB_Index col_nvals = 0 ;
+                GrB_Vector_nvals (&col_nvals, w) ;
+                GrB_free (&w) ;
+
+                if (col_nvals > 0) {
+                    continue ;
+                }
+            }
 
             if (!final)
             {
@@ -1414,8 +1443,16 @@ static int LAGraph_2Rpq
             }
         }
 
+        if (ignore_visited)
+        {
+            //GRB_TRY (GrB_assign (visited, visited, GrB_NULL, next_frontier,
+            //    GrB_ALL, nr, GrB_ALL, ng, GrB_DESC_SC)) ;
+            GrB_assign (visited, next_frontier, GrB_NULL, true, GrB_ALL, nr, GrB_ALL, ng, GrB_DESC_S) ;
+        }
+
         LAGraph_Free ((void **) &X, NULL) ;
         LAGraph_Free ((void **) &I, NULL) ;
+        LAGraph_Free ((void **) &J, NULL) ;
 
         if (!had_non_empty_path || (*path_count) == limit)
         {
@@ -1456,22 +1493,25 @@ static int LAGraph_2Rpq
             GRB_TRY (GrB_Matrix_nvals (&symbol_nvals, symbol_frontier)) ;
             if (symbol_nvals == 0) continue ;
 
+            GrB_Descriptor desc_forward = ignore_visited ? GrB_DESC_SC : GrB_NULL ;
+            GrB_Descriptor desc_backward = ignore_visited ? GrB_DESC_SCT1 : GrB_DESC_T1 ;
+
             // Traverse the graph
             if (!inverse_labels[i]) {
                 if (!inverse) {
-                    GRB_TRY (GrB_mxm (next_frontier, GrB_NULL, acc, sr1, symbol_frontier, A[i], GrB_NULL)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
                 } else if (AT[i]) {
-                    GRB_TRY (GrB_mxm (next_frontier, GrB_NULL, acc, sr1, symbol_frontier, AT[i], GrB_NULL)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
                 } else {
-                    GRB_TRY (GrB_mxm (next_frontier, GrB_NULL, acc, sr1, symbol_frontier, A[i], GrB_DESC_T1)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
                 }
             } else {
                 if (!inverse && AT[i]) {
-                    GRB_TRY (GrB_mxm (next_frontier, GrB_NULL, acc, sr1, symbol_frontier, AT[i], GrB_NULL)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
                 } else if (!inverse) {
-                    GRB_TRY (GrB_mxm (next_frontier, GrB_NULL, acc, sr1, symbol_frontier, A[i], GrB_DESC_T1)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
                 } else {
-                    GRB_TRY (GrB_mxm (next_frontier, GrB_NULL, acc, sr1, symbol_frontier, A[i], GrB_NULL)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
                 }
             }
 
@@ -1524,7 +1564,7 @@ int LAGraph_2Rpq_AllSimple      // All simple paths satisfying regular
     char *msg                   // LAGraph output message
 )
 {
-    return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, ULLONG_MAX, msg, extend_multiple_simple) ;
+    return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, false, ULLONG_MAX, msg, extend_multiple_simple) ;
 }
 
 LAGRAPHX_PUBLIC
@@ -1552,7 +1592,7 @@ int LAGraph_2Rpq_AllTrails      // All trails satisfying regular expression.
     char *msg                   // LAGraph output message
 )
 {
-    return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, ULLONG_MAX, msg, extend_multiple_trails) ;
+    return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, false, ULLONG_MAX, msg, extend_multiple_trails) ;
 }
 
 int LAGraph_2Rpq_AllPaths       // All paths satisfying regular expression
@@ -1579,7 +1619,33 @@ int LAGraph_2Rpq_AllPaths       // All paths satisfying regular expression
     char *msg                   // LAGraph output message
     )
 {
-        return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, limit, msg, extend_multiple_paths) ;
+        return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, false, limit, msg, extend_multiple_paths) ;
+}
+
+int LAGraph_2Rpq_AllShortestPaths       // All shortest paths satisfying regular expression
+(
+    // output:
+    Path **paths,               // paths from one of the starting nodes
+                                // satisfying regular constraints
+    size_t *path_count,         // resulting path count
+                                // input:
+    LAGraph_Graph *R,           // input non-deterministic finite automaton
+                                // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
+    size_t nl,                  // total label count, # of matrices graph and
+                                // NFA adjacency matrix decomposition
+    const GrB_Index *QS,        // starting states in NFA
+    size_t nqs,                 // number of starting states in NFA
+    const GrB_Index *QF,        // final states in NFA
+    size_t nqf,                 // number of final states in NFA
+    LAGraph_Graph *G,           // input graph adjacency matrix decomposition
+    const GrB_Index *S,         // source vertices to start searching paths
+    size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    char *msg                   // LAGraph output message
+    )
+{
+        return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, true, ULLONG_MAX, msg, extend_multiple_paths) ;
 }
 
 // Required because returned Path objects may own heap-allocated PathExtra.
