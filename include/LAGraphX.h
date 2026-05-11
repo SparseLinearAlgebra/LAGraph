@@ -885,8 +885,7 @@ int LAGraph_Rpq_initialize (char *msg);
 LAGRAPHX_PUBLIC
 int LAGraph_2Rpq_AllSimple      // All simple paths satisfying regular
                                 // expression. Simple paths are paths without
-                                // loops or the ones with the same starting
-                                // and final nodes.
+                                // repeated vertices.
 (
     // output:
     Path **paths,               // simple paths from one of the starting
@@ -980,6 +979,7 @@ int LAGraph_2Rpq_AllShortestPaths // All shortest paths satisfying regular expre
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
     bool inverse,               // inverse the whole query
+    uint64_t limit,             // maximum path count
     char *msg                   // LAGraph output message
 );
 //****************************************************************************

@@ -21,14 +21,20 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #define PATH_LIMIT 100000
 
+#define RPQ_MAX_PATH_LENGTH 60000
+
+#define RPQ_STRINGIFY_HELPER(x) #x
+#define RPQ_STRINGIFY(x) RPQ_STRINGIFY_HELPER(x)
+
 // This define and three functions below need for YAGO dataset.
 // Because we have OOM on it
 // 
-#define PATHS_PER_POINT_LIMIT 15000
+#define PATHS_PER_POINT_LIMIT 3000000
 
 static atomic_int path_limit_exceeded ;
 
@@ -153,9 +159,6 @@ static size_t temp_arena_used (void)
 // JIT kernels are compiled into a separate shared object. They cannot call
 // static functions from this translation unit, so expose tiny wrappers for
 // the stateful parts: arena allocation and path-limit reporting.
-//
-// These functions must be visible from the dynamic symbol table. If LAGraphX
-// builds with hidden visibility, LAGRAPHX_PUBLIC is important here.
 LAGRAPHX_PUBLIC
 void *LAGraph_Rpq_jit_temp_calloc_bytes (size_t size)
 {
@@ -202,9 +205,10 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "#include <stddef.h>\n"                                                \
 "#include <stdbool.h>\n"                                               \
 "#include <string.h>\n"                                                \
-"#define QUICK_PATH_LENGTH 20\n"                                       \
-"#define QUICK_PATH_COUNT 1\n"                                         \
-"#define PATHS_PER_POINT_LIMIT 15000\n"                                \
+"#define QUICK_PATH_LENGTH " RPQ_STRINGIFY(QUICK_PATH_LENGTH) "\n"     \
+"#define QUICK_PATH_COUNT " RPQ_STRINGIFY(QUICK_PATH_COUNT) "\n"       \
+"#define PATHS_PER_POINT_LIMIT " RPQ_STRINGIFY(PATHS_PER_POINT_LIMIT) "\n"\
+"#define RPQ_MAX_PATH_LENGTH " RPQ_STRINGIFY(RPQ_MAX_PATH_LENGTH) "\n" \
 "typedef uint64_t Vertex;\n"                                           \
 "typedef struct PathExtra {\n"                                         \
 "    size_t len;\n"                                                    \
@@ -252,6 +256,11 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "{\n"                                                                  \
 "    return path->vertex_count > 1 &&\n"                                \
 "        path_start_vertex_jit(path) == path_last_vertex_jit(path);\n"  \
+"}\n"                                                                  \
+"static bool all_paths_can_extend_jit(const Path *path)\n"             \
+"{\n"                                                                  \
+"    return RPQ_MAX_PATH_LENGTH == 0 ||\n"                              \
+"        path->vertex_count < RPQ_MAX_PATH_LENGTH;\n"                   \
 "}\n"                                                                  \
 "static PathExtra *path_extra_temp_alloc_copy_plus_one_jit(\n"          \
 "    const Path *src, Vertex vertex)\n"                                 \
@@ -364,13 +373,12 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "    *multiple_paths_nth_mut_jit(x, x->path_count) = *path;\n"          \
 "    x->path_count++;\n"                                                \
 "}\n"                                                                  \
-"static bool path_extending_will_add_repeated_non_starting_vertex_jit(\n"\
+"static bool path_extending_will_add_repeated_vertex_jit(\n"            \
 "    const Path *path, Vertex vertex)\n"                                \
 "{\n"                                                                  \
 "    if (path->vertex_count == 0) return false;\n"                      \
 "    if (path_is_closed_cycle_jit(path)) return true;\n"                \
-"    if (vertex == path_start_vertex_jit(path)) return false;\n"        \
-"    for (size_t i = 1; i < path->vertex_count; i++)\n"                 \
+"    for (size_t i = 0 ; i < path->vertex_count ; i++)\n"                 \
 "    {\n"                                                              \
 "        if (path_get_vertex_jit(path, i) == vertex) return true;\n"    \
 "    }\n"                                                              \
@@ -440,6 +448,7 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "    for (size_t i = 0; i < src.path_count; i++)\n"                     \
 "    {\n"                                                              \
 "        Path path = *multiple_paths_nth_const_jit(&src, i);\n"        \
+"        if (!all_paths_can_extend_jit(&path)) continue;\n"            \
 "        path_extend_jit(&path, (Vertex) col);\n"                      \
 "        if (!path_is_empty_jit(&path))\n"                              \
 "        {\n"                                                          \
@@ -460,7 +469,7 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "    for (size_t i = 0; i < src.path_count; i++)\n"                     \
 "    {\n"                                                              \
 "        Path path = *multiple_paths_nth_const_jit(&src, i);\n"        \
-"        if (path_extending_will_add_repeated_non_starting_vertex_jit(\n"\
+"        if (path_extending_will_add_repeated_vertex_jit(\n"            \
 "            &path, (Vertex) col))\n"                                   \
 "        {\n"                                                          \
 "            continue;\n"                                               \
@@ -543,6 +552,12 @@ static bool path_is_closed_cycle (const Path *path)
 {
     return path->vertex_count > 1 &&
         path_start_vertex (path) == path_last_vertex (path) ;
+}
+
+static bool all_paths_can_extend (const Path *path)
+{
+    return RPQ_MAX_PATH_LENGTH == 0 ||
+        path->vertex_count < RPQ_MAX_PATH_LENGTH ;
 }
 
 static PathExtra *path_extra_temp_alloc_copy_plus_one
@@ -809,18 +824,6 @@ static void multiple_paths_append_unchecked (MultiplePaths *x, const Path *path)
 }
 //
 
-static void MultiplePaths_print (const MultiplePaths *x)
-{
-    printf("Multiple paths:\n") ;
-    for (size_t i = 0 ; i < x->path_count ; i++)
-    {
-
-        printf("\t Path %zu: ", i) ;
-        Path_print (multiple_paths_nth_const (x, i)) ;
-    }
-    printf("\n") ;
-}
-
 // All functions below reworked.
 // Due to graphblas api, we must handle z param like it's empty.
 // It should just store result (z = f(x)).
@@ -882,6 +885,11 @@ void extend_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index
     for (size_t i = 0 ; i < src.path_count ; i++)
     {
         Path path = *multiple_paths_nth_const (&src, i) ;
+        if (!all_paths_can_extend (&path))
+        {
+            continue ;
+        }
+
         path_extend (&path, (Vertex) col) ;
 
         if (!path_is_empty (&path))
@@ -895,7 +903,9 @@ void extend_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index
 // ALL SIMPLE
 //
 
-static inline bool path_extending_will_add_repeated_non_starting_vertex(const Path *path, Vertex vertex)
+
+// remove cycle support from all simple
+static inline bool path_extending_will_add_repeated_vertex(const Path *path, Vertex vertex)
 {
     if (path->vertex_count == 0)
     {
@@ -907,12 +917,7 @@ static inline bool path_extending_will_add_repeated_non_starting_vertex(const Pa
         return true ;
     }
 
-    if (vertex == path_start_vertex (path))
-    {
-        return false ;
-    }
-
-    for (size_t i = 1 ; i < path->vertex_count ; i++)
+    for (size_t i = 0 ; i < path->vertex_count ; i++)
     {
         if (path_get_vertex (path, i) == vertex)
         {
@@ -939,7 +944,7 @@ void extend_multiple_simple_f(MultiplePaths *z, const MultiplePaths *x, GrB_Inde
     {
         Path path = *multiple_paths_nth_const (&src, i) ;
 
-        if (path_extending_will_add_repeated_non_starting_vertex (&path,
+        if (path_extending_will_add_repeated_vertex (&path,
             (Vertex) col))
         {
             continue ;
@@ -1067,13 +1072,52 @@ static int ensure_result_capacity
     return GrB_SUCCESS ;
 }
 
+static int final_state_was_visited
+(
+    GrB_Matrix visited,
+    const GrB_Index *QF,
+    size_t nqf,
+    GrB_Index vertex,
+    bool *seen
+)
+{
+    GrB_Info info ;
+    bool value ;
 
+    *seen = false ;
+
+    for (size_t i = 0 ; i < nqf ; i++)
+    {
+        value = false ;
+        info = GrB_Matrix_extractElement_BOOL (&value, visited, QF [i],
+            vertex) ;
+        if (info == GrB_NO_VALUE)
+        {
+            continue ;
+        }
+        if (info != GrB_SUCCESS)
+        {
+            return info ;
+        }
+        if (value)
+        {
+            *seen = true ;
+            return GrB_SUCCESS ;
+        }
+    }
+
+    return GrB_SUCCESS ;
+}
+
+
+#undef LG_FREE_WORK
+#undef LG_FREE_ALL
 #define LG_FREE_WORK                            \
 {                                               \
     GrB_free (&frontier) ;                      \
     GrB_free (&next_frontier) ;                 \
     GrB_free (&symbol_frontier) ;               \
-    GrB_free (&final_reducer) ;                 \
+    GrB_free (&visited) ;                       \
     LAGraph_Free ((void **) &A, NULL) ;         \
     LAGraph_Free ((void **) &AT, NULL) ;        \
     LAGraph_Free ((void **) &B, NULL) ;         \
@@ -1132,8 +1176,6 @@ static int LAGraph_2Rpq
     GrB_Matrix next_frontier = NULL ;    // frontier value on the next
                                          // traversal step
     GrB_Matrix visited = NULL ;          // visited pairs (state, vertex)
-    GrB_Vector final_reducer = NULL ;    // auxiliary vector for reducing the
-                                         // visited matrix to an answer
 
     GrB_Index ng = 0 ;                   // # nodes in the graph
     GrB_Index nr = 0 ;                   // # states in the NFA
@@ -1166,6 +1208,9 @@ static int LAGraph_2Rpq
     (*path_count) = 0 ;
 
     path_limit_reset () ;
+
+    LG_ASSERT_MSG (!ignore_visited || ns == 1, GrB_INVALID_VALUE,
+        "AllShortestPaths requires exactly one source vertex") ;
 
     // init arenas for pathExtra
     LG_TRY (temp_arena_init (msg)) ;
@@ -1308,13 +1353,9 @@ static int LAGraph_2Rpq
     // initialization
     // -------------------------------------------------------------------------
 
-    GRB_TRY (LAGraph_Calloc ((void **) paths, PATH_LIMIT, sizeof (Path), msg)) ;
+    GRB_TRY (LAGraph_Calloc ((void **) paths, PATH_LIMIT,
+        sizeof (Path), msg)) ;
     result_capacity = PATH_LIMIT ;
-
-    GRB_TRY (GrB_Vector_new (&final_reducer, GrB_BOOL, nr)) ;
-
-    // Initialize matrix for reducing the result
-    GRB_TRY (GrB_assign (final_reducer, NULL, NULL, true, QF, nqf, NULL)) ;
 
     GRB_TRY (GrB_Matrix_new (&next_frontier, multiple_paths, nr, ng)) ;
 
@@ -1348,11 +1389,6 @@ static int LAGraph_2Rpq
         }
     }
 
-    if (ignore_visited)
-    {
-        GrB_assign (visited, NULL, NULL, true, QS, nqs, S, ns, NULL) ;
-    }
-
     // Initialize a few utility matrices
     GRB_TRY (GrB_Matrix_new (&frontier, multiple_paths, nr, ng)) ;
     GRB_TRY (GrB_Matrix_new (&symbol_frontier, multiple_paths, nr, ng)) ;
@@ -1360,7 +1396,6 @@ static int LAGraph_2Rpq
     // Main loop
     while (true)
     {
-        //printf("Iteration\n");
         GrB_Index nvals = 0 ;
         bool had_non_empty_path = false ;
 
@@ -1368,25 +1403,31 @@ static int LAGraph_2Rpq
 
         LG_TRY (LAGraph_Calloc ((void **) &X, nvals, sizeof (MultiplePaths), msg)) ;
         LG_TRY (LAGraph_Calloc ((void **) &I, nvals, sizeof (GrB_Index), msg)) ;
-        LG_TRY (LAGraph_Calloc ((void **) &J, nvals, sizeof (GrB_Index), msg)) ;
+        if (ignore_visited)
+        {
+            LG_TRY (LAGraph_Calloc ((void **) &J, nvals,
+                sizeof (GrB_Index), msg)) ;
+        }
 
         // TODO: Change to a generic call.
-        GRB_TRY (GrB_Matrix_extractTuples_UDT (I, J, (void**) X, &nvals, next_frontier)) ;
-        //printf("Next frontier with %d entries\n", nvals);
+        GRB_TRY (GrB_Matrix_extractTuples_UDT (I,
+            ignore_visited ? J : GrB_NULL, (void**) X, &nvals,
+            next_frontier)) ;
 
         for (size_t i = 0 ; i < nvals ; i++)
         {
             for (size_t j = 0 ; j < X[i].path_count ; j++)
             {
+                const Path *path = multiple_paths_nth_const (&X[i], j) ;
+
                 // Required beacause we need to handle not only quick paths
-                if (!path_is_empty (multiple_paths_nth_const (&X[i], j)))
+                if (!path_is_empty (path))
                 {
                     had_non_empty_path = true;
                     break;
                 }
             }
 
-            //MultiplePaths_print (&X[i]) ;
             bool final = false ;
             for (size_t j = 0 ; j < nqf ; j++)
             {
@@ -1396,34 +1437,36 @@ static int LAGraph_2Rpq
                     break ;
                 }
             }
-            //printf("Path at %ld final is %b", I[i], final) ;
-
-            // HACK: only for all_shortest_paths
-            if (ignore_visited) {
-                GrB_Vector w;
-                GRB_TRY (GrB_Vector_new (&w, GrB_BOOL, nr)) ;
-                GrB_Col_extract(w, GrB_NULL, GrB_NULL, visited, QF, nqf, J[i], GrB_NULL);
-                GrB_Index col_nvals = 0 ;
-                GrB_Vector_nvals (&col_nvals, w) ;
-                GrB_free (&w) ;
-
-                if (col_nvals > 0) {
-                    continue ;
-                }
-            }
 
             if (!final)
             {
                 continue ;
             }
 
-            //printf("Found final paths!\n");
+            if (ignore_visited)
+            {
+                bool seen_final = false ;
+
+                GRB_TRY (final_state_was_visited (visited, QF, nqf, J [i],
+                    &seen_final)) ;
+                if (seen_final)
+                {
+                    continue ;
+                }
+            }
+
             if ((*path_count) >= limit)
             {
                 continue ;
             }
 
-            size_t result_need = (*path_count) + X[i].path_count ;
+            uint64_t remaining_limit = limit - (uint64_t) (*path_count) ;
+            size_t paths_to_reserve = X[i].path_count ;
+            if (remaining_limit < (uint64_t) paths_to_reserve)
+            {
+                paths_to_reserve = (size_t) remaining_limit ;
+            }
+            size_t result_need = (*path_count) + paths_to_reserve ;
             if (result_need > result_capacity)
             {
                 LG_TRY (ensure_result_capacity (paths, &result_capacity,
@@ -1445,9 +1488,8 @@ static int LAGraph_2Rpq
 
         if (ignore_visited)
         {
-            //GRB_TRY (GrB_assign (visited, visited, GrB_NULL, next_frontier,
-            //    GrB_ALL, nr, GrB_ALL, ng, GrB_DESC_SC)) ;
-            GrB_assign (visited, next_frontier, GrB_NULL, true, GrB_ALL, nr, GrB_ALL, ng, GrB_DESC_S) ;
+            GRB_TRY (GrB_assign (visited, next_frontier, GrB_NULL, true,
+                GrB_ALL, nr, GrB_ALL, ng, GrB_DESC_S)) ;
         }
 
         LAGraph_Free ((void **) &X, NULL) ;
@@ -1456,7 +1498,6 @@ static int LAGraph_2Rpq
 
         if (!had_non_empty_path || (*path_count) == limit)
         {
-            //printf("breaking\n");
             break;
         }
 
@@ -1493,25 +1534,28 @@ static int LAGraph_2Rpq
             GRB_TRY (GrB_Matrix_nvals (&symbol_nvals, symbol_frontier)) ;
             if (symbol_nvals == 0) continue ;
 
-            GrB_Descriptor desc_forward = ignore_visited ? GrB_DESC_SC : GrB_NULL ;
-            GrB_Descriptor desc_backward = ignore_visited ? GrB_DESC_SCT1 : GrB_DESC_T1 ;
+            GrB_Matrix mask = ignore_visited ? visited : GrB_NULL ;
+            GrB_Descriptor desc_forward = ignore_visited ? GrB_DESC_SC :
+                GrB_NULL ;
+            GrB_Descriptor desc_backward = ignore_visited ? GrB_DESC_SCT1 :
+                GrB_DESC_T1 ;
 
             // Traverse the graph
             if (!inverse_labels[i]) {
                 if (!inverse) {
-                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
                 } else if (AT[i]) {
-                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
                 } else {
-                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
                 }
             } else {
                 if (!inverse && AT[i]) {
-                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
                 } else if (!inverse) {
-                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
                 } else {
-                    GRB_TRY (GrB_mxm (next_frontier, visited, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
                 }
             }
 
@@ -1519,8 +1563,13 @@ static int LAGraph_2Rpq
             LG_ASSERT_MSGF (!temp_alloc_failed (), GrB_OUT_OF_MEMORY,
                 "out of memory in temporary RPQ allocator: used=%zu capacity=%zu",
                 temp_arena_used (), temp_arena_capacity) ;
-            LG_ASSERT_MSG (!path_limit_failed (), GrB_OUT_OF_MEMORY,
-                "path limit per point exceeded") ;
+            if (path_limit_failed ())
+            {
+                LG_ERROR_MSG ("LAGraph failure (file %s, line %d): %s",
+                    __FILE__, __LINE__, "path limit per point exceeded") ;
+                LG_FREE_WORK ;
+                return GrB_OUT_OF_MEMORY ;
+            }
         }
 
         GRB_TRY (GrB_apply (next_frontier, GrB_NULL, GrB_NULL, op, next_frontier, false, GrB_NULL)) ;
@@ -1529,8 +1578,13 @@ static int LAGraph_2Rpq
         LG_ASSERT_MSGF (!temp_alloc_failed (), GrB_OUT_OF_MEMORY,
             "out of memory in temporary RPQ allocator: used=%zu capacity=%zu",
             temp_arena_used (), temp_arena_capacity) ;
-        LG_ASSERT_MSG (!path_limit_failed (), GrB_OUT_OF_MEMORY,
-            "path limit per point exceeded") ;
+        if (path_limit_failed ())
+        {
+            LG_ERROR_MSG ("LAGraph failure (file %s, line %d): %s",
+                __FILE__, __LINE__, "path limit per point exceeded") ;
+            LG_FREE_WORK ;
+            return GrB_OUT_OF_MEMORY ;
+        }
     }
 
     LG_FREE_WORK ;
@@ -1540,8 +1594,7 @@ static int LAGraph_2Rpq
 
 int LAGraph_2Rpq_AllSimple      // All simple paths satisfying regular
                                 // expression. Simple paths are paths without
-                                // loops or the ones with the same starting
-                                // and final nodes.
+                                // repeated vertices.
 (
     // output:
     Path **paths,               // simple paths from one of the starting
@@ -1642,10 +1695,11 @@ int LAGraph_2Rpq_AllShortestPaths       // All shortest paths satisfying regular
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
     bool inverse,               // inverse the whole query
+    uint64_t limit,             // maximum path count
     char *msg                   // LAGraph output message
     )
 {
-        return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, true, ULLONG_MAX, msg, extend_multiple_paths) ;
+        return LAGraph_2Rpq(paths, path_count, R, inverse_labels, nl, QS, nqs, QF, nqf, G, S, ns, inverse, true, limit, msg, extend_multiple_paths) ;
 }
 
 // Required because returned Path objects may own heap-allocated PathExtra.
@@ -1662,6 +1716,8 @@ int LAGraph_2Rpq_FreePaths
     return GrB_SUCCESS ;
 }
 
+#undef LG_FREE_WORK
+#undef LG_FREE_ALL
 #define LG_FREE_WORK                            \
 {                                               \
 }
