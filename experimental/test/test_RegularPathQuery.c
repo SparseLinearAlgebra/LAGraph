@@ -179,8 +179,8 @@ void test_RegularPathQueryBasic (void)
             // Evaluate the algorithm
             GrB_Vector r = NULL ;
 
-            OK (LAGraph_RegularPathQuery (&r, R, MAX_LABELS, QS, nqs,
-                                             QF, nqf, G, S, ns, msg)) ;
+            OK (LAGraph_2RegularPathQuery (&r, R, false, MAX_LABELS, QS, nqs,
+                                             QF, nqf, G, S, ns, false, msg)) ;
 
             // Extract results from the output vector
             GrB_Index *reachable ;
