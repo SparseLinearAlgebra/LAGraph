@@ -178,8 +178,9 @@ void test_RegularPathQueryBasic (void)
 
             // Evaluate the algorithm
             GrB_Vector r = NULL ;
+            bool inverse_labels[MAX_LABELS] = {false} ;
 
-            OK (LAGraph_2RegularPathQuery (&r, R, false, MAX_LABELS, QS, nqs,
+            OK (LAGraph_2RegularPathQuery (&r, R, inverse_labels, MAX_LABELS, QS, nqs,
                                              QF, nqf, G, S, ns, false, msg)) ;
 
             // Extract results from the output vector
@@ -190,7 +191,7 @@ void test_RegularPathQueryBasic (void)
             GrB_Vector_nvals (&nvals, r) ;
 
             OK (LAGraph_Malloc ((void **) &reachable, MAX_RESULTS, sizeof (GrB_Index), msg)) ;
-            OK (LAGraph_Malloc ((void **) &values, MAX_RESULTS, sizeof (GrB_Index), msg)) ;
+            OK (LAGraph_Malloc ((void **) &values, MAX_RESULTS, sizeof (bool), msg)) ;
 
             GrB_Vector_extractTuples (reachable, values, &nvals, r) ;
 
@@ -211,43 +212,11 @@ void test_RegularPathQueryBasic (void)
                 OK (LAGraph_Delete (&(G[i]), msg)) ;
             }
 
-        // TODO: Use 2RPQ HERE.
-        //OK (LAGraph_RegularPathQuery (&r, R, MAX_LABELS, QS, nqs,
-        //                                  QF, nqf, G, S, ns, msg)) ;
-
-        // Extract results from the output vector
-        GrB_Index *reachable ;
-        bool *values ;
-
-        GrB_Index nvals ;
-        GrB_Vector_nvals (&nvals, r) ;
-
-        OK (LAGraph_Malloc ((void **) &reachable, MAX_RESULTS, sizeof (GrB_Index), msg)) ;
-        OK (LAGraph_Malloc ((void **) &values, MAX_RESULTS, sizeof (GrB_Index), msg)) ;
-
-        GrB_Vector_extractTuples (reachable, values, &nvals, r) ;
-
-        // Compare the results with expected values
-        TEST_CHECK (nvals == files[k].expected_count) ;
-        for (uint64_t i = 0 ; i < nvals ; i++)
-            TEST_CHECK (reachable[i] + 1 == files[k].expected[i]) ;
-
-        // Cleanup
-        OK (LAGraph_Free ((void **) &values, NULL)) ;
-        OK (LAGraph_Free ((void **) &reachable, NULL)) ;
-
-        OK (GrB_free (&r)) ;
-
-        for (uint64_t i = 0 ; i < MAX_LABELS ; i++)
-        {
-            if (G[i] == NULL) continue ;
-            OK (LAGraph_Delete (&(G[i]), msg)) ;
-        }
-
-        for (uint64_t i = 0 ; i < MAX_LABELS ; i++ )
-        {
-            if (R[i] == NULL) continue ;
-            OK (LAGraph_Delete (&(R[i]), msg)) ;
+            for (uint64_t i = 0 ; i < MAX_LABELS ; i++ )
+            {
+                if (R[i] == NULL) continue ;
+                OK (LAGraph_Delete (&(R[i]), msg)) ;
+            }
         }
     }
 
