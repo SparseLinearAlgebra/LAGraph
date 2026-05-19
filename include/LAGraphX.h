@@ -834,7 +834,7 @@ int LAGraph_scc (
 
 //****************************************************************************
 LAGRAPHX_PUBLIC
-int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
+int LAGraph_2RegularPathQuery   // nodes reachable from the starting by the
                                 // path satisfying regular expression
 (
     // output:
@@ -844,6 +844,7 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
     // input:
     LAGraph_Graph *R,           // input non-deterministic finite automaton
                                 // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
     size_t nl,                  // total label count, # of matrices graph and
                                 // NFA adjacency matrix decomposition
     const GrB_Index *QS,        // starting states in NFA
@@ -853,6 +854,132 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
     LAGraph_Graph *G,           // input graph adjacency matrix decomposition
     const GrB_Index *S,         // source vertices to start searching paths
     size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    char *msg                   // LAGraph output message
+);
+//****************************************************************************
+#define QUICK_PATH_LENGTH 20
+#define QUICK_PATH_COUNT 1
+
+typedef uint64_t Vertex ;
+
+typedef struct PathExtra {
+    size_t len;
+    Vertex vertices[0];
+} PathExtra ;
+
+typedef struct {
+        Vertex vertices[QUICK_PATH_LENGTH];
+        size_t vertex_count;
+        PathExtra *extra;
+} Path ;
+
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_FreePaths(Path **paths, size_t path_count, char *msg);
+
+void Path_print (const Path *x);
+
+LAGRAPHX_PUBLIC
+int LAGraph_Rpq_initialize (char *msg);
+
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_AllSimple      // All simple paths satisfying regular
+                                // expression. Simple paths are paths without
+                                // repeated vertices.
+(
+    // output:
+    Path **paths,               // simple paths from one of the starting
+                                // nodes satisfying regular constraints
+    size_t *path_count,         // resulting path count
+    // input:
+    LAGraph_Graph *R,           // input non-deterministic finite automaton
+                                // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
+    size_t nl,                  // total label count, # of matrices graph and
+                                // NFA adjacency matrix decomposition
+    const GrB_Index *QS,        // starting states in NFA
+    size_t nqs,                 // number of starting states in NFA
+    const GrB_Index *QF,        // final states in NFA
+    size_t nqf,                 // number of final states in NFA
+    LAGraph_Graph *G,           // input graph adjacency matrix decomposition
+    const GrB_Index *S,         // source vertices to start searching paths
+    size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    char *msg                   // LAGraph output message
+);
+
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_AllTrails      // All trails satisfying regular expression.
+                                // Trails are paths without repeated edges.
+(
+    // output:
+    Path **paths,               // trails from one of the starting nodes
+                                // satisfying regular constraints
+    size_t *path_count,         // resulting path count
+    // input:
+    LAGraph_Graph *R,           // input non-deterministic finite automaton
+                                // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
+    size_t nl,                  // total label count, # of matrices graph and
+                                // NFA adjacency matrix decomposition
+    const GrB_Index *QS,        // starting states in NFA
+    size_t nqs,                 // number of starting states in NFA
+    const GrB_Index *QF,        // final states in NFA
+    size_t nqf,                 // number of final states in NFA
+    LAGraph_Graph *G,           // input graph adjacency matrix decomposition
+    const GrB_Index *S,         // source vertices to start searching paths
+    size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    char *msg                   // LAGraph output message
+);
+
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_AllPaths       // All paths satisfying regular expression
+(
+    // output:
+    Path **paths,               // paths from one of the starting nodes
+                                // satisfying regular constraints
+    size_t *path_count,         // resulting path count
+    // input:
+    LAGraph_Graph *R,           // input non-deterministic finite automaton
+                                // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
+    size_t nl,                  // total label count, # of matrices graph and
+                                // NFA adjacency matrix decomposition
+    const GrB_Index *QS,        // starting states in NFA
+    size_t nqs,                 // number of starting states in NFA
+    const GrB_Index *QF,        // final states in NFA
+    size_t nqf,                 // number of final states in NFA
+    LAGraph_Graph *G,           // input graph adjacency matrix decomposition
+    const GrB_Index *S,         // source vertices to start searching paths
+    size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    uint64_t limit,             // maximum path count
+    char *msg                   // LAGraph output message
+);
+
+LAGRAPHX_PUBLIC
+int LAGraph_2Rpq_AllShortestPaths // All shortest paths satisfying regular expression
+(
+    // output:
+    Path **paths,               // paths from one of the starting nodes
+                                // satisfying regular constraints
+    size_t *path_count,         // resulting path count
+    // input:
+    LAGraph_Graph *R,           // input non-deterministic finite automaton
+                                // adjacency matrix decomposition
+    bool *inverse_labels,       // inversed labels
+    size_t nl,                  // total label count, # of matrices graph and
+                                // NFA adjacency matrix decomposition
+    const GrB_Index *QS,        // starting states in NFA
+    size_t nqs,                 // number of starting states in NFA
+    const GrB_Index *QF,        // final states in NFA
+    size_t nqf,                 // number of final states in NFA
+    LAGraph_Graph *G,           // input graph adjacency matrix decomposition
+    const GrB_Index *S,         // source vertices to start searching paths
+    size_t ns,                  // number of source vertices
+    bool inverse,               // inverse the whole query
+    uint64_t limit,             // maximum path count
     char *msg                   // LAGraph output message
 );
 //****************************************************************************

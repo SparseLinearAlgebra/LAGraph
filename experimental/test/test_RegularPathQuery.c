@@ -178,9 +178,10 @@ void test_RegularPathQueryBasic (void)
 
             // Evaluate the algorithm
             GrB_Vector r = NULL ;
+            bool inverse_labels[MAX_LABELS] = {false} ;
 
-            OK (LAGraph_RegularPathQuery (&r, R, MAX_LABELS, QS, nqs,
-                                             QF, nqf, G, S, ns, msg)) ;
+            OK (LAGraph_2RegularPathQuery (&r, R, inverse_labels, MAX_LABELS, QS, nqs,
+                                             QF, nqf, G, S, ns, false, msg)) ;
 
             // Extract results from the output vector
             GrB_Index *reachable ;
@@ -190,7 +191,7 @@ void test_RegularPathQueryBasic (void)
             GrB_Vector_nvals (&nvals, r) ;
 
             OK (LAGraph_Malloc ((void **) &reachable, MAX_RESULTS, sizeof (GrB_Index), msg)) ;
-            OK (LAGraph_Malloc ((void **) &values, MAX_RESULTS, sizeof (GrB_Index), msg)) ;
+            OK (LAGraph_Malloc ((void **) &values, MAX_RESULTS, sizeof (bool), msg)) ;
 
             GrB_Vector_extractTuples (reachable, values, &nvals, r) ;
 
