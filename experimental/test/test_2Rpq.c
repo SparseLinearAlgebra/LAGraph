@@ -230,7 +230,7 @@ void test_Rpq_Simple (void)
 
         res = LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R, inverse_labels,
                                             MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                            inverse, msg) ;
+                                            inverse, 100, msg) ;
 
         // Compare the results with expected values
         //TEST_CHECK (nvals == files[k].expected_count) ;
