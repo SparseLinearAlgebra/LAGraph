@@ -331,9 +331,8 @@ GrB_Info LAGraph_CFL_AllPaths_adv(
 
         for (size_t i = 0; i < eps_rules_count; i++) {
             LAGraph_rule_EWCNF eps_rule = new_rules[eps_rules[i]];
-            GrB_BinaryOp acc_op = t_empty_flags[eps_rule.nonterm] ? GrB_NULL : AllPaths_add;
             GxB_eWiseUnion(
-                T[eps_rule.nonterm], GrB_NULL, acc_op, AllPaths_set,
+                T[eps_rule.nonterm], GrB_NULL, GrB_NULL, AllPaths_set,
                 T[eps_rule.nonterm], bottom_scalar, identity_matrix, false_scalar, GrB_NULL
             );
             t_empty_flags[eps_rule.nonterm] = false;
