@@ -481,9 +481,8 @@ GrB_Info LAGraph_CFL_AllPaths(
     for (size_t i = 0; i < eps_rules_count; i++)
     {
       LAGraph_rule_WCNF eps_rule = rules[eps_rules[i]];
-      GrB_BinaryOp acc_op = t_empty_flags[eps_rule.nonterm] ? GrB_NULL : semiring.add;
       GxB_eWiseUnion(
-        T[eps_rule.nonterm], GrB_NULL, acc_op, semiring.init_path,
+        T[eps_rule.nonterm], GrB_NULL, GrB_NULL, semiring.init_path,
         T[eps_rule.nonterm], semiring.bottom_scalar, identity_matrix, false_scalar, GrB_NULL);
 
       t_empty_flags[eps_rule.nonterm] = false;
