@@ -20,7 +20,7 @@
     {                                                                                    \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             CFL_matrix_free(&T[i]);                                                      \
-            CFL_matrix_free(&dT[i]);                                                     \
+            CFL_matrix_free(&Adj[i]);                                                     \
             CFL_matrix_free(&TSrc[i]);                                                   \
         }                                                                                \
         CFL_matrix_free(&iden);                                                          \
@@ -576,7 +576,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
 )
 {
     CFL_Matrix **T;
-    CFL_Matrix **dT;
+    CFL_Matrix **Adj;
     CFL_Matrix **TSrc;
     CFL_Matrix *MSrc;
     CFL_Matrix *M;
@@ -734,7 +734,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     GrB_Scalar_setElement_BOOL(true_scalar, true);
 
     TRY(LAGraph_Calloc((void **) &T, new_symbols_amount, sizeof(CFL_Matrix), msg));
-    TRY(LAGraph_Calloc((void **) &dT, new_symbols_amount, sizeof(CFL_Matrix), msg));
+    TRY(LAGraph_Calloc((void **) &Adj, new_symbols_amount, sizeof(CFL_Matrix), msg));
     TRY(LAGraph_Calloc((void **) &TSrc, new_symbols_amount, sizeof(CFL_Matrix), msg));
 
     TRY(LAGraph_Calloc((void **) &nnzs_T, new_symbols_amount, sizeof(GrB_Index), msg));
@@ -750,7 +750,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     for (int32_t i = 0; i < new_symbols_amount; i++) {
         GrB_Matrix new_adj_matrix;
         TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
-        TRY(CFL_matrix_from_base(&dT[i], new_adj_matrix));
+        TRY(CFL_matrix_from_base(&Adj[i], new_adj_matrix));
 
         TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
         if (opt_mask & OPT_LAZY) {
@@ -777,9 +777,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_EWCNF term_rule = new_rules[term_rules[i]];
 
-        // I'd like to get rid of double operation
-        GRB_TRY(CFL_wise(T[term_rule.nonterm], T[term_rule.nonterm], dT[term_rule.prod_A], true, opt_mask));
-        // GRB_TRY(CFL_wise(dT[term_rule.nonterm], dT[term_rule.nonterm], dT[term_rule.prod_A], true, opt_mask));
+        GRB_TRY(CFL_wise(T[term_rule.nonterm], T[term_rule.nonterm], Adj[term_rule.prod_A], true, opt_mask));
     }
 
     // Rule [Variable -> eps]
@@ -787,10 +785,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         LAGraph_rule_EWCNF eps_rule = new_rules[eps_rules[i]];
 
         GRB_TRY(CFL_wise(T[eps_rule.nonterm], T[eps_rule.nonterm], iden, true, opt_mask));
-        // GRB_TRY(CFL_wise(dT[eps_rule.nonterm], dT[eps_rule.nonterm], iden, true, opt_mask));
     }
-
-    // printf("bin_rules_count: %d, new_symbols_amount: %d\n", bin_rules_count, new_symbols_amount);
 
     // Rule [Variable -> Variable1 Variable2]
     bool changed = true;
@@ -799,41 +794,13 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         iter++;
         GrB_Index curr;
         GrB_Matrix_nvals(&curr, T[0]->base);
-        // printf("iter: %ld, nvals: %lu\n", iter, curr);
     
         changed = false;
-
-        // for (size_t i = 0; i < bin_rules_count; i++) {
-        //     LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
-
-        //     TRY(CFL_mxm(M, TSrc[bin_rule.nonterm], T[bin_rule.prod_A], false, false, opt_mask));
-
-        //     // Update source vertices matrix to find appropriate paths only
-        //     // M[i, j] == 1 => A[j, j] == 1
-        //     TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M->base, GrB_NULL));
-        //     TRY(GrB_Matrix_free(&A->base));
-        //     TRY(GrB_Matrix_diag(&A->base, a, 0));
-        //     TRY(CFL_matrix_from_base(&A, A->base));
-
-        //     TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask));
-
-        //     TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M, false, opt_mask));
-
-        //     TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask));
-
-        //     TRY(CFL_wise(TSrc[bin_rule.prod_B], TSrc[bin_rule.prod_B], A, false, opt_mask));
-        // }
 
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
 
             TRY(CFL_mxm(M, TSrc[bin_rule.nonterm], T[bin_rule.prod_A], false, false, opt_mask));
-
-            TRY(CFL_mxm(dT[bin_rule.nonterm], M, T[bin_rule.prod_B], false, false, opt_mask));
-
-            TRY(CFL_rsub(dT[bin_rule.nonterm], T[bin_rule.nonterm], opt_mask));
-
-            TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], dT[bin_rule.nonterm], false, opt_mask));
 
             // Update source vertices matrix to find appropriate paths only
             // M[i, j] == 1 => A[j, j] == 1
@@ -841,6 +808,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
             TRY(GrB_Matrix_free(&A->base));
             TRY(GrB_Matrix_diag(&A->base, a, 0));
             TRY(CFL_matrix_from_base(&A, A->base));
+
+            TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask));
+
+            TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M, false, opt_mask));
 
             TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask));
 
