@@ -848,6 +848,36 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         CFL_matrix_free(&res);
     }
 
+    // GrB_Index nrows, ncols, nvals;
+    // GrB_Matrix_nrows(&nrows, *output);
+    // GrB_Matrix_ncols(&ncols, *output);
+    // GrB_Matrix_nvals(&nvals, *output);
+
+    // // Pointers for exported data
+    // GrB_Index *Ap = NULL, *Ai = NULL;
+    // void *Ax = NULL;
+    // GrB_Index ap_size, ai_size, ax_size;
+    // bool is_csc;
+
+    // // Export in CSC format (or use GxB_Matrix_export_CSR)
+    // GxB_Matrix_export_CSC(output, &GrB_BOOL, &nrows, &ncols, &Ap, &Ai, &Ax,
+    //                     &ap_size, &ai_size, &ax_size, &is_csc, NULL, NULL);
+
+    // // --- Write Ap, Ai, Ax to a file here using fprintf or fwrite ---
+    // // Example: Saving to a simple text file
+    // FILE *f = fopen("matrix.txt", "w");
+    // for (int i = 0; i < nrows; i++) {
+    //     for (int j = Ap[i]; j < Ap[i+1]; j++) {
+    //         fprintf(f, "%ld %ld\n", (long)Ai[j], (long)i);
+    //     }
+    // }
+    // fclose(f);
+
+    // // Free the exported arrays
+    // free(Ap);
+    // free(Ai);
+    // free(Ax);
+
     LG_FREE_ALL;
     return GrB_SUCCESS;
 }
