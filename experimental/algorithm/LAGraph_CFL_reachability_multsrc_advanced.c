@@ -20,18 +20,22 @@
     {                                                                                    \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             CFL_matrix_free(&T[i]);                                                      \
-            CFL_matrix_free(&Adj[i]);                                                     \
+            CFL_matrix_free(&Adj[i]);                                                    \
             CFL_matrix_free(&TSrc[i]);                                                   \
         }                                                                                \
         CFL_matrix_free(&iden);                                                          \
+        CFL_matrix_free(&MSrc);                                                          \
+        CFL_matrix_free(&M);                                                             \
+        CFL_matrix_free(&A);                                                             \
         LAGraph_Free((void **) &nnzs_T, msg);                                            \
         LAGraph_Free((void **) &nnzs_TSrc, msg);                                         \
         LAGraph_Free((void **) &T, msg);                                                 \
         LAGraph_Free((void **) &TSrc, msg);                                              \
-        LAGraph_Free((void **) &MSrc, msg);                                              \
-        LAGraph_Free((void **) &M, msg);                                                 \
-        LAGraph_Free((void **) &A, msg);                                                 \
-        LAGraph_Free((void **) &a, msg);                                                 \
+        LAGraph_Free((void **) &Adj, msg);                                               \
+        LAGraph_Free((void **) &new_rules, msg);                                         \
+        LAGraph_Free((void **) &to_new_symbols_map, msg);                                \
+        GrB_Vector_free(&ones_vec);                                                      \
+        GrB_Vector_free(&a);                                                             \
         GrB_free(&true_scalar);                                                          \
     }
 
@@ -805,9 +809,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
             // Update source vertices matrix to find appropriate paths only
             // M[i, j] == 1 => A[j, j] == 1
             TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M->base, GrB_NULL));
-            TRY(GrB_Matrix_free(&A->base));
-            TRY(GrB_Matrix_diag(&A->base, a, 0));
-            TRY(CFL_matrix_from_base(&A, A->base));
+            TRY(GxB_Matrix_diag(A->base, a, 0, GrB_NULL));
+            TRY(CFL_matrix_update(A));
 
             TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask));
 
