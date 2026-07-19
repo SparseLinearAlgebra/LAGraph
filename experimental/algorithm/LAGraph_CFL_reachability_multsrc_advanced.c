@@ -564,7 +564,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
-                                    // terminals (terms_count).
+                                    // symbols (symbols_amount).
                                     //
                                     // adj_matrices[t]: (i, j) == 1 if and only if there
                                     // is an edge between nodes i and j with the label of
