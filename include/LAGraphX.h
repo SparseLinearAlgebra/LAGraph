@@ -856,6 +856,166 @@ int LAGraph_RegularPathQuery    // nodes reachable from the starting by the
     char *msg                   // LAGraph output message
 );
 //****************************************************************************
+
+// LAGraph_RPQMatrix: regular path query algortithm
+//
+// For an edge-labelled directed graph the algorithm computes the nubmer of
+// nonzero elements in its reachability matrix.
+// The reachability matrix created by following rules:
+// * A[i,j] = True if node with index j is reachable from node with index i
+//   and concatenation of labels over path between these two labels is a word
+//   from specified regular language.
+// * A[i,j] = False in other cases.
+//
+// The algorithm is based on the idea of ​​considering a regular constraint as
+// an abstract syntax tree, the leaves of which are matrices of adjacency matrix
+// decomposition of the graph, and the internal nodes are the operations of
+// conjunction, concatenation, etc.
+//
+// Example of adjacency matrix decomposition:
+//
+// Graph:
+// (0) --[a]-> (1)
+//  |           ^
+// [b]    [c]--/
+//  |  --/
+//  v /
+// (2) --[b]-> (3)
+//
+// Adjacency matrix decomposition of this graph consists of:
+// * Adjacency matrix for the label a:
+//       0   1   2   3
+//   0 |   | T |   |   |
+//   1 |   |   |   |   |
+//   2 |   |   |   |   |
+//   3 |   |   |   |   |
+// * Adjacency matrix for the label b:
+//       0   1   2   3
+//   0 |   |   | T |   |
+//   1 |   |   |   |   |
+//   2 |   |   |   | T |
+//   3 |   |   |   |   |
+// * Adjacency matrix for the label c:
+//       0   1   2   3
+//   0 |   |   |   |   |
+//   1 |   |   |   |   |
+//   2 |   | T |   |   |
+//   3 |   |   |   |   |
+//
+// The algorithm recursively starts from the root of the given tree and
+// performs the operations corresponding to each node on the children of that
+// node. As a result of the algorithm's execution, the reachability
+// matrix will be stored at the root.
+//
+// Example of regular expression and its corresponding AST:
+//
+// Regular expression:
+// a/(b|c)*
+//
+// Abstract syntax tree:
+//    ┌─┐
+//    │/| (3)
+//    └┬┘
+// ┌─┬─┴─┬─┐
+// │a│   │*│ (2)
+// └─┘   └┬┘
+//       ┌┴┐
+//       │|│ (1)
+//       └┬┘
+//    ┌─┬─┴─┬─┐
+//    │b│   │c│
+//    └─┘   └─┘
+// The numbers next to the graph nodes show the order in which operations are
+// executed. For the decomposition and AST specified above, the resulting
+// matrix will have the following structure:
+//
+//      0   1   2   3
+//  0 |   | T |   |   |
+//  1 |   |   |   |   |
+//  2 |   |   |   |   |
+//  3 |   |   |   |   |
+//
+// So for this example LAGraph_RPQMatrix will return 1.
+typedef enum RPQMatrixOp
+{
+    RPQ_MATRIX_OP_LABEL,    // edge label of input graph
+    RPQ_MATRIX_OP_LOR,      // alternation
+    RPQ_MATRIX_OP_CONCAT,   // concatenation
+    RPQ_MATRIX_OP_KLEENE,   // reflexive-transitive closure
+    RPQ_MATRIX_OP_KLEENE_L, // optimization for (A)*/B case,
+                            // when B is sparse and A is dense
+    RPQ_MATRIX_OP_KLEENE_R, // optimization for A/(B)* case,
+                            // when A is sparse and B is dense
+} RPQMatrixOp ;
+
+typedef struct RPQMatrixPlan
+{
+    RPQMatrixOp op ;            // type of tree node
+    struct RPQMatrixPlan *lhs ; // left subtree
+    struct RPQMatrixPlan *rhs ; // right subtree
+    GrB_Matrix mat ;            // adjacency matrix of label.
+                                // Only for leafes. Should be NULL
+                                // in other cases
+    GrB_Matrix res_mat ;        // result of subtree execution.
+                                // Should be NULL
+} RPQMatrixPlan ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix(
+    // output:
+    GrB_Index *nnz, // number of nonzero values in
+                    // result reachability matrix
+
+    // input:
+    RPQMatrixPlan *plan, // root of abstarct syntax tree of
+                         // regular expression
+    char *msg            // LAGraph output message
+) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_label
+(
+    GrB_Matrix *mat, 
+    GrB_Index x,
+    GrB_Index i, 
+    GrB_Index j
+) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_DestroyRpqMatrixPlan(RPQMatrixPlan *plan) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_Free(GrB_Matrix *mat) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrixOuts (GrB_Vector w, const GrB_Matrix A);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrixIns (GrB_Vector w, const GrB_Matrix A);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrixEstimate (float *estimate, float *estimate2, GrB_Vector outs, GrB_Vector ins);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_Alt (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_Seq (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_ExtractRandom (GrB_Matrix rhs, GrB_Matrix *srhs, uint64_t seed);
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_reduce(
+    GrB_Index *res,
+    GrB_Matrix mat,
+    uint8_t reduce_type // reduce_type values:
+                        // 0 --- reduce by row
+                        // 1 --- reduce by col
+) ;
+
+
+//****************************************************************************
 LAGRAPHX_PUBLIC
 int LAGraph_VertexCentrality_Triangle       // vertex triangle-centrality
 (
