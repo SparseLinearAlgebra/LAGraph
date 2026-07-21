@@ -536,7 +536,7 @@ GrB_Info LAGraph_RPQMatrix_initialize(void)
     {
         return GrB_SUCCESS ;
     }
-    sr = LAGraph_any_one_bool ;
+    sr = GxB_ANY_PAIR_BOOL ;
     op = GxB_ANY_BOOL_MONOID ;
     srand(time(NULL)) ;
     return GrB_SUCCESS ;
