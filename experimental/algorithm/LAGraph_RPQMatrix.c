@@ -331,7 +331,7 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
     {
         // S <- S x (B + I)
         GRB_TRY(GrB_mxm(S, S, GrB_NULL,
-                        sr, S, B, GrB_DESC_C)) ;
+                        sr, S, B, GrB_DESC_SC)) ;
 
         GRB_TRY(GrB_Matrix_nvals(&nnz_S, S)) ;
         if (nnz_S != nnz_Sold)
