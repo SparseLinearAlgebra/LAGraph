@@ -309,45 +309,51 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
     OK(LAGraph_RPQMatrix_solver(rhs, msg)) ;
 
     GrB_Matrix B = rhs->res_mat ;
-    // S <- I
-    GrB_Matrix S ;
+    GrB_Matrix S = GrB_NULL ;
+    GrB_Matrix T = GrB_NULL ;
+    GrB_Matrix U = GrB_NULL ;
 
-    // Creating identity matrix.
     GrB_Index n ;
     GRB_TRY(GrB_Matrix_nrows(&n, B)) ;
-    // GrB_Matrix I ;
-    // GRB_TRY(GrB_Matrix_new(&I, GrB_BOOL, n, n)) ;
 
-    GrB_Vector v ;
-    GRB_TRY(GrB_Vector_new(&v, GrB_BOOL, n)) ;
-    GRB_TRY(GrB_Vector_assign_BOOL(v, NULL, NULL, true, GrB_ALL, n, NULL)) ;
+    GRB_TRY(GrB_Matrix_dup(&S, B)) ;
 
-    GRB_TRY(GrB_Matrix_diag(&S, v, 0)) ;
+    GrB_Index nnz_S = 0, nnz_Sold = 0 ;
+    GRB_TRY(GrB_Matrix_nvals(&nnz_Sold, S)) ;
 
     bool changed = true ;
-    GrB_Index nnz_S = n, nnz_Sold = 0 ;
-
     while (changed)
     {
-        // S <- S x (B + I)
-        GRB_TRY(GrB_mxm(S, S, GrB_NULL,
-                        sr, S, B, GrB_DESC_SC)) ;
+        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, S, B, GrB_NULL)) ;
 
-        GRB_TRY(GrB_Matrix_nvals(&nnz_S, S)) ;
-        if (nnz_S != nnz_Sold)
-        {
-            changed = true ;
-            nnz_Sold = nnz_S ;
-        }
-        else
-        {
-            changed = false ;
-        }
+        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GrB_LOR, S, T, GrB_NULL)) ;
+        GRB_TRY(GrB_Matrix_free(&T)) ;
+
+        GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
+        changed = (nnz_S != nnz_Sold) ;
+        nnz_Sold = nnz_S ;
+
+        GRB_TRY(GrB_Matrix_free(&S)) ;
+        S = U ;
+        U = GrB_NULL ;
     }
-    GrB_Vector_free(&v) ;
-    plan->res_mat = S ;
 
-    // GRB_TRY(GrB_Matrix_free(&I)) ;
+    // Add I to recieve B* from B+.
+    GrB_Vector v = GrB_NULL ;
+    GrB_Matrix I = GrB_NULL ;
+    GRB_TRY(GrB_Vector_new(&v, GrB_BOOL, n)) ;
+    GRB_TRY(GrB_Vector_assign_BOOL(v, NULL, NULL, true, GrB_ALL, n, NULL)) ;
+    GRB_TRY(GrB_Matrix_diag(&I, v, 0)) ;
+    GRB_TRY(GrB_Vector_free(&v)) ;
+
+    GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
+    GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GrB_LOR, S, I, GrB_NULL)) ;
+    GRB_TRY(GrB_Matrix_free(&S)) ;
+    GRB_TRY(GrB_Matrix_free(&I)) ;
+
+    plan->res_mat = U ;
     return (GrB_SUCCESS) ;
 }
 
