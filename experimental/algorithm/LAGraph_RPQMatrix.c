@@ -258,7 +258,7 @@ static GrB_Info LAGraph_RPQMatrixLor(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix res ;
     GrB_Matrix_new(&res, GrB_BOOL, dimension, dimension) ;
     GRB_TRY(GrB_eWiseAdd(res, GrB_NULL, GrB_NULL,
-                         GrB_LOR, lhs_mat, rhs_mat, GrB_DESC_R)) ;
+                         GxB_ANY_BOOL, lhs_mat, rhs_mat, GrB_DESC_R)) ;
     plan->res_mat = res ;
 
     return (GrB_SUCCESS) ;
@@ -328,7 +328,7 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
         GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, S, B, GrB_NULL)) ;
 
         GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GrB_LOR, S, T, GrB_NULL)) ;
+        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, T, GrB_NULL)) ;
         GRB_TRY(GrB_Matrix_free(&T)) ;
 
         GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
@@ -349,7 +349,7 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
     GRB_TRY(GrB_Vector_free(&v)) ;
 
     GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
-    GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GrB_LOR, S, I, GrB_NULL)) ;
+    GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, I, GrB_NULL)) ;
     GRB_TRY(GrB_Matrix_free(&S)) ;
     GRB_TRY(GrB_Matrix_free(&I)) ;
 
@@ -405,27 +405,40 @@ static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix B = rhs->res_mat ;
 
     // S <- B
-    GrB_Matrix S ;
+    GrB_Matrix S = GrB_NULL ;
+    GrB_Matrix T = GrB_NULL ;
+    GrB_Matrix U = GrB_NULL ;
     GRB_TRY(GrB_Matrix_dup(&S, B)) ;
 
-    bool changed = true ;
-    GrB_Index nnz_S = 0, nnz_Sold = 0 ;
+    GrB_Index n ;
+    GRB_TRY(GrB_Matrix_nrows(&n, B)) ;
 
+    GrB_Index nnz_A = 0, nnz_S = 0, nnz_Sold = 0 ;
+    GRB_TRY(GrB_Matrix_nvals(&nnz_A, A)) ;
+    GRB_TRY(GrB_Matrix_nvals(&nnz_Sold, S)) ;
+    if (nnz_A == 0 || nnz_Sold == 0)
+    {
+        plan->res_mat = S ;
+        return GrB_SUCCESS ;
+    }
+
+    bool changed = true ;
     while (changed)
     {
-        // S <- (A + I) x S
-        GRB_TRY(GrB_mxm(S, S, NULL, sr, A, S, GrB_DESC_C)) ;
+        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, A, S, GrB_NULL)) ;
 
-        GRB_TRY(GrB_Matrix_nvals(&nnz_S, S)) ;
-        if (nnz_S != nnz_Sold)
-        {
-            changed = true ;
-            nnz_Sold = nnz_S ;
-        }
-        else
-        {
-            changed = false ;
-        }
+        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, T, GrB_NULL)) ;
+        GRB_TRY(GrB_Matrix_free(&T)) ;
+
+        GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
+        changed = (nnz_S != nnz_Sold) ;
+        nnz_Sold = nnz_S ;
+
+        GRB_TRY(GrB_Matrix_free(&S)) ;
+        S = U ;
+        U = GrB_NULL ;
     }
 
     plan->res_mat = S ;
@@ -479,27 +492,40 @@ static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix B = rhs->res_mat ;
 
     // S <- A
-    GrB_Matrix S ;
+    GrB_Matrix S = GrB_NULL ;
+    GrB_Matrix T = GrB_NULL ;
+    GrB_Matrix U = GrB_NULL ;
     GRB_TRY(GrB_Matrix_dup(&S, A)) ;
 
-    bool changed = true ;
-    GrB_Index nnz_S = 0, nnz_Sold = 0 ;
+    GrB_Index n ;
+    GRB_TRY(GrB_Matrix_nrows(&n, A)) ;
 
+    GrB_Index nnz_B = 0, nnz_S = 0, nnz_Sold = 0 ;
+    GRB_TRY(GrB_Matrix_nvals(&nnz_B, B)) ;
+    GRB_TRY(GrB_Matrix_nvals(&nnz_Sold, S)) ;
+    if (nnz_B == 0 || nnz_Sold == 0)
+    {
+        plan->res_mat = S ;
+        return GrB_SUCCESS ;
+    }
+
+    bool changed = true ;
     while (changed)
     {
-        // S <- S x (B + I)
-        GRB_TRY(GrB_mxm(S, S, NULL, sr, S, B, GrB_DESC_C)) ;
+        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, S, B, GrB_NULL)) ;
 
-        GRB_TRY(GrB_Matrix_nvals(&nnz_S, S)) ;
-        if (nnz_S != nnz_Sold)
-        {
-            changed = true ;
-            nnz_Sold = nnz_S ;
-        }
-        else
-        {
-            changed = false ;
-        }
+        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, T, GrB_NULL)) ;
+        GRB_TRY(GrB_Matrix_free(&T)) ;
+
+        GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
+        changed = (nnz_S != nnz_Sold) ;
+        nnz_Sold = nnz_S ;
+
+        GRB_TRY(GrB_Matrix_free(&S)) ;
+        S = U ;
+        U = GrB_NULL ;
     }
 
     plan->res_mat = S ;
