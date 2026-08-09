@@ -159,6 +159,21 @@ typedef struct {
     int32_t count;
 } CFL_Symbol;
 
+#define TIMER_START() { \
+    start_time = LAGraph_WallClockTime(); \
+}
+
+#define TIMER_END(marker) { \
+    end_time = LAGraph_WallClockTime(); \
+    marker += end_time - start_time; \
+}
+
+#define TIMED(marker, op) { \
+    TIMER_START();      \
+    op;                 \
+    TIMER_END(marker);  \
+}
+
 // When using the OPT_BLOCK optimization, indexed symbols must be grouped together.
 // This produces a mapping: [old_index -> (new_index, base_index, indexed_count)]
 //   - new_index:     the index of the symbol in the new numeration
@@ -791,15 +806,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         GRB_TRY(CFL_wise(T[eps_rule.nonterm], T[eps_rule.nonterm], iden, true, opt_mask));
     }
 
-    #define TIMER_START() { \
-        start_time = LAGraph_WallClockTime(); \
-    }
-
-    #define TIMER_END(marker) { \
-        end_time = LAGraph_WallClockTime(); \
-        marker += end_time - start_time; \
-    }
-
     double start_time, end_time;
     double mxm1 = 0.0;
     double vxm = 0.0;
@@ -823,72 +829,22 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
 
-            TIMER_START();
-            TRY(CFL_mxm(M, TSrc[bin_rule.nonterm], T[bin_rule.prod_A], false, false, opt_mask));
-            TIMER_END(mxm1);
-
-            // printf("a");
-            // fflush(stdout);
+            TIMED(mxm1, TRY(CFL_mxm(M, TSrc[bin_rule.nonterm], T[bin_rule.prod_A], false, false, opt_mask)));
 
             // Update source vertices matrix to find appropriate paths only
             // M[i, j] == 1 => A[j, j] == 1
-            TIMER_START();
-            TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M->base, GrB_NULL));
-            TIMER_END(vxm);
+            TIMED(vxm, TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M->base, GrB_NULL)));
+            TIMED(diag, TRY(GxB_Matrix_diag(A->base, a, 0, GrB_NULL)));
+            TIMED(update, TRY(CFL_matrix_update(A)));
 
-            // printf("b");
-            // fflush(stdout);
+            TIMED(mxm2, TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask)));
+            TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M, false, opt_mask)));
 
-            TIMER_START();
-            TRY(GxB_Matrix_diag(A->base, a, 0, GrB_NULL));
-            TIMER_END(diag);
-
-            // printf("c");
-            // fflush(stdout);
-
-            TIMER_START();
-            TRY(CFL_matrix_update(A));
-            TIMER_END(update);
-
-            // printf("d");
-            // fflush(stdout);
-
-
-            // fprintf(stdout, "M block type: %d, T^C block type: %d\n", M->block_type, T[bin_rule.prod_B]->block_type);
-            // fflush(stdout);
-
-            TIMER_START();
-            TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask));
-            TIMER_END(mxm2);
-
-            // printf("e");
-            // fflush(stdout);
-
-            TIMER_START();
-            TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M, false, opt_mask));
-            TIMER_END(wise1);
-
-            // printf("f");
-            // fflush(stdout);
-
-            TIMER_START();
-            TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask));
-            TIMER_END(wise2);
-
-            // printf("g");
-            // fflush(stdout);
-
-            TIMER_START();
-            TRY(CFL_wise(TSrc[bin_rule.prod_B], TSrc[bin_rule.prod_B], A, false, opt_mask));
-            TIMER_END(wise3);
-
-            // printf("h\n");
-
+            TIMED(wise2, TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask)));
+            TIMED(wise3, TRY(CFL_wise(TSrc[bin_rule.prod_B], TSrc[bin_rule.prod_B], A, false, opt_mask)));
         }
 
         // Check if any of the matrices changed. If not, job is done.
-        // printf("%li---------------------------------\n", iter);
-
         for (size_t i = 0; i < new_symbols_amount; i++) {
             GrB_Index nnz_T, nnz_TSrc;
 
@@ -901,15 +857,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
             changed = changed || (nnzs_T[i] != nnz_T);
             changed = changed || (nnzs_TSrc[i] != nnz_TSrc);
 
-            // if (nnzs_T[i] != nnz_T) {
-            //     printf("changed nnzs_T[%u] = %lu, nnz_T = %lu\n", i, nnzs_T[i], nnz_T);
-            // }
-
-
-            // if (nnzs_TSrc[i] != nnz_TSrc) {
-            //     printf("changed nnzs_TSrc[%u] = %lu, nnz_TSrc = %lu\n", i, nnzs_TSrc[i], nnz_TSrc);
-            // }
-
             nnzs_T[i] = nnz_T;
             nnzs_TSrc[i] = nnz_TSrc;
         }
@@ -917,8 +864,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
 
     GRB_TRY(CFL_mxm(MSrc, MSrc, T[0], false, false, opt_mask));
 
-    // printf("\nmxm1: %.3f, vxm: %.3f, dia: %.3f, upd: %.3f\nmxm2: %.3f, ws1: %.3f, ws2: %.3f, ws3: %.3f\n",
-    //         mxm1, vxm, diag, update, mxm2, wise1, wise2, wise3);
+    printf("\nmxm1: %.3f, vxm: %.3f, dia: %.3f, upd: %.3f\nmxm2: %.3f, ws1: %.3f, ws2: %.3f, ws3: %.3f\n",
+            mxm1, vxm, diag, update, mxm2, wise1, wise2, wise3);
 
     // get outputs matrix
     if (MSrc->base_matrices_count == 0) {
@@ -929,36 +876,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         TRY(GrB_Matrix_dup(output, res->base));
         CFL_matrix_free(&res);
     }
-
-    // GrB_Index nrows, ncols, nvals;
-    // GrB_Matrix_nrows(&nrows, *output);
-    // GrB_Matrix_ncols(&ncols, *output);
-    // GrB_Matrix_nvals(&nvals, *output);
-
-    // // Pointers for exported data
-    // GrB_Index *Ap = NULL, *Ai = NULL;
-    // void *Ax = NULL;
-    // GrB_Index ap_size, ai_size, ax_size;
-    // bool is_csc;
-
-    // // Export in CSC format (or use GxB_Matrix_export_CSR)
-    // GxB_Matrix_export_CSC(output, &GrB_BOOL, &nrows, &ncols, &Ap, &Ai, &Ax,
-    //                     &ap_size, &ai_size, &ax_size, &is_csc, NULL, NULL);
-
-    // // --- Write Ap, Ai, Ax to a file here using fprintf or fwrite ---
-    // // Example: Saving to a simple text file
-    // FILE *f = fopen("matrix.txt", "w");
-    // for (int i = 0; i < nrows; i++) {
-    //     for (int j = Ap[i]; j < Ap[i+1]; j++) {
-    //         fprintf(f, "%ld %ld\n", (long)Ai[j], (long)i);
-    //     }
-    // }
-    // fclose(f);
-
-    // // Free the exported arrays
-    // free(Ap);
-    // free(Ai);
-    // free(Ax);
 
     LG_FREE_ALL;
     return GrB_SUCCESS;
