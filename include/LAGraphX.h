@@ -960,6 +960,25 @@ typedef struct RPQMatrixPlan
                                 // Should be NULL
 } RPQMatrixPlan ;
 
+typedef enum RPQMatrixStorage
+{
+    RPQ_MATRIX_STORAGE_CSC = 1,
+    RPQ_MATRIX_STORAGE_CSR = 2,
+} RPQMatrixStorage ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_SetGlobalStorageOrientation(RPQMatrixStorage storage) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_SetStorageOrientation(GrB_Matrix mat, RPQMatrixStorage storage) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_DupWithStorageOrientation(
+    GrB_Matrix *dst,
+    GrB_Matrix src,
+    RPQMatrixStorage storage
+) ;
+
 LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrix(
     // output:

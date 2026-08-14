@@ -175,6 +175,48 @@ GrB_Info LAGraph_RPQMatrix_Free(GrB_Matrix *mat) {
     return GrB_SUCCESS ;
 }
 
+static GrB_Info LAGraph_RPQMatrix_storage_to_orientation(RPQMatrixStorage storage, int32_t *orientation)
+{
+    switch (storage)
+    {
+    case RPQ_MATRIX_STORAGE_CSC:
+        *orientation = GrB_COLMAJOR ;
+        return GrB_SUCCESS ;
+    case RPQ_MATRIX_STORAGE_CSR:
+        *orientation = GrB_ROWMAJOR ;
+        return GrB_SUCCESS ;
+    default:
+        return GrB_INVALID_VALUE ;
+    }
+}
+
+GrB_Info LAGraph_RPQMatrix_SetGlobalStorageOrientation(RPQMatrixStorage storage)
+{
+    int32_t orientation = 0 ;
+    OK(LAGraph_RPQMatrix_storage_to_orientation(storage, &orientation)) ;
+    OK(GrB_Global_set_INT32(GrB_GLOBAL, orientation, GrB_STORAGE_ORIENTATION_HINT)) ;
+    return GrB_SUCCESS ;
+}
+
+GrB_Info LAGraph_RPQMatrix_SetStorageOrientation(GrB_Matrix mat, RPQMatrixStorage storage)
+{
+    LG_ASSERT(mat != NULL, GrB_NULL_POINTER) ;
+    int32_t orientation = 0 ;
+    OK(LAGraph_RPQMatrix_storage_to_orientation(storage, &orientation)) ;
+    OK(GrB_Matrix_set_INT32(mat, orientation, GrB_STORAGE_ORIENTATION_HINT)) ;
+    OK(GrB_Matrix_wait(mat, GrB_MATERIALIZE)) ;
+    return GrB_SUCCESS ;
+}
+
+GrB_Info LAGraph_RPQMatrix_DupWithStorageOrientation( GrB_Matrix *dst, GrB_Matrix src, RPQMatrixStorage storage)
+{
+    LG_ASSERT(dst != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(src != NULL, GrB_NULL_POINTER) ;
+    OK(GrB_Matrix_dup(dst, src)) ;
+    OK(LAGraph_RPQMatrix_SetStorageOrientation(*dst, storage)) ;
+    return GrB_SUCCESS ;
+}
+
 GrB_Info LAGraph_RPQMatrix_label(GrB_Matrix *mat, GrB_Index x, GrB_Index i, GrB_Index j)
 {
     OK(GrB_Matrix_new(mat, GrB_BOOL, i, j)) ;
