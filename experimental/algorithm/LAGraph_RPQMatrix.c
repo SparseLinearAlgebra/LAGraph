@@ -335,6 +335,53 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
     return (GrB_SUCCESS) ;
 }
 
+// Compute the least fixed point starting from seed.  S keeps all discovered
+// pairs, while frontier contains only pairs discovered by the previous step.
+static GrB_Info LAGraph_RPQMatrixFrontierClosure(
+    GrB_Matrix *result,
+    GrB_Matrix seed,
+    GrB_Matrix step,
+    bool step_on_left,
+    char *msg)
+{
+    LG_ASSERT(result != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(seed != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(step != NULL, GrB_NULL_POINTER) ;
+
+    GrB_Matrix S = GrB_NULL ;
+    GrB_Matrix frontier = GrB_NULL ;
+    GRB_TRY(GrB_Matrix_dup(&S, seed)) ;
+    GRB_TRY(GrB_Matrix_dup(&frontier, seed)) ;
+
+    GrB_Index frontier_nnz = 0, step_nnz = 0 ;
+    GRB_TRY(GrB_Matrix_nvals(&frontier_nnz, frontier)) ;
+    GRB_TRY(GrB_Matrix_nvals(&step_nnz, step)) ;
+
+    while (frontier_nnz > 0 && step_nnz > 0)
+    {
+        // frontier<!S> = step * frontier or frontier * step.  The replace,
+        // structural, complemented mask leaves only newly discovered pairs.
+        if (step_on_left)
+        {
+            GRB_TRY(GrB_mxm(frontier, S, GrB_NULL, sr,
+                            step, frontier, GrB_DESC_RSC)) ;
+        }
+        else
+        {
+            GRB_TRY(GrB_mxm(frontier, S, GrB_NULL, sr,
+                            frontier, step, GrB_DESC_RSC)) ;
+        }
+
+        GRB_TRY(GrB_Matrix_nvals(&frontier_nnz, frontier)) ;
+        GRB_TRY(GrB_eWiseAdd(S, GrB_NULL, GrB_NULL,
+                             GxB_ANY_BOOL, S, frontier, GrB_NULL)) ;
+    }
+
+    GRB_TRY(GrB_Matrix_free(&frontier)) ;
+    *result = S ;
+    return (GrB_SUCCESS) ;
+}
+
 static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
@@ -352,35 +399,12 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
 
     GrB_Matrix B = rhs->res_mat ;
     GrB_Matrix S = GrB_NULL ;
-    GrB_Matrix T = GrB_NULL ;
     GrB_Matrix U = GrB_NULL ;
 
     GrB_Index n ;
     GRB_TRY(GrB_Matrix_nrows(&n, B)) ;
 
-    GRB_TRY(GrB_Matrix_dup(&S, B)) ;
-
-    GrB_Index nnz_S = 0, nnz_Sold = 0 ;
-    GRB_TRY(GrB_Matrix_nvals(&nnz_Sold, S)) ;
-
-    bool changed = true ;
-    while (changed)
-    {
-        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, S, B, GrB_NULL)) ;
-
-        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, T, GrB_NULL)) ;
-        GRB_TRY(GrB_Matrix_free(&T)) ;
-
-        GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
-        changed = (nnz_S != nnz_Sold) ;
-        nnz_Sold = nnz_S ;
-
-        GRB_TRY(GrB_Matrix_free(&S)) ;
-        S = U ;
-        U = GrB_NULL ;
-    }
+    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, B, B, false, msg)) ;
 
     // Add I to recieve B* from B+.
     GrB_Vector v = GrB_NULL ;
@@ -446,42 +470,8 @@ static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix A = lhs->res_mat ;
     GrB_Matrix B = rhs->res_mat ;
 
-    // S <- B
     GrB_Matrix S = GrB_NULL ;
-    GrB_Matrix T = GrB_NULL ;
-    GrB_Matrix U = GrB_NULL ;
-    GRB_TRY(GrB_Matrix_dup(&S, B)) ;
-
-    GrB_Index n ;
-    GRB_TRY(GrB_Matrix_nrows(&n, B)) ;
-
-    GrB_Index nnz_A = 0, nnz_S = 0, nnz_Sold = 0 ;
-    GRB_TRY(GrB_Matrix_nvals(&nnz_A, A)) ;
-    GRB_TRY(GrB_Matrix_nvals(&nnz_Sold, S)) ;
-    if (nnz_A == 0 || nnz_Sold == 0)
-    {
-        plan->res_mat = S ;
-        return GrB_SUCCESS ;
-    }
-
-    bool changed = true ;
-    while (changed)
-    {
-        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, A, S, GrB_NULL)) ;
-
-        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, T, GrB_NULL)) ;
-        GRB_TRY(GrB_Matrix_free(&T)) ;
-
-        GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
-        changed = (nnz_S != nnz_Sold) ;
-        nnz_Sold = nnz_S ;
-
-        GRB_TRY(GrB_Matrix_free(&S)) ;
-        S = U ;
-        U = GrB_NULL ;
-    }
+    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, B, A, true, msg)) ;
 
     plan->res_mat = S ;
     return GrB_SUCCESS ;
@@ -533,42 +523,8 @@ static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix A = lhs->res_mat ;
     GrB_Matrix B = rhs->res_mat ;
 
-    // S <- A
     GrB_Matrix S = GrB_NULL ;
-    GrB_Matrix T = GrB_NULL ;
-    GrB_Matrix U = GrB_NULL ;
-    GRB_TRY(GrB_Matrix_dup(&S, A)) ;
-
-    GrB_Index n ;
-    GRB_TRY(GrB_Matrix_nrows(&n, A)) ;
-
-    GrB_Index nnz_B = 0, nnz_S = 0, nnz_Sold = 0 ;
-    GRB_TRY(GrB_Matrix_nvals(&nnz_B, B)) ;
-    GRB_TRY(GrB_Matrix_nvals(&nnz_Sold, S)) ;
-    if (nnz_B == 0 || nnz_Sold == 0)
-    {
-        plan->res_mat = S ;
-        return GrB_SUCCESS ;
-    }
-
-    bool changed = true ;
-    while (changed)
-    {
-        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr, S, B, GrB_NULL)) ;
-
-        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
-        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, S, T, GrB_NULL)) ;
-        GRB_TRY(GrB_Matrix_free(&T)) ;
-
-        GRB_TRY(GrB_Matrix_nvals(&nnz_S, U)) ;
-        changed = (nnz_S != nnz_Sold) ;
-        nnz_Sold = nnz_S ;
-
-        GRB_TRY(GrB_Matrix_free(&S)) ;
-        S = U ;
-        U = GrB_NULL ;
-    }
+    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, A, B, false, msg)) ;
 
     plan->res_mat = S ;
     return GrB_SUCCESS ;
