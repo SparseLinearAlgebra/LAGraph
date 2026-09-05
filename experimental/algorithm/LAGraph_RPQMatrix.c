@@ -335,6 +335,97 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
     return (GrB_SUCCESS) ;
 }
 
+// A hypersparse seed that is much smaller than an ultra-sparse repeated step
+// is normally a bound endpoint.  For these matrices the mask setup costs more
+// than the redundant work avoided by the frontier algorithm.
+#define RPQ_MATRIX_NAIVE_SEED_RATIO 64
+#define RPQ_MATRIX_NAIVE_STEP_DEGREE_DENOMINATOR 64
+
+static GrB_Info LAGraph_RPQMatrixUseNaiveClosure(
+    bool *use_naive,
+    GrB_Matrix seed,
+    GrB_Matrix step,
+    char *msg)
+{
+    LG_ASSERT(use_naive != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(seed != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(step != NULL, GrB_NULL_POINTER) ;
+
+    GrB_Index n = 0, seed_nnz = 0, step_nnz = 0 ;
+    int seed_sparsity = LG_SPARSE, step_sparsity = LG_SPARSE ;
+    GRB_TRY(GrB_Matrix_nrows(&n, step)) ;
+    GRB_TRY(GrB_Matrix_nvals(&seed_nnz, seed)) ;
+    GRB_TRY(GrB_Matrix_nvals(&step_nnz, step)) ;
+    GRB_TRY(LG_GET_FORMAT_HINT(seed, &seed_sparsity)) ;
+    GRB_TRY(LG_GET_FORMAT_HINT(step, &step_sparsity)) ;
+
+    bool step_is_sparse = step_sparsity == LG_HYPERSPARSE ||
+        step_sparsity == LG_SPARSE ;
+    bool step_is_ultrasparse = step_nnz <=
+        n / RPQ_MATRIX_NAIVE_STEP_DEGREE_DENOMINATOR ;
+    *use_naive = seed_sparsity == LG_HYPERSPARSE && step_is_sparse &&
+        step_is_ultrasparse && seed_nnz > 0 &&
+        seed_nnz <= step_nnz / RPQ_MATRIX_NAIVE_SEED_RATIO ;
+    return (GrB_SUCCESS) ;
+}
+
+// Compute the fixed point from the accumulated result.  This avoids mask
+// overhead for very small hypersparse seeds.
+static GrB_Info LAGraph_RPQMatrixNaiveClosure(
+    GrB_Matrix *result,
+    GrB_Matrix seed,
+    GrB_Matrix step,
+    bool step_on_left,
+    char *msg)
+{
+    LG_ASSERT(result != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(seed != NULL, GrB_NULL_POINTER) ;
+    LG_ASSERT(step != NULL, GrB_NULL_POINTER) ;
+
+    GrB_Matrix S = GrB_NULL ;
+    GrB_Matrix T = GrB_NULL ;
+    GrB_Matrix U = GrB_NULL ;
+    GRB_TRY(GrB_Matrix_dup(&S, seed)) ;
+
+    GrB_Index n = 0, nnz = 0, previous_nnz = 0, step_nnz = 0 ;
+    GRB_TRY(GrB_Matrix_nrows(&n, seed)) ;
+    GRB_TRY(GrB_Matrix_nvals(&previous_nnz, S)) ;
+    GRB_TRY(GrB_Matrix_nvals(&step_nnz, step)) ;
+
+    while (previous_nnz > 0 && step_nnz > 0)
+    {
+        GRB_TRY(GrB_Matrix_new(&T, GrB_BOOL, n, n)) ;
+        if (step_on_left)
+        {
+            GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr,
+                            step, S, GrB_NULL)) ;
+        }
+        else
+        {
+            GRB_TRY(GrB_mxm(T, GrB_NULL, GrB_NULL, sr,
+                            S, step, GrB_NULL)) ;
+        }
+
+        GRB_TRY(GrB_Matrix_new(&U, GrB_BOOL, n, n)) ;
+        GRB_TRY(GrB_eWiseAdd(U, GrB_NULL, GrB_NULL,
+                             GxB_ANY_BOOL, S, T, GrB_NULL)) ;
+        GRB_TRY(GrB_Matrix_free(&T)) ;
+        GRB_TRY(GrB_Matrix_nvals(&nnz, U)) ;
+
+        GRB_TRY(GrB_Matrix_free(&S)) ;
+        S = U ;
+        U = GrB_NULL ;
+        if (nnz == previous_nnz)
+        {
+            break ;
+        }
+        previous_nnz = nnz ;
+    }
+
+    *result = S ;
+    return (GrB_SUCCESS) ;
+}
+
 // Compute the least fixed point starting from seed.  S keeps all discovered
 // pairs, while frontier contains only pairs discovered by the previous step.
 static GrB_Info LAGraph_RPQMatrixFrontierClosure(
@@ -382,6 +473,25 @@ static GrB_Info LAGraph_RPQMatrixFrontierClosure(
     return (GrB_SUCCESS) ;
 }
 
+static GrB_Info LAGraph_RPQMatrixAdaptiveClosure(
+    GrB_Matrix *result,
+    GrB_Matrix seed,
+    GrB_Matrix step,
+    bool step_on_left,
+    char *msg)
+{
+    bool use_naive = false ;
+    GRB_TRY(LAGraph_RPQMatrixUseNaiveClosure(
+        &use_naive, seed, step, msg)) ;
+    if (use_naive)
+    {
+        return LAGraph_RPQMatrixNaiveClosure(
+            result, seed, step, step_on_left, msg) ;
+    }
+    return LAGraph_RPQMatrixFrontierClosure(
+        result, seed, step, step_on_left, msg) ;
+}
+
 static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
 {
     LG_ASSERT(plan != NULL, GrB_NULL_POINTER) ;
@@ -404,7 +514,7 @@ static GrB_Info LAGraph_RPQMatrixKleene(RPQMatrixPlan *plan, char *msg)
     GrB_Index n ;
     GRB_TRY(GrB_Matrix_nrows(&n, B)) ;
 
-    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, B, B, false, msg)) ;
+    GRB_TRY(LAGraph_RPQMatrixAdaptiveClosure(&S, B, B, false, msg)) ;
 
     // Add I to recieve B* from B+.
     GrB_Vector v = GrB_NULL ;
@@ -471,7 +581,7 @@ static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix B = rhs->res_mat ;
 
     GrB_Matrix S = GrB_NULL ;
-    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, B, A, true, msg)) ;
+    GRB_TRY(LAGraph_RPQMatrixAdaptiveClosure(&S, B, A, true, msg)) ;
 
     plan->res_mat = S ;
     return GrB_SUCCESS ;
@@ -524,7 +634,7 @@ static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix B = rhs->res_mat ;
 
     GrB_Matrix S = GrB_NULL ;
-    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, A, B, false, msg)) ;
+    GRB_TRY(LAGraph_RPQMatrixAdaptiveClosure(&S, A, B, false, msg)) ;
 
     plan->res_mat = S ;
     return GrB_SUCCESS ;
