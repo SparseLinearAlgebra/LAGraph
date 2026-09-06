@@ -1249,66 +1249,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc_fast
     int8_t opt_mask                 // Optimizations mask
 );
 
-enum CFL_Matrix_block { CELL, VEC_HORIZ, VEC_VERT };
-
-// Struct for matrix for CFL algorithms with optimizations
-typedef struct CFL_Matrix {
-    GrB_Matrix base; // Base GrB_Matrix from we create CFL_Matrix
-    int8_t optimizations; // Optimizations flags
-    // Fields of base matrix
-    GrB_Index nvals;
-    GrB_Index nrows;
-    GrB_Index ncols;
-    // Fields of format optimization
-    GrB_Matrix base_row;
-    GrB_Matrix base_col;
-    int32_t format;
-    bool is_both;
-    // Fields of lazy addition optimization
-    struct CFL_Matrix **base_matrices;
-    size_t base_matrices_count;
-    bool is_lazy;
-    // Fields of block optimization
-    enum CFL_Matrix_block block_type;
-} CFL_Matrix;
-
-GrB_Info CFL_matrix_from_base(CFL_Matrix **matrix, GrB_Matrix base);
-GrB_Info CFL_matrix_from_base_lazy(CFL_Matrix **matrix, GrB_Matrix base);
-GrB_Info CFL_matrix_create(CFL_Matrix **matrix, GrB_Index nrows, GrB_Index ncols);
-GrB_Info CFL_matrix_create_lazy(CFL_Matrix **matrix, GrB_Index nrows, GrB_Index ncols);
-GrB_Info CFL_matrix_free(CFL_Matrix **matrix);
-
-GrB_Info CFL_matrix_update(CFL_Matrix *matrix);
-
-
-GrB_Info CFL_mxm(CFL_Matrix *output, CFL_Matrix *first, CFL_Matrix *second, bool accum,
-                 bool swap, int8_t optimizations);
-GrB_Info CFL_wise(CFL_Matrix *output, CFL_Matrix *first, CFL_Matrix *second, bool accum,
-                  int8_t optimizations);
-GrB_Info CFL_rsub(CFL_Matrix *output, CFL_Matrix *mask, int8_t optimizations);
-GrB_Info CFL_dup(CFL_Matrix *output, CFL_Matrix *input, int8_t optimizations);
-
-// Converts a matrix (lazy or regular) into its evaluated base form by merging
-// all underlying base matrices. If the input matrix is not lazy, returns its copy.
-//
-// Parameters:
-//   matrix_p       - [out] Pointer that will be holds created matrix
-//   input          - [in]  Pointer to the source matrix (may be lazy).
-//   optimizations  - [in]  Bitmask specifying enabled optimizations.
-//
-// Returns:
-//   GrB_Info.
-GrB_Info CFL_matrix_to_base
-(
-    // output
-    CFL_Matrix **matrix_p,
-    // input
-    CFL_Matrix *matrix,
-    int8_t optimizations
-) ;
-
-GrB_Info CFL_clear(CFL_Matrix *A, int8_t optimizations);
-
 // LAGraph_CFL_reachability_adv: Context-Free Language Reachability Matrix-Based
 // Algorithm
 //

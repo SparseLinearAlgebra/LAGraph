@@ -109,13 +109,13 @@ GrB_Info LAGraph_CFL_reachability_multsrc
 )
 {
     // Declare workspace and clear the msg string, if not NULL
-    GrB_Matrix *T;
-    GrB_Matrix *TSrc;
-    GrB_Matrix MSrc;
-    GrB_Matrix M;
-    GrB_Matrix A;
-    GrB_Matrix B;
-    GrB_Vector a;
+    GrB_Matrix *T = NULL;
+    GrB_Matrix *TSrc = NULL;
+    GrB_Matrix MSrc = NULL;
+    GrB_Matrix M = NULL;
+    GrB_Matrix A = NULL;
+    GrB_Matrix B = NULL;
+    GrB_Vector a = NULL;
     GrB_Index n; // number of vertices in the graph
     GrB_Matrix identity_matrix = NULL;
     GrB_Index *nnzs_T = NULL;
@@ -142,11 +142,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     LG_ASSERT_MSG(src_count > 0, GrB_NULL_POINTER,
                   "The number of source vertices must be greater than zero.");
 
-    for (int i = 0; i < src_count; i++) {
-        printf("src[%d] = %d\n", i, src[i]);
-    }
-
-
     // Find null adjacency matrices
     bool found_null = false;
     for (int32_t i = 0; i < terms_count; i++) {
@@ -167,7 +162,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     }
 
     GRB_TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
-    if (n < src_count) return GrB_INVALID_VALUE;
+    LG_ASSERT_MSG(n >= src_count, GrB_INVALID_VALUE,
+                "The number of sources should not be greater than n.");
 
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
     GrB_Scalar_setElement_BOOL(true_scalar, true);
@@ -187,15 +183,11 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     for (int32_t i = 0; i < nonterms_count; i++) {
         GRB_TRY(GrB_Matrix_new(&T[i], GrB_BOOL, n, n));
         GRB_TRY(GrB_Matrix_new(&TSrc[i], GrB_BOOL, n, n));
-        t_empty_flags[i] = true;
-        t_src_empty_flags[i] = true;
     }
 
     for (int32_t i = 0; i < src_count; i++) {
         GrB_Matrix_setElement(TSrc[0], true, src[i], src[i]);
     }
-
-    t_src_empty_flags[0] = false;
 
     GRB_TRY(GrB_Matrix_dup(&MSrc, TSrc[0]));
     GRB_TRY(GrB_Matrix_new(&A, GrB_BOOL, n, n));
@@ -294,8 +286,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             T[term_rule.nonterm], GrB_NULL, GrB_NULL, GxB_PAIR_BOOL,
             T[term_rule.nonterm], true_scalar, adj_matrices[term_rule.prod_A], true_scalar, GrB_NULL
         );
-
-        t_empty_flags[term_rule.nonterm] = false;
     }
 
     // Rule [Variable -> eps]
@@ -306,8 +296,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             T[eps_rule.nonterm],GrB_NULL,GxB_PAIR_BOOL,GxB_PAIR_BOOL,
             T[eps_rule.nonterm],true_scalar,identity_matrix,true_scalar,GrB_NULL
         );
-        
-        t_empty_flags[eps_rule.nonterm] = false;
     }
 
     // Rule [Variable -> Variable1 Variable2]
@@ -321,11 +309,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             GRB_TRY(GrB_mxm(M, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL,
                 TSrc[bin_rule.nonterm], T[bin_rule.prod_A], GrB_NULL));
 
-
             GRB_TRY(GrB_mxm(B, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, M, T[bin_rule.prod_B], GrB_NULL));
 
             GRB_TRY(GrB_eWiseAdd(T[bin_rule.nonterm], GrB_NULL, GrB_NULL, GxB_ANY_BOOL, T[bin_rule.nonterm], B, GrB_NULL));
-
 
             GRB_TRY(GrB_eWiseAdd(TSrc[bin_rule.prod_A], GrB_NULL, GrB_NULL, GxB_ANY_BOOL,
                             TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], GrB_NULL));
@@ -344,10 +330,6 @@ GrB_Info LAGraph_CFL_reachability_multsrc
             GRB_TRY(GrB_Matrix_nvals(&nnz_T, T[bin_rule.nonterm]));
             GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_B, TSrc[bin_rule.prod_A]));
             GRB_TRY(GrB_Matrix_nvals(&nnz_TSrc_C, TSrc[bin_rule.prod_B]));
-            
-            if (nnz_T != 0) t_empty_flags[bin_rule.nonterm] = false;
-            if (nnz_TSrc_B != 0) t_src_empty_flags[bin_rule.prod_A] = false;
-            if (nnz_TSrc_C != 0) t_src_empty_flags[bin_rule.prod_B] = false;
 
             changed = changed || (nnzs_T[bin_rule.nonterm] != nnz_T);
             changed = changed || (nnzs_TSrc_B[bin_rule.prod_A] != nnz_TSrc_B);
