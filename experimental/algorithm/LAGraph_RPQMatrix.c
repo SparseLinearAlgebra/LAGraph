@@ -335,7 +335,7 @@ static GrB_Info LAGraph_RPQMatrixConcat(RPQMatrixPlan *plan, char *msg)
     return (GrB_SUCCESS) ;
 }
 
-// Compute the least fixed point starting from seed.  S keeps all discovered
+// Compute the least fixed point starting from seed. S keeps all discovered
 // pairs, while frontier contains only pairs discovered by the previous step.
 static GrB_Info LAGraph_RPQMatrixFrontierClosure(
     GrB_Matrix *result,
@@ -359,8 +359,6 @@ static GrB_Info LAGraph_RPQMatrixFrontierClosure(
 
     while (frontier_nnz > 0 && step_nnz > 0)
     {
-        // frontier<!S> = step * frontier or frontier * step.  The replace,
-        // structural, complemented mask leaves only newly discovered pairs.
         if (step_on_left)
         {
             GRB_TRY(GrB_mxm(frontier, S, GrB_NULL, sr,
@@ -378,43 +376,6 @@ static GrB_Info LAGraph_RPQMatrixFrontierClosure(
     }
 
     GRB_TRY(GrB_Matrix_free(&frontier)) ;
-    *result = S ;
-    return (GrB_SUCCESS) ;
-}
-
-static GrB_Info LAGraph_RPQMatrixInPlaceFixedPoint(
-    GrB_Matrix *result,
-    GrB_Matrix S,
-    GrB_Matrix step,
-    bool step_on_left,
-    char *msg)
-{
-    LG_ASSERT(result != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(S != NULL, GrB_NULL_POINTER) ;
-    LG_ASSERT(step != NULL, GrB_NULL_POINTER) ;
-
-    GrB_Index nnz = 0, previous_nnz = 0 ;
-    while (true)
-    {
-        if (step_on_left)
-        {
-            GRB_TRY(GrB_mxm(S, S, GrB_NULL, sr,
-                            step, S, GrB_DESC_C)) ;
-        }
-        else
-        {
-            GRB_TRY(GrB_mxm(S, S, GrB_NULL, sr,
-                            S, step, GrB_DESC_C)) ;
-        }
-
-        GRB_TRY(GrB_Matrix_nvals(&nnz, S)) ;
-        if (nnz == previous_nnz)
-        {
-            break ;
-        }
-        previous_nnz = nnz ;
-    }
-
     *result = S ;
     return (GrB_SUCCESS) ;
 }
@@ -508,9 +469,7 @@ static GrB_Info LAGraph_RPQMatrixKleene_L(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix B = rhs->res_mat ;
 
     GrB_Matrix S = GrB_NULL ;
-    GRB_TRY(GrB_Matrix_dup(&S, B)) ;
-    GRB_TRY(LAGraph_RPQMatrixInPlaceFixedPoint(
-        &S, S, A, true, msg)) ;
+    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, B, A, true, msg)) ;
 
     plan->res_mat = S ;
     return GrB_SUCCESS ;
@@ -563,9 +522,7 @@ static GrB_Info LAGraph_RPQMatrixKleene_R(RPQMatrixPlan *plan, char *msg)
     GrB_Matrix B = rhs->res_mat ;
 
     GrB_Matrix S = GrB_NULL ;
-    GRB_TRY(GrB_Matrix_dup(&S, A)) ;
-    GRB_TRY(LAGraph_RPQMatrixInPlaceFixedPoint(
-        &S, S, B, false, msg)) ;
+    GRB_TRY(LAGraph_RPQMatrixFrontierClosure(&S, A, B, false, msg)) ;
 
     plan->res_mat = S ;
     return GrB_SUCCESS ;
