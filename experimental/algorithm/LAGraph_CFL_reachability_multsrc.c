@@ -164,20 +164,19 @@ GrB_Info LAGraph_CFL_reachability_multsrc
     GrB_Scalar true_scalar;
     GrB_Vector ones_vec;
 
-    LG_ASSERT_MSG(terms_count > 0, GrB_INVALID_VALUE,
-                  "The number of terminals must be greater than zero.");
-    LG_ASSERT_MSG(nonterms_count > 0, GrB_INVALID_VALUE,
-                  "The number of non-terminals must be greater than zero.");
-    LG_ASSERT_MSG(rules_count > 0, GrB_INVALID_VALUE,
-                  "The number of rules must be greater than zero.");
-    LG_ASSERT_MSG(output != NULL, GrB_NULL_POINTER, "The outputs array cannot be null.");
-    LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
-    LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
-                  "The adjacency matrices array cannot be null.");
-    LG_ASSERT_MSG(src != NULL, GrB_NULL_POINTER,
-                  "The source vertices array cannot be null.");
-    LG_ASSERT_MSG(src_count > 0, GrB_NULL_POINTER,
-                  "The number of source vertices must be greater than zero.");
+    if (terms_count <= 0 || nonterms_count <= 0) {
+        return GrB_INVALID_VALUE;
+    }
+    if (rules_count <= 0) {
+        return GrB_INVALID_VALUE;
+    }
+    if (!output || !rules || !adj_matrices || !src) {
+        return GrB_NULL_POINTER;
+    }
+
+    if (src_count <= 0) {
+        return GrB_INVALID_VALUE;
+    }
 
     // Find null adjacency matrices
     bool found_null = false;
