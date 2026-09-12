@@ -772,6 +772,15 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         return GrB_SUCCESS;
     }
 
+    if (first->is_lazy && second->is_lazy) {
+        return GrB_INVALID_VALUE;
+    }
+
+    if (!first->is_lazy && !second->is_lazy) {
+        TRY(matrix_mxm_empty(output, first, second, accum, swap, optimizations));
+        return GrB_SUCCESS;
+    }
+
     if (first->is_lazy) {
         TRY(CFL_matrix_update(second));
 
@@ -833,8 +842,8 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         TRY(LAGraph_Calloc((void **)&acc_matrices, second->base_matrices_count,
                            sizeof(Matrix *), NULL));
         for (size_t i = 0; i < second->base_matrices_count; i++) {
-            TRY(GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? second->nrows : first->nrows,
-                               swap ? first->ncols : second->ncols));
+            TRY(GrB_Matrix_new(&accs[i], GrB_BOOL, swap ? first->nrows : second->nrows,
+                            swap ? second->ncols : first->ncols));
             TRY(CFL_matrix_from_base(&acc_matrices[i], accs[i]))
         }
 
@@ -844,8 +853,8 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         }
 
         GrB_Matrix acc;
-        GrB_Matrix_new(&acc, GrB_BOOL, swap ? second->nrows : first->nrows,
-                       swap ? first->ncols : second->ncols);
+        GrB_Matrix_new(&acc, GrB_BOOL, swap ? first->nrows : second->nrows,
+                    swap ? second->ncols : first->ncols);
         Matrix *acc_matrix;
         CFL_matrix_from_base(&acc_matrix, acc);
 
@@ -868,7 +877,6 @@ GrB_Info matrix_mxm_lazy(Matrix *output, Matrix *first, Matrix *second, bool acc
         return GrB_SUCCESS;
     }
 
-    TRY(matrix_mxm_empty(output, first, second, accum, swap, optimizations));
     return GrB_SUCCESS;
 }
 
@@ -1059,43 +1067,46 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         return GrB_SUCCESS;
     }
 
+    if (first->is_lazy && second->is_lazy) {
+        return GrB_INVALID_VALUE;
+    }
+
     if (!first->is_lazy && !second->is_lazy) {
         TRY(matrix_wise_empty(output, first, second, accum, optimizations));
         return GrB_SUCCESS;
     }
 
-    if (!first->is_lazy && second->is_lazy) {
-        for (size_t i = 0; i < second->base_matrices_count; i++) {
-            TRY(matrix_wise_empty(output, first, second->base_matrices[i], true,
-                                  optimizations));
-        }
-
-        return GrB_SUCCESS;
-    }
-
+    Matrix *lazy;
     Matrix *other;
     TRY(CFL_matrix_create(&other, output->nrows, output->ncols));
-    TRY(matrix_dup_empty(other, second, optimizations));
+
+    if (first->is_lazy) {
+        lazy = first;
+        TRY(matrix_dup_empty(other, second, optimizations));
+    } else {
+        lazy = second;
+        TRY(matrix_dup_empty(other, first, optimizations));
+    }
 
     size_t other_nvals = other->nvals >= 10 ? other->nvals : 10;
 
     while (true) {
         bool found = false;
 
-        for (size_t i = 0; i < first->base_matrices_count; i++) {
-            TRY(CFL_matrix_update(first->base_matrices[i]));
-            size_t self_nvals = first->base_matrices[i]->nvals >= 10
+        for (size_t i = 0; i < lazy->base_matrices_count; i++) {
+            TRY(CFL_matrix_update(lazy->base_matrices[i]));
+            size_t self_nvals = lazy->base_matrices[i]->nvals >= 10
                                     ? first->base_matrices[i]->nvals
                                     : 10;
 
             if (other_nvals / 10 <= self_nvals && self_nvals <= other_nvals * 10) {
-                TRY(matrix_wise_empty(other, other, first->base_matrices[i], accum,
-                                      optimizations));
-                TRY(CFL_matrix_free(&first->base_matrices[i]));
-                for (size_t j = i + 1; j < first->base_matrices_count; j++) {
-                    first->base_matrices[j - 1] = first->base_matrices[j];
+                TRY(matrix_wise_empty(other, other, lazy->base_matrices[i], accum,
+                                    optimizations));
+                TRY(CFL_matrix_free(&lazy->base_matrices[i]));
+                for (size_t j = i + 1; j < lazy->base_matrices_count; j++) {
+                    lazy->base_matrices[j - 1] = lazy->base_matrices[j];
                 }
-                first->base_matrices_count--;
+                lazy->base_matrices_count--;
                 found = true;
                 break;
             }
@@ -1105,11 +1116,11 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
             continue;
         }
 
-        first->base_matrices[first->base_matrices_count++] = other;
+        lazy->base_matrices[lazy->base_matrices_count++] = other;
         break;
     }
 
-    TRY(matrix_sort_lazy(first, false));
+    TRY(matrix_sort_lazy(lazy, false));
     TRY(CFL_matrix_update(output));
 
     return GrB_SUCCESS;
