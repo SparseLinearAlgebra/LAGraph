@@ -935,7 +935,8 @@ static void test_CFL_lazy_wise(void) {
         OK(CFL_wise(C, A, B, is_accum, OPT_LAZY));
         OK(CFL_wise(C_base, A_base, B_base, is_accum, 0));
 
-        TEST_CHECK(compare_matrices(A, C_base));
+        TEST_CHECK(compare_matrices(A, C));
+        TEST_CHECK(compare_matrices(C, C_base));
 
         OK(free_matrix(&A));
         OK(free_matrix(&B));
@@ -959,6 +960,7 @@ static void test_CFL_lazy_wise(void) {
         OK(CFL_wise(C, A, B, is_accum, OPT_LAZY));
         OK(CFL_wise(C_base, A_base, B_base, is_accum, 0));
 
+        TEST_CHECK(compare_matrices(B, C));
         TEST_CHECK(compare_matrices(C, C_base));
 
         OK(free_matrix(&A));
