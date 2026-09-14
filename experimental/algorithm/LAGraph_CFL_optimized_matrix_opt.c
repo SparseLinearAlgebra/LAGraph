@@ -1052,7 +1052,7 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         TRY(matrix_dup_empty(other, first, optimizations));
     }
 
-    size_t other_nvals = other->nvals >= 10 ? other->nvals : 10;
+    size_t other_nvals = other->nvals >= 10 ? other->nvals : 10; // maybe has to be in the loop??
 
     while (true) {
         bool found = false;
@@ -1060,12 +1060,12 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
         for (size_t i = 0; i < lazy->base_matrices_count; i++) {
             TRY(CFL_matrix_update(lazy->base_matrices[i]));
             size_t self_nvals = lazy->base_matrices[i]->nvals >= 10
-                                    ? first->base_matrices[i]->nvals
+                                    ? lazy->base_matrices[i]->nvals
                                     : 10;
 
             if (other_nvals / 10 <= self_nvals && self_nvals <= other_nvals * 10) {
                 TRY(matrix_wise_empty(other, other, lazy->base_matrices[i], accum,
-                                    optimizations));
+                            optimizations));
                 TRY(CFL_matrix_free(&lazy->base_matrices[i]));
                 for (size_t j = i + 1; j < lazy->base_matrices_count; j++) {
                     lazy->base_matrices[j - 1] = lazy->base_matrices[j];
@@ -1082,6 +1082,13 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
 
         lazy->base_matrices[lazy->base_matrices_count++] = other;
         break;
+    }
+
+    if (lazy != output) {
+        Matrix *temp = NULL;
+        TRY(CFL_matrix_create(&temp, output->nrows, output->ncols));
+        CFL_matrix_to_base(&temp, lazy, optimizations);
+        CFL_dup(output, temp, optimizations);
     }
 
     TRY(matrix_sort_lazy(lazy, false));
