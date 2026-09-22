@@ -249,16 +249,18 @@ GrB_Info LAGraph_RPQMatrix_reduce(GrB_Index *res, GrB_Matrix mat, uint8_t reduce
     GrB_Index nvals ;
     GrB_Vector reduce = GrB_NULL ;
 
-    GrB_Index nrows ;
+    GrB_Index nrows, ncols ;
     OK(GrB_Matrix_nrows(&nrows, mat)) ;
-    OK(GrB_Vector_new(&reduce, GrB_BOOL, nrows)) ;
+    OK(GrB_Matrix_ncols(&ncols, mat)) ;
 
     if (reduce_type == 0)
     {
+        OK(GrB_Vector_new(&reduce, GrB_BOOL, nrows)) ;
         OK(GrB_reduce(reduce, GrB_NULL, GrB_NULL, GxB_ANY_BOOL_MONOID, mat, GrB_NULL)) ;
     }
     else if (reduce_type == 1)
     {
+        OK(GrB_Vector_new(&reduce, GrB_BOOL, ncols)) ;
         OK(GrB_reduce(reduce, GrB_NULL, GrB_NULL, GxB_ANY_BOOL_MONOID, mat, GrB_DESC_T0)) ;
     }
     else

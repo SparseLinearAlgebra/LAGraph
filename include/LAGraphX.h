@@ -1007,24 +1007,6 @@ LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrix_Free(GrB_Matrix *mat) ;
 
 LAGRAPHX_PUBLIC
-GrB_Info LAGraph_RPQMatrixOuts (GrB_Vector w, const GrB_Matrix A);
-
-LAGRAPHX_PUBLIC
-GrB_Info LAGraph_RPQMatrixIns (GrB_Vector w, const GrB_Matrix A);
-
-LAGRAPHX_PUBLIC
-GrB_Info LAGraph_RPQMatrixEstimate (float *estimate, float *estimate2, GrB_Vector outs, GrB_Vector ins);
-
-LAGRAPHX_PUBLIC
-GrB_Info LAGraph_RPQMatrix_Alt (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals);
-
-LAGRAPHX_PUBLIC
-GrB_Info LAGraph_RPQMatrix_Seq (GrB_Matrix lhs, GrB_Matrix rhs, GrB_Matrix *res, uint64_t *nvals);
-
-LAGRAPHX_PUBLIC
-GrB_Info LAGraph_RPQMatrix_ExtractRandom (GrB_Matrix rhs, GrB_Matrix *srhs, uint64_t seed);
-
-LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrix_reduce(
     GrB_Index *res,
     GrB_Matrix mat,
@@ -1032,6 +1014,21 @@ GrB_Info LAGraph_RPQMatrix_reduce(
                         // 0 --- reduce by row
                         // 1 --- reduce by col
 ) ;
+
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_reduce_count_vector(GrB_Vector *res, GrB_Matrix mat, uint8_t reduce_type) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_extended_count_vectors(GrB_Vector *row_extended, GrB_Vector *col_extended, GrB_Matrix mat, GrB_Vector row_counts, GrB_Vector col_counts) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_count_vector_dot(double *res, GrB_Vector lhs, GrB_Vector rhs) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_count_vector_mnc_matmul_nnz(double *res, GrB_Vector lhs_rows, GrB_Vector lhs_cols, GrB_Vector rhs_rows, GrB_Vector rhs_cols, GrB_Vector lhs_col_extended, GrB_Vector rhs_row_extended) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_count_vector_sum(double *res, GrB_Vector vector) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_count_vector_scale(GrB_Vector *res, GrB_Vector vector, double scale, double cap) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_count_vector_mnc_add(GrB_Vector *res, GrB_Vector lhs, GrB_Vector rhs, double lambda, double cap) ;
 
 
 //****************************************************************************
