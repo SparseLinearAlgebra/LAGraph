@@ -668,6 +668,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     TRY(get_new_rules(rules, rules_count, to_new_symbols_map, new_symbols_amount,
                       &new_rules, &new_rules_count, msg, opt_mask));
 
+    int32_t new_S = to_new_symbols_map[0].base_index;
+
     // Arrays for processing rules
     size_t eps_rules[new_rules_count], eps_rules_count = 0;   // [Variable -> eps]
     size_t term_rules[new_rules_count], term_rules_count = 0; // [Variable -> term]
@@ -783,14 +785,14 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     }
 
     for (int32_t i = 0; i < src_count; i++) {
-        GrB_Matrix_setElement(TSrc[0]->base, true, src[i], src[i]);
+        GrB_Matrix_setElement(TSrc[new_S]->base, true, src[i], src[i]);
     }
-    TRY(CFL_matrix_update(TSrc[0]));
+    TRY(CFL_matrix_update(TSrc[new_S]));
 
     TRY(CFL_matrix_create(&MSrc, n, n));
     TRY(CFL_matrix_create(&M, n, n));
     TRY(CFL_matrix_create(&A, n, n));
-    TRY(CFL_dup(MSrc, TSrc[0], opt_mask));
+    TRY(CFL_dup(MSrc, TSrc[new_S], opt_mask));
     TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
     // Rule [Variable -> term]
@@ -863,7 +865,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         }
     }
 
-    GRB_TRY(CFL_mxm(MSrc, MSrc, T[0], false, false, opt_mask));
+    GRB_TRY(CFL_mxm(MSrc, MSrc, T[new_S], false, false, opt_mask));
 
     #ifdef BENCH_CFL_REACHBILITY
     printf("\nmxm1: %.3f, vxm: %.3f, dia: %.3f, upd: %.3f\nmxm2: %.3f, ws1: %.3f, ws2: %.3f, ws3: %.3f\n",
