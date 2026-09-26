@@ -686,7 +686,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     rule_error_s nonterm_err = {0};
     rule_error_s invalid_err = {0};
 
-    for (size_t i = 0; i < rules_count; i++) {
+    for (size_t i = 0; i < new_rules_count; i++) {
         LAGraph_rule_EWCNF rule = new_rules[i];
 
         bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
