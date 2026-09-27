@@ -29,49 +29,60 @@
 #include <LAGraphX.h>
 
 //Merging two ordered arrays of internal vertices in the add function
-static GrB_Index* merge_all_paths(size_t* n, const GrB_Index* a, const size_t na, const GrB_Index* b, const size_t nb)
+static GrB_Index* merge_all_paths(size_t* n, GrB_Index* a, const size_t na, GrB_Index* b, const size_t nb)
 {  
   GrB_Index *tmp = malloc((na + nb) * sizeof(GrB_Index));
   
   size_t ia = 0, ib = 0, outn = 0;
   // Handle the first elements of both arrays to initialize tmp and avoid checking if tmp is empty in the loop
-  if (na > 0 && nb > 0) {
-    if (a[0] < b[0]) {
-      tmp[outn++] = a[ia++];
-    } else if (b[0] < a[0]) {
-      tmp[outn++] = b[ib++];
-    } else {
-      tmp[outn++] = a[ia++];
-      ib++;
-    }
-  } else if (na > 0) {
+  if (a[0] < b[0]) {
     tmp[outn++] = a[ia++];
-  } else {
+  } else if (b[0] < a[0]) {
     tmp[outn++] = b[ib++];
+  } else {
+    tmp[outn++] = a[ia++];
+    ib++;
   }
   
   while (ia < na && ib < nb) {
     GrB_Index va = a[ia];
     GrB_Index vb = b[ib];
     if (va < vb) {
-      if (tmp[outn-1] != va) tmp[outn++] = va;
+      tmp[outn++] = va;
       ia++;
     } else if (vb < va) {
-      if (tmp[outn-1] != vb) tmp[outn++] = vb;
+      tmp[outn++] = vb;
       ib++;
     } else {
-      if (tmp[outn-1] != va) tmp[outn++] = va;
+      tmp[outn++] = va;
       ia++; ib++;
     }
   }
-  while (ia < na) {
-    GrB_Index va = a[ia++];
-    if (tmp[outn-1] != va) tmp[outn++] = va;
+  
+  if (ia < na) {
+      if (tmp[outn-1] != a[ia]) {
+          tmp[outn++] = a[ia];
+      }
+      ++ia;
+      size_t rem = na - ia;
+      if (rem > 0) {
+          memcpy(tmp + outn, a + ia, rem * sizeof(GrB_Index));
+          outn += rem;
+      }
   }
-  while (ib < nb) {
-    GrB_Index vb = b[ib++];
-    if (tmp[outn-1] != vb) tmp[outn++] = vb;
+  if (ib < nb) {
+      if (tmp[outn-1] != b[ib]) {
+          tmp[outn++] = b[ib];
+      }
+      ++ib;
+      size_t rem = nb - ib;
+      if (rem > 0) {
+          memcpy(tmp + outn, b + ib, rem * sizeof(GrB_Index));
+          outn += rem;
+      }
   }
+  free(a);
+  free(b);
   
   tmp = realloc(tmp, outn * sizeof(GrB_Index));
   *n = outn;
@@ -79,9 +90,8 @@ static GrB_Index* merge_all_paths(size_t* n, const GrB_Index* a, const size_t na
   return tmp;
 }
 
-static GrB_Index* insert_all_paths(size_t* n, const GrB_Index* arr, size_t len, GrB_Index value)
+static GrB_Index* insert_all_paths(size_t* n, GrB_Index* arr, const size_t len, const GrB_Index value)
 {
-  // Array is ordered, so we can use binary search to find the position to insert value
   size_t l = 0, r = len, m = 0;
   while (l < r) {
     m = l + (r - l) / 2;
@@ -89,21 +99,17 @@ static GrB_Index* insert_all_paths(size_t* n, const GrB_Index* arr, size_t len, 
     else r = m;
   }
 
-    // If value is already in the array, return the original array
-    if (l < len && arr[l] == value) {
-        GrB_Index *tmp = malloc(len * sizeof(GrB_Index));
-        memcpy(tmp, arr, len * sizeof(GrB_Index));
-        *n = len;
-        return tmp;
-    }
+  if (l < len && arr[l] == value) {
+    *n = len;
+    return arr;
+  }
 
-    GrB_Index *tmp = malloc((len + 1) * sizeof(GrB_Index));
-    memcpy(tmp, arr, l * sizeof(GrB_Index));
-    tmp[l] = value;
-    memcpy(tmp + l + 1, arr + l, (len - l) * sizeof(GrB_Index));
+  GrB_Index *tmp = realloc(arr, (len + 1) * sizeof(GrB_Index));
+  memmove(tmp + l + 1, tmp + l, (len - l) * sizeof(GrB_Index));
+  tmp[l] = value;
 
-    *n = len + 1;
-    return tmp;
+  *n = len + 1;
+  return tmp;
 }
 
 static void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
@@ -134,14 +140,7 @@ static void add_all_paths(AllPathsElem *z, AllPathsElem *x, AllPathsElem *y)
     } else {
         temp.data.middle = merge_all_paths(&temp.n, x->data.middle, x->n, y->data.middle, y->n);
     }
-
-    if(x->n > 1){
-      free(x->data.middle);
-    }
-    if(y->n > 1){
-      free(y->data.middle);
-    }
-
+    
     *z = temp;
 }
 
