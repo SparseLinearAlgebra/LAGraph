@@ -862,16 +862,19 @@ int LAGraph_2RegularPathQuery   // nodes reachable from the starting by the
 #define QUICK_PATH_COUNT 1
 
 typedef uint64_t Vertex ;
+typedef uint64_t Label ;
 
 typedef struct PathExtra {
     size_t len;
+    // Vertices ~ label-vertex-...-label-vertex sequence.
     Vertex vertices[0];
 } PathExtra ;
 
 typedef struct {
-        Vertex vertices[QUICK_PATH_LENGTH];
-        size_t vertex_count;
-        PathExtra *extra;
+    // Vertices ~ vertex-...-label-vertex sequence.
+    Vertex vertices[2 * QUICK_PATH_LENGTH - 1];
+    size_t vertex_count;
+    PathExtra *extra;
 } Path ;
 
 LAGRAPHX_PUBLIC

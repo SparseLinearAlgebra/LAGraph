@@ -188,13 +188,11 @@ MultiplePaths multiple_paths_identity ;
 GrB_Type multiple_paths ;
 GrB_BinaryOp combine_multiple_paths_op ;
 GrB_Monoid combine_multiple_paths ;
-GrB_BinaryOp first_multiple_paths ;
 GrB_BinaryOp second_multiple_paths ;
-GrB_Semiring first_combine_multiple_paths ;
 GrB_Semiring second_combine_multiple_paths ;
-GrB_IndexUnaryOp extend_multiple_paths ;
-GrB_IndexUnaryOp extend_multiple_simple ;
-GrB_IndexUnaryOp extend_multiple_trails ;
+GxB_IndexBinaryOp extend_multiple_paths ;
+GxB_IndexBinaryOp extend_multiple_simple ;
+GxB_IndexBinaryOp extend_multiple_trails ;
 
 
 
@@ -210,12 +208,13 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "#define PATHS_PER_POINT_LIMIT " RPQ_STRINGIFY(PATHS_PER_POINT_LIMIT) "\n"\
 "#define RPQ_MAX_PATH_LENGTH " RPQ_STRINGIFY(RPQ_MAX_PATH_LENGTH) "\n" \
 "typedef uint64_t Vertex;\n"                                           \
+"typedef uint64_t Label;\n"                                            \
 "typedef struct PathExtra {\n"                                         \
 "    size_t len;\n"                                                    \
 "    Vertex vertices[];\n"                                             \
 "} PathExtra;\n"                                                       \
 "typedef struct Path {\n"                                              \
-"    Vertex vertices[QUICK_PATH_LENGTH];\n"                            \
+"    Vertex vertices[2 * QUICK_PATH_LENGTH - 1];\n"                      \
 "    size_t vertex_count;\n"                                           \
 "    PathExtra *extra;\n"                                              \
 "} Path;\n"                                                           \
@@ -237,8 +236,13 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "}\n"                                                                  \
 "static Vertex path_get_vertex_jit(const Path *path, size_t i)\n"       \
 "{\n"                                                                  \
-"    if (i < QUICK_PATH_LENGTH) return path->vertices[i];\n"            \
-"    return path->extra->vertices[i - QUICK_PATH_LENGTH];\n"           \
+"    if (i < QUICK_PATH_LENGTH) return path->vertices[2 * i];\n"         \
+"    return path->extra->vertices[2 * (i - QUICK_PATH_LENGTH) + 1];\n"   \
+"}\n"                                                                    \
+"static Label path_get_label_jit(const Path *path, size_t i)\n"          \
+"{\n"                                                                    \
+"    if (i < QUICK_PATH_LENGTH) return path->vertices[2 * i - 1];\n"     \
+"    return path->extra->vertices[2 * (i - QUICK_PATH_LENGTH)];\n"       \
 "}\n"                                                                  \
 "static bool path_is_empty_jit(const Path *path)\n"                    \
 "{\n"                                                                  \
@@ -263,12 +267,12 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "        path->vertex_count < RPQ_MAX_PATH_LENGTH;\n"                   \
 "}\n"                                                                  \
 "static PathExtra *path_extra_temp_alloc_copy_plus_one_jit(\n"          \
-"    const Path *src, Vertex vertex)\n"                                 \
+"    const Path *src, Vertex vertex, Label label)\n"                     \
 "{\n"                                                                  \
 "    size_t old_extra_len = path_extra_len_jit(src);\n"                 \
 "    size_t new_extra_len = old_extra_len + 1;\n"                       \
 "    size_t nbytes = sizeof(PathExtra) +\n"                             \
-"        new_extra_len * sizeof(Vertex);\n"                             \
+"        new_extra_len * (sizeof(Vertex) + sizeof(Label));\n"            \
 "    PathExtra *extra = (PathExtra *)\n"                                \
 "        LAGraph_Rpq_jit_temp_calloc_bytes(nbytes);\n"                  \
 "    if (extra == NULL) return NULL;\n"                                  \
@@ -276,22 +280,24 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "    if (old_extra_len > 0)\n"                                          \
 "    {\n"                                                              \
 "        memcpy(extra->vertices, src->extra->vertices,\n"               \
-"            old_extra_len * sizeof(Vertex));\n"                        \
+"            old_extra_len * (sizeof(Vertex) + sizeof(Label)));\n"       \
 "    }\n"                                                              \
-"    extra->vertices[old_extra_len] = vertex;\n"                        \
+"    extra->vertices[2 * old_extra_len] = label;\n"                      \
+"    extra->vertices[2 * old_extra_len + 1] = vertex;\n"                 \
 "    return extra;\n"                                                   \
 "}\n"                                                                  \
-"static void path_extend_jit(Path *path, Vertex vertex)\n"              \
+"static void path_extend_jit(Path *path, Vertex vertex, Label label)\n"  \
 "{\n"                                                                  \
 "    if (path->vertex_count == 0) return;\n"                            \
 "    if (path->vertex_count < QUICK_PATH_LENGTH)\n"                     \
 "    {\n"                                                              \
-"        path->vertices[path->vertex_count] = vertex;\n"                \
+"        path->vertices[2 * path->vertex_count - 1] = label;\n"          \
+"        path->vertices[2 * path->vertex_count] = vertex;\n"             \
 "        path->vertex_count++;\n"                                       \
 "        return;\n"                                                     \
 "    }\n"                                                              \
 "    PathExtra *new_extra =\n"                                          \
-"        path_extra_temp_alloc_copy_plus_one_jit(path, vertex);\n"      \
+"        path_extra_temp_alloc_copy_plus_one_jit(path, vertex, label);\n" \
 "    if (new_extra == NULL)\n"                                          \
 "    {\n"                                                              \
 "        path->vertex_count = 0;\n"                                     \
@@ -385,27 +391,20 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "    return false;\n"                                                   \
 "}\n"                                                                  \
 "static bool path_extending_will_add_repeated_edge_jit(\n"              \
-"    const Path *path, Vertex vertex_2)\n"                              \
+"    const Path *path, Vertex vertex_2, Label label_2)\n"                \
 "{\n"                                                                  \
 "    if (path->vertex_count == 0) return false;\n"                      \
 "    Vertex vertex_1 = path_last_vertex_jit(path);\n"                   \
 "    for (size_t i = 0; i + 1 < path->vertex_count; i++)\n"             \
 "    {\n"                                                              \
 "        if (path_get_vertex_jit(path, i) == vertex_1 &&\n"             \
-"            path_get_vertex_jit(path, i + 1) == vertex_2)\n"           \
+"            path_get_label_jit(path, i + 1) == label_2 &&\n"            \
+"            path_get_vertex_jit(path, i + 1) == vertex_2)\n"            \
 "        {\n"                                                          \
 "            return true;\n"                                            \
 "        }\n"                                                          \
 "    }\n"                                                              \
 "    return false;\n"                                                   \
-"}\n"
-
-#define FIRST_MULTIPLE_PATHS_DEFN                                      \
-"void first_multiple_paths_f(MultiplePaths *z, MultiplePaths *x,\n"     \
-"    bool *_y)\n"                                                       \
-"{\n"                                                                  \
-"    (void) _y;\n"                                                      \
-"    *z = *x;\n"                                                        \
 "}\n"
 
 #define SECOND_MULTIPLE_PATHS_DEFN                                     \
@@ -437,74 +436,80 @@ GrB_IndexUnaryOp extend_multiple_trails ;
 "}\n"
 
 #define EXTEND_MULTIPLE_PATHS_DEFN                                     \
-"void extend_multiple_paths_f(MultiplePaths *z,\n"                     \
-"    const MultiplePaths *x, GrB_Index _row, GrB_Index col,\n"          \
-"    const void *_y)\n"                                                 \
-"{\n"                                                                  \
+"void extend_multiple_paths_f(MultiplePaths *z,\n"                      \
+"    const MultiplePaths *x, GrB_Index ix, GrB_Index jx,\n"             \
+"    const MultiplePaths *y, GrB_Index iy, GrB_Index jy, const Label *theta)\n" \
+"{\n"                                                                   \
 "    MultiplePaths src = *x;\n"                                         \
-"    (void) _row;\n"                                                    \
-"    (void) _y;\n"                                                      \
+"    (void) ix;\n"                                                      \
+"    (void) jx;\n"                                                      \
+"    (void) y;\n"                                                       \
+"    (void) iy;\n"                                                      \
 "    if (!multiple_paths_prepare_jit(z, src.path_count)) return;\n"     \
 "    for (size_t i = 0; i < src.path_count; i++)\n"                     \
-"    {\n"                                                              \
-"        Path path = *multiple_paths_nth_const_jit(&src, i);\n"        \
+"    {\n"                                                               \
+"        Path path = *multiple_paths_nth_const_jit(&src, i);\n"         \
 "        if (!all_paths_can_extend_jit(&path)) continue;\n"            \
-"        path_extend_jit(&path, (Vertex) col);\n"                      \
+"        path_extend_jit(&path, (Vertex) jy, *theta);\n"                \
 "        if (!path_is_empty_jit(&path))\n"                              \
-"        {\n"                                                          \
-"            multiple_paths_append_unchecked_jit(z, &path);\n"         \
-"        }\n"                                                          \
-"    }\n"                                                              \
+"        {\n"                                                           \
+"            multiple_paths_append_unchecked_jit(z, &path);\n"          \
+"        }\n"                                                           \
+"    }\n"                                                               \
 "}\n"
 
 #define EXTEND_MULTIPLE_SIMPLE_DEFN                                    \
-"void extend_multiple_simple_f(MultiplePaths *z,\n"                    \
-"    const MultiplePaths *x, GrB_Index _row, GrB_Index col,\n"          \
-"    const void *_y)\n"                                                 \
-"{\n"                                                                  \
-"    MultiplePaths src = *x;\n"                                         \
-"    (void) _row;\n"                                                    \
-"    (void) _y;\n"                                                      \
-"    if (!multiple_paths_prepare_jit(z, src.path_count)) return;\n"     \
-"    for (size_t i = 0; i < src.path_count; i++)\n"                     \
-"    {\n"                                                              \
-"        Path path = *multiple_paths_nth_const_jit(&src, i);\n"        \
-"        if (path_extending_will_add_repeated_vertex_jit(\n"            \
-"            &path, (Vertex) col))\n"                                   \
-"        {\n"                                                          \
-"            continue;\n"                                               \
-"        }\n"                                                          \
-"        path_extend_jit(&path, (Vertex) col);\n"                      \
-"        if (!path_is_empty_jit(&path))\n"                              \
-"        {\n"                                                          \
-"            multiple_paths_append_unchecked_jit(z, &path);\n"         \
-"        }\n"                                                          \
-"    }\n"                                                              \
+"void extend_multiple_simple_f(MultiplePaths *z,\n"                      \
+"    const MultiplePaths *x, GrB_Index ix, GrB_Index jx,\n"              \
+"    const MultiplePaths *y, GrB_Index iy, GrB_Index jy, const Label *theta)\n" \
+"{\n"                                                                    \
+"    MultiplePaths src = *x;\n"                                          \
+"    (void) ix;\n"                                                       \
+"    (void) jx;\n"                                                       \
+"    (void) y;\n"                                                        \
+"    (void) iy;\n"                                                       \
+"    if (!multiple_paths_prepare_jit(z, src.path_count)) return;\n"      \
+"    for (size_t i = 0; i < src.path_count; i++)\n"                      \
+"    {\n"                                                                \
+"        Path path = *multiple_paths_nth_const_jit(&src, i);\n"          \
+"        if (path_extending_will_add_repeated_vertex_jit(\n"              \
+"            &path, (Vertex) jy))\n"                                     \
+"        {\n"                                                            \
+"            continue;\n"                                                \
+"        }\n"                                                            \
+"        path_extend_jit(&path, (Vertex) jy, *theta);\n"                 \
+"        if (!path_is_empty_jit(&path))\n"                               \
+"        {\n"                                                            \
+"            multiple_paths_append_unchecked_jit(z, &path);\n"           \
+"        }\n"                                                            \
+"    }\n"                                                                \
 "}\n"
 
 #define EXTEND_MULTIPLE_TRAILS_DEFN                                    \
-"void extend_multiple_trails_f(MultiplePaths *z,\n"                    \
-"    const MultiplePaths *x, GrB_Index _row, GrB_Index col,\n"          \
-"    const void *y)\n"                                                  \
-"{\n"                                                                  \
+"void extend_multiple_trails_f(MultiplePaths *z,\n"                     \
+"    const MultiplePaths *x, GrB_Index ix, GrB_Index jx,\n"             \
+"    const MultiplePaths *y, GrB_Index iy, GrB_Index jy, const Label *theta)\n" \
+"{\n"                                                                   \
 "    MultiplePaths src = *x;\n"                                         \
-"    (void) _row;\n"                                                    \
+"    (void) ix;\n"                                                      \
+"    (void) jx;\n"                                                      \
 "    (void) y;\n"                                                       \
+"    (void) iy;\n"                                                      \
 "    if (!multiple_paths_prepare_jit(z, src.path_count)) return;\n"     \
 "    for (size_t i = 0; i < src.path_count; i++)\n"                     \
-"    {\n"                                                              \
-"        Path path = *multiple_paths_nth_const_jit(&src, i);\n"        \
+"    {\n"                                                               \
+"        Path path = *multiple_paths_nth_const_jit(&src, i);\n"         \
 "        if (path_extending_will_add_repeated_edge_jit(&path,\n"        \
-"            (Vertex) col))\n"                                          \
-"        {\n"                                                          \
+"            (Vertex) jy, *theta))\n"                                   \
+"        {\n"                                                           \
 "            continue;\n"                                               \
-"        }\n"                                                          \
-"        path_extend_jit(&path, (Vertex) col);\n"                      \
+"        }\n"                                                           \
+"        path_extend_jit(&path, (Vertex) jy, *theta);\n"                \
 "        if (!path_is_empty_jit(&path))\n"                              \
-"        {\n"                                                          \
-"            multiple_paths_append_unchecked_jit(z, &path);\n"         \
-"        }\n"                                                          \
-"    }\n"                                                              \
+"        {\n"                                                           \
+"            multiple_paths_append_unchecked_jit(z, &path);\n"          \
+"        }\n"                                                           \
+"    }\n"                                                               \
 "}\n"
 //
 
@@ -526,11 +531,25 @@ static Vertex path_get_vertex (const Path *path, size_t i)
 
     if (i < QUICK_PATH_LENGTH)
     {
-        return path->vertices[i] ;
+        return path->vertices[2 * i] ;
     }
 
     assert (path->extra != NULL) ;
-    return path->extra->vertices[i - QUICK_PATH_LENGTH] ;
+    return path->extra->vertices[2 * (i - QUICK_PATH_LENGTH) + 1] ;
+}
+
+static Label path_get_label (const Path *path, size_t i)
+{
+    assert (path != NULL) ;
+    assert (i < path->vertex_count) ;
+
+    if (i < QUICK_PATH_LENGTH)
+    {
+        return path->vertices[2 * i - 1] ;
+    }
+
+    assert (path->extra != NULL) ;
+    return path->extra->vertices[2 * (i - QUICK_PATH_LENGTH)] ;
 }
 
 static bool path_is_empty (const Path *path)
@@ -563,7 +582,8 @@ static bool all_paths_can_extend (const Path *path)
 static PathExtra *path_extra_temp_alloc_copy_plus_one
 (
     const Path *src,
-    Vertex vertex
+    Vertex vertex,
+    Label label
 )
 {
     size_t old_extra_len ;
@@ -573,7 +593,7 @@ static PathExtra *path_extra_temp_alloc_copy_plus_one
 
     old_extra_len = path_extra_len (src) ;
     new_extra_len = old_extra_len + 1 ;
-    nbytes = sizeof (PathExtra) + new_extra_len * sizeof (Vertex) ;
+    nbytes = sizeof (PathExtra) + new_extra_len * (sizeof (Vertex) + sizeof(Label)) ;
 
     extra = (PathExtra *) temp_calloc_bytes (nbytes) ;
     if (extra == NULL)
@@ -587,14 +607,15 @@ static PathExtra *path_extra_temp_alloc_copy_plus_one
     {
         assert (src->extra != NULL) ;
         memcpy (extra->vertices, src->extra->vertices,
-            old_extra_len * sizeof (Vertex)) ;
+            old_extra_len * (sizeof (Vertex) + sizeof (Label))) ;
     }
 
-    extra->vertices[old_extra_len] = vertex ;
+    extra->vertices[2 * old_extra_len] = label ;
+    extra->vertices[2 * old_extra_len + 1] = vertex ;
     return extra ;
 }
 
-static void path_extend (Path *path, Vertex vertex)
+static void path_extend (Path *path, Vertex vertex, Label label)
 {
     PathExtra *new_extra ;
 
@@ -605,12 +626,13 @@ static void path_extend (Path *path, Vertex vertex)
 
     if (path->vertex_count < QUICK_PATH_LENGTH)
     {
-        path->vertices[path->vertex_count] = vertex ;
+        path->vertices[2 * path->vertex_count - 1] = label ;
+        path->vertices[2 * path->vertex_count] = vertex ;
         path->vertex_count++ ;
         return ;
     }
 
-    new_extra = path_extra_temp_alloc_copy_plus_one (path, vertex) ;
+    new_extra = path_extra_temp_alloc_copy_plus_one (path, vertex, label) ;
     if (new_extra == NULL)
     {
         path->vertex_count = 0 ;
@@ -639,7 +661,7 @@ static int path_clone_heap (Path *dst, const Path *src, char *msg)
         return GrB_SUCCESS ;
     }
 
-    nbytes = sizeof (PathExtra) + extra_len * sizeof (Vertex) ;
+    nbytes = sizeof (PathExtra) + extra_len * (sizeof (Vertex) + sizeof (Label)) ;
     info = LAGraph_Malloc ((void **) &dst->extra, nbytes, sizeof (char), msg) ;
     if (info != GrB_SUCCESS)
     {
@@ -648,7 +670,7 @@ static int path_clone_heap (Path *dst, const Path *src, char *msg)
 
     dst->extra->len = extra_len ;
     memcpy (dst->extra->vertices, src->extra->vertices,
-        extra_len * sizeof (Vertex)) ;
+        extra_len * (sizeof (Vertex) + sizeof(Label))) ;
     return GrB_SUCCESS ;
 }
 
@@ -696,7 +718,7 @@ void Path_print (const Path *x)
 
         if (i != x->vertex_count - 1)
         {
-            printf ("-") ;
+            printf ("-[%llu]-", (unsigned long long) (path_get_label (x, i + 1) + 1)) ;
         }
     }
 
@@ -828,12 +850,6 @@ static void multiple_paths_append_unchecked (MultiplePaths *x, const Path *path)
 // Due to graphblas api, we must handle z param like it's empty.
 // It should just store result (z = f(x)).
 // So we can't use it for any checks, or use its fields for something.
-void first_multiple_paths_f(MultiplePaths *z, MultiplePaths *x, bool *_y)
-{
-    (void) _y ;
-    *z = *x ;
-}
-
 void second_multiple_paths_f(MultiplePaths *z, bool *_x, MultiplePaths *y)
 {
     (void) _x ;
@@ -870,12 +886,14 @@ void combine_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, const Mu
 // procedure for searching all paths satisfying the constraints.
 // It means it may not finish if there is loops.
 
-void extend_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index _row, GrB_Index col, const void *_y)
+void extend_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index ix, GrB_Index jx, const MultiplePaths *y, GrB_Index iy, GrB_Index jy, const Label *theta)
 {
     MultiplePaths src = *x ;
 
-    (void) _row ;
-    (void) _y ;
+    (void) ix ;
+    (void) jx ;
+    (void) y ;
+    (void) iy ;
 
     if (!multiple_paths_prepare (z, src.path_count))
     {
@@ -890,7 +908,7 @@ void extend_multiple_paths_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index
             continue ;
         }
 
-        path_extend (&path, (Vertex) col) ;
+        path_extend (&path, (Vertex) jy, *theta) ;
 
         if (!path_is_empty (&path))
         {
@@ -928,12 +946,14 @@ static inline bool path_extending_will_add_repeated_vertex(const Path *path, Ver
     return false ;
 }
 
-void extend_multiple_simple_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index _row, GrB_Index col, const void *_y)
+void extend_multiple_simple_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index ix, GrB_Index jx, const MultiplePaths *y, GrB_Index iy, GrB_Index jy, const Label *theta)
 {
     MultiplePaths src = *x ;
 
-    (void) _row ;
-    (void) _y ;
+    (void) ix ;
+    (void) jx ;
+    (void) y ;
+    (void) iy ;
 
     if (!multiple_paths_prepare (z, src.path_count))
     {
@@ -945,12 +965,12 @@ void extend_multiple_simple_f(MultiplePaths *z, const MultiplePaths *x, GrB_Inde
         Path path = *multiple_paths_nth_const (&src, i) ;
 
         if (path_extending_will_add_repeated_vertex (&path,
-            (Vertex) col))
+            (Vertex) jy))
         {
             continue ;
         }
 
-        path_extend (&path, (Vertex) col) ;
+        path_extend (&path, (Vertex) jy, *theta) ;
         if (!path_is_empty (&path))
         {
             multiple_paths_append_unchecked (z, &path) ;
@@ -962,19 +982,20 @@ void extend_multiple_simple_f(MultiplePaths *z, const MultiplePaths *x, GrB_Inde
 // ALL TRAILS
 //
 
-static inline bool path_extending_will_add_repeated_edge(const Path *path, Vertex vertex_2)
+static inline bool path_extending_will_add_repeated_edge(const Path *path, Vertex vertex_2, Label label_2)
 {
     if (path->vertex_count == 0)
     {
         return false ;
     }
 
-    // We identify edges as pairs of vertices.
+    // We identify edges as triples of a vertex, a label and a vertex.
     Vertex vertex_1 = path_last_vertex (path) ;
 
     for (size_t i = 0 ; i + 1 < path->vertex_count ; i++)
     {
         if (path_get_vertex (path, i) == vertex_1 &&
+            path_get_label (path, i + 1) == label_2 &&
             path_get_vertex (path, i + 1) == vertex_2)
         {
             return true ;
@@ -984,12 +1005,14 @@ static inline bool path_extending_will_add_repeated_edge(const Path *path, Verte
     return false ;
 }
 
-void extend_multiple_trails_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index _row, GrB_Index col, const void *y)
+void extend_multiple_trails_f(MultiplePaths *z, const MultiplePaths *x, GrB_Index ix, GrB_Index jx, const MultiplePaths *y, GrB_Index iy, GrB_Index jy, const Label *theta)
 {
     MultiplePaths src = *x ;
 
-    (void) _row ;
+    (void) ix ;
+    (void) jx ;
     (void) y ;
+    (void) iy ;
 
     if (!multiple_paths_prepare (z, src.path_count))
     {
@@ -1000,12 +1023,12 @@ void extend_multiple_trails_f(MultiplePaths *z, const MultiplePaths *x, GrB_Inde
     {
         Path path = *multiple_paths_nth_const (&src, i) ;
 
-        if (path_extending_will_add_repeated_edge (&path, (Vertex) col))
+        if (path_extending_will_add_repeated_edge (&path, (Vertex) jy, *theta))
         {
             continue ;
         }
 
-        path_extend (&path, (Vertex) col) ;
+        path_extend (&path, (Vertex) jy, *theta) ;
         if (!path_is_empty (&path))
         {
             multiple_paths_append_unchecked (z, &path) ;
@@ -1109,6 +1132,77 @@ static int final_state_was_visited
     return GrB_SUCCESS ;
 }
 
+static void free_label_matrices
+(
+    GrB_Matrix **AP,
+    GrB_Matrix **APT,
+    size_t nl
+)
+{
+    if (*APT != NULL)
+    {
+        for (size_t i = 0 ; i < nl ; i++)
+        {
+            if (*AP != NULL && (*APT)[i] == (*AP)[i])
+            {
+                (*APT)[i] = NULL ;
+            }
+
+            GrB_free (&((*APT)[i])) ;
+        }
+
+        LAGraph_Free ((void **) APT, NULL) ;
+    }
+
+    if (*AP != NULL)
+    {
+        for (size_t i = 0 ; i < nl ; i++)
+        {
+            GrB_free (&((*AP)[i])) ;
+        }
+
+        LAGraph_Free ((void **) AP, NULL) ;
+    }
+}
+
+static void free_label_semirings
+(
+    GrB_Scalar **labels,
+    GrB_BinaryOp **extend_ops,
+    GrB_Semiring **extend_semirings,
+    size_t nl
+)
+{
+    if (*extend_semirings != NULL)
+    {
+        for (size_t i = 0 ; i < nl ; i++)
+        {
+            GrB_free (&((*extend_semirings)[i])) ;
+        }
+
+        LAGraph_Free ((void **) extend_semirings, NULL) ;
+    }
+
+    if (*extend_ops != NULL)
+    {
+        for (size_t i = 0 ; i < nl ; i++)
+        {
+            GrB_free (&((*extend_ops)[i])) ;
+        }
+
+        LAGraph_Free ((void **) extend_ops, NULL) ;
+    }
+
+    if (*labels != NULL)
+    {
+        for (size_t i = 0 ; i < nl ; i++)
+        {
+            GrB_free (&((*labels)[i])) ;
+        }
+
+        LAGraph_Free ((void **) labels, NULL) ;
+    }
+}
 
 #undef LG_FREE_WORK
 #undef LG_FREE_ALL
@@ -1125,6 +1219,9 @@ static int final_state_was_visited
     LAGraph_Free ((void **) &X, NULL) ;         \
     LAGraph_Free ((void **) &I, NULL) ;         \
     LAGraph_Free ((void **) &J, NULL) ;         \
+    free_label_semirings (&labels, &extend_ops, \
+        &extend_semirings, nl) ;                \
+    free_label_matrices (&AP, &APT, nl) ;       \
     temp_arena_destroy () ;                     \
 }
 
@@ -1159,7 +1256,7 @@ static int LAGraph_2Rpq
     bool ignore_visited,        // use mask to avoid processing the same (q, v)
     uint64_t limit,             // maximum path count
     char *msg,                  // LAGraph output message
-    GrB_IndexUnaryOp op         // index unary op for a specific semantic
+    GxB_IndexBinaryOp op        // index binary op for a specific semantic
 )
 {
     //--------------------------------------------------------------------------
@@ -1167,6 +1264,9 @@ static int LAGraph_2Rpq
     //--------------------------------------------------------------------------
 
     LG_CLEAR_MSG ;
+
+    if (paths != NULL) *paths = NULL ;
+    if (path_count != NULL) *path_count = 0 ;
 
     GrB_Matrix frontier = NULL ;         // traversal frontier representing
                                          // correspondence between NFA states
@@ -1184,7 +1284,6 @@ static int LAGraph_2Rpq
     GrB_Index cols = 0 ;                 // utility matrix column count
 
     // TODO: This names might be too short.
-    GrB_Semiring sr1 = first_combine_multiple_paths ;
     GrB_Semiring sr2 = second_combine_multiple_paths ;
     GrB_BinaryOp acc = combine_multiple_paths_op ;
 
@@ -1192,6 +1291,13 @@ static int LAGraph_2Rpq
     GrB_Matrix *AT = NULL ;
     GrB_Matrix *B = NULL ;
     GrB_Matrix *BT = NULL ;
+
+    GrB_Matrix *AP = NULL ;
+    GrB_Matrix *APT = NULL ;
+
+    GrB_Scalar *labels = NULL ;
+    GrB_BinaryOp *extend_ops = NULL ;
+    GrB_Semiring *extend_semirings = NULL ;
 
     MultiplePaths *X = NULL ;
     GrB_Index *I = NULL ;
@@ -1278,6 +1384,58 @@ static int LAGraph_2Rpq
             // descriptor
             BT[i] = R[i]->AT ;
         }
+    }
+
+    // SuiteSparse bug: the generic index-binary mxm kernel sizes and casts
+    // its operand buffers as if the operands were not flipped, so an operator
+    // whose x and y types differ corrupts memory when the JIT is off. Feeding
+    // the graph pattern as an iso multiple_paths matrix keeps both operand
+    // types equal, which makes the mis-sized buffer harmless.
+    LG_TRY (LAGraph_Calloc ((void **) &AP, nl, sizeof (GrB_Matrix), msg)) ;
+    LG_TRY (LAGraph_Calloc ((void **) &APT, nl, sizeof (GrB_Matrix), msg)) ;
+
+    for (size_t i = 0 ; i < nl ; i++)
+    {
+        if (A[i] == NULL) continue ;
+
+        GRB_TRY (GrB_Matrix_nrows (&rows, A[i])) ;
+        GRB_TRY (GrB_Matrix_ncols (&cols, A[i])) ;
+        GRB_TRY (GrB_Matrix_new (&AP[i], multiple_paths, rows, cols)) ;
+        GRB_TRY (GrB_Matrix_assign_UDT (AP[i], A[i], GrB_NULL,
+            (void *) &multiple_paths_identity, GrB_ALL, rows, GrB_ALL, cols,
+            GrB_DESC_S)) ;
+
+        if (AT[i] == A[i])
+        {
+            APT[i] = AP[i] ;
+            continue ;
+        }
+
+        if (AT[i] == NULL) continue ;
+
+        GRB_TRY (GrB_Matrix_nrows (&rows, AT[i])) ;
+        GRB_TRY (GrB_Matrix_ncols (&cols, AT[i])) ;
+        GRB_TRY (GrB_Matrix_new (&APT[i], multiple_paths, rows, cols)) ;
+        GRB_TRY (GrB_Matrix_assign_UDT (APT[i], AT[i], GrB_NULL,
+            (void *) &multiple_paths_identity, GrB_ALL, rows, GrB_ALL, cols,
+            GrB_DESC_S)) ;
+    }
+
+    LG_TRY (LAGraph_Calloc ((void **) &labels, nl, sizeof (GrB_Scalar), msg)) ;
+    LG_TRY (LAGraph_Calloc ((void **) &extend_ops, nl, sizeof (GrB_BinaryOp),
+        msg)) ;
+    LG_TRY (LAGraph_Calloc ((void **) &extend_semirings, nl,
+        sizeof (GrB_Semiring), msg)) ;
+
+    for (size_t i = 0 ; i < nl ; i++)
+    {
+        if (A[i] == NULL || B[i] == NULL) continue ;
+
+        GRB_TRY (GrB_Scalar_new (&labels[i], GrB_UINT64)) ;
+        GRB_TRY (GrB_Scalar_setElement_UINT64 (labels[i], (uint64_t) i)) ;
+        GRB_TRY (GxB_BinaryOp_new_IndexOp (&extend_ops[i], op, labels[i])) ;
+        GRB_TRY (GrB_Semiring_new (&extend_semirings[i],
+            combine_multiple_paths, extend_ops[i])) ;
     }
 
     for (size_t i = 0 ; i < nl ; i++)
@@ -1543,19 +1701,19 @@ static int LAGraph_2Rpq
             // Traverse the graph
             if (!inverse_labels[i]) {
                 if (!inverse) {
-                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, extend_semirings[i], symbol_frontier, AP[i], desc_forward)) ;
                 } else if (AT[i]) {
-                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, extend_semirings[i], symbol_frontier, APT[i], desc_forward)) ;
                 } else {
-                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, extend_semirings[i], symbol_frontier, AP[i], desc_backward)) ;
                 }
             } else {
                 if (!inverse && AT[i]) {
-                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, AT[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, extend_semirings[i], symbol_frontier, APT[i], desc_forward)) ;
                 } else if (!inverse) {
-                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_backward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, extend_semirings[i], symbol_frontier, AP[i], desc_backward)) ;
                 } else {
-                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, sr1, symbol_frontier, A[i], desc_forward)) ;
+                    GRB_TRY (GrB_mxm (next_frontier, mask, acc, extend_semirings[i], symbol_frontier, AP[i], desc_forward)) ;
                 }
             }
 
@@ -1572,7 +1730,6 @@ static int LAGraph_2Rpq
             }
         }
 
-        GRB_TRY (GrB_apply (next_frontier, GrB_NULL, GrB_NULL, op, next_frontier, false, GrB_NULL)) ;
 
         // Handle oom
         LG_ASSERT_MSGF (!temp_alloc_failed (), GrB_OUT_OF_MEMORY,
@@ -1732,19 +1889,19 @@ int LAGraph_Rpq_initialize(char *msg)
 
         memset (&multiple_paths_identity, 0, sizeof (multiple_paths_identity)) ;
 
-        GRB_TRY (GxB_Type_new (&multiple_paths, sizeof (MultiplePaths), "MultiplePaths", MULTIPLE_PATHS_TYPE_DEFN)) ;
+        GRB_TRY (GrB_set (GrB_GLOBAL, (int32_t) GxB_JIT_OFF, GxB_JIT_C_CONTROL)) ;
+
+    GRB_TRY (GxB_Type_new (&multiple_paths, sizeof (MultiplePaths), "MultiplePaths", MULTIPLE_PATHS_TYPE_DEFN)) ;
 
         GRB_TRY (GxB_BinaryOp_new (&combine_multiple_paths_op, (GxB_binary_function) &combine_multiple_paths_f, multiple_paths, multiple_paths, multiple_paths, "combine_multiple_paths_f", COMBINE_MULTIPLE_PATHS_DEFN)) ;
-        GRB_TRY (GxB_BinaryOp_new (&first_multiple_paths, (GxB_binary_function) &first_multiple_paths_f, multiple_paths, multiple_paths, GrB_BOOL, "first_multiple_paths_f", FIRST_MULTIPLE_PATHS_DEFN)) ;
-        GRB_TRY (GxB_BinaryOp_new (&second_multiple_paths, (GxB_binary_function) &second_multiple_paths_f, multiple_paths, GrB_BOOL, multiple_paths, "second_multiple_paths_f", SECOND_MULTIPLE_PATHS_DEFN)) ;
+            GRB_TRY (GxB_BinaryOp_new (&second_multiple_paths, (GxB_binary_function) &second_multiple_paths_f, multiple_paths, GrB_BOOL, multiple_paths, "second_multiple_paths_f", SECOND_MULTIPLE_PATHS_DEFN)) ;
 
         GRB_TRY (GrB_Monoid_new (&combine_multiple_paths, combine_multiple_paths_op, (void*) &multiple_paths_identity)) ;
-        GRB_TRY (GrB_Semiring_new (&first_combine_multiple_paths, combine_multiple_paths, first_multiple_paths)) ;
-        GRB_TRY (GrB_Semiring_new (&second_combine_multiple_paths, combine_multiple_paths, second_multiple_paths)) ;
+            GRB_TRY (GrB_Semiring_new (&second_combine_multiple_paths, combine_multiple_paths, second_multiple_paths)) ;
 
-        GRB_TRY (GxB_IndexUnaryOp_new (&extend_multiple_paths, (GxB_index_unary_function) &extend_multiple_paths_f, multiple_paths, multiple_paths, GrB_BOOL, "extend_multiple_paths_f", EXTEND_MULTIPLE_PATHS_DEFN)) ;
-        GRB_TRY (GxB_IndexUnaryOp_new (&extend_multiple_simple, (GxB_index_unary_function) &extend_multiple_simple_f, multiple_paths, multiple_paths, GrB_BOOL, "extend_multiple_simple_f", EXTEND_MULTIPLE_SIMPLE_DEFN)) ;
-        GRB_TRY (GxB_IndexUnaryOp_new (&extend_multiple_trails, (GxB_index_unary_function) &extend_multiple_trails_f, multiple_paths, multiple_paths, GrB_BOOL, "extend_multiple_trails_f", EXTEND_MULTIPLE_TRAILS_DEFN)) ;
+        GRB_TRY (GxB_IndexBinaryOp_new (&extend_multiple_paths, (GxB_index_binary_function) &extend_multiple_paths_f, multiple_paths, multiple_paths, multiple_paths, GrB_UINT64, "extend_multiple_paths_f", EXTEND_MULTIPLE_PATHS_DEFN)) ;
+        GRB_TRY (GxB_IndexBinaryOp_new (&extend_multiple_simple, (GxB_index_binary_function) &extend_multiple_simple_f, multiple_paths, multiple_paths, multiple_paths, GrB_UINT64, "extend_multiple_simple_f", EXTEND_MULTIPLE_SIMPLE_DEFN)) ;
+        GRB_TRY (GxB_IndexBinaryOp_new (&extend_multiple_trails, (GxB_index_binary_function) &extend_multiple_trails_f, multiple_paths, multiple_paths, multiple_paths, GrB_UINT64, "extend_multiple_trails_f", EXTEND_MULTIPLE_TRAILS_DEFN)) ;
 
         return GrB_SUCCESS ;
 }

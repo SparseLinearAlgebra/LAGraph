@@ -59,6 +59,125 @@ const matrix_info files [ ] =
 } ;
 
 //****************************************************************************
+static void load_testcase
+(
+    const char* const graphs [ ],
+    const char* const fas [ ],
+    const char *fa_meta,
+    const char *sources,
+    GrB_Index S [ ],
+    size_t *ns,
+    GrB_Index QS [ ],
+    size_t *nqs,
+    GrB_Index QF [ ],
+    size_t *nqf
+)
+{
+    // Load graph from MTX files representing its adjacency matrix
+    // decomposition
+    for (int i = 0 ; ; i++)
+    {
+        const char *name = graphs[i] ;
+
+        if (name == NULL) break ;
+        if (strlen(name) == 0) continue ;
+
+        snprintf (filename, LEN, LG_DATA_DIR "%s", name) ;
+        FILE *f = fopen (filename, "r") ;
+        TEST_CHECK (f != NULL) ;
+        OK (LAGraph_MMRead (&A, f, msg)) ;
+        OK (fclose (f));
+
+        OK (LAGraph_New (&(G[i]), &A, LAGraph_ADJACENCY_DIRECTED, msg)) ;
+
+        TEST_CHECK (A == NULL) ;
+    }
+
+    // Load NFA from MTX files representing its adjacency matrix
+    // decomposition
+    for (int i = 0 ; ; i++)
+    {
+        const char *name = fas[i] ;
+
+        if (name == NULL) break ;
+        if (strlen(name) == 0) continue ;
+
+        snprintf (filename, LEN, LG_DATA_DIR "%s", name) ;
+        FILE *f = fopen (filename, "r") ;
+        TEST_CHECK (f != NULL) ;
+        OK (LAGraph_MMRead (&A, f, msg)) ;
+        OK (fclose (f)) ;
+
+        OK (LAGraph_New (&(R[i]), &A, LAGraph_ADJACENCY_DIRECTED, msg)) ;
+        OK (LAGraph_Cached_AT (R[i], msg)) ;
+
+        TEST_CHECK (A == NULL) ;
+    }
+
+    // Note the matrix rows/cols are enumerated from 0 to n-1. Meanwhile, in
+    // MTX format they are enumerated from 1 to n. Thus, when
+    // loading/comparing the results these values should be
+    // decremented/incremented correspondingly.
+
+    // Load graph source nodes from the sources file
+    GrB_Index s ;
+    *ns = 0 ;
+
+    snprintf (filename, LEN, LG_DATA_DIR "%s", sources) ;
+    FILE *f = fopen (filename, "r") ;
+    TEST_CHECK (f != NULL) ;
+
+    while (fscanf(f, "%ld", &s) != EOF)
+        S[(*ns)++] = s - 1 ;
+
+    OK (fclose(f)) ;
+
+    // Load NFA starting states from the meta file
+    GrB_Index qs ;
+    *nqs = 0 ;
+
+    snprintf (filename, LEN, LG_DATA_DIR "%s", fa_meta) ;
+    f = fopen (filename, "r") ;
+    TEST_CHECK (f != NULL) ;
+
+    TEST_CHECK (fscanf(f, "%ld", nqs) != EOF) ;
+
+    for (uint64_t i = 0; i < *nqs; i++) {
+        TEST_CHECK (fscanf(f, "%ld", &qs) != EOF) ;
+        QS[i] = qs - 1 ;
+    }
+
+    // Load NFA final states from the same file
+    uint64_t qf ;
+    *nqf = 0 ;
+
+    TEST_CHECK (fscanf(f, "%ld", nqf) != EOF) ;
+
+    for (uint64_t i = 0; i < *nqf; i++) {
+        TEST_CHECK (fscanf(f, "%ld", &qf) != EOF) ;
+        QF[i] = qf - 1 ;
+    }
+
+    OK (fclose(f)) ;
+}
+
+//****************************************************************************
+static void free_testcase (void)
+{
+    for (uint64_t i = 0 ; i < MAX_LABELS ; i++)
+    {
+        if (G[i] == NULL) continue ;
+        OK (LAGraph_Delete (&(G[i]), msg)) ;
+    }
+
+    for (uint64_t i = 0 ; i < MAX_LABELS ; i++ )
+    {
+        if (R[i] == NULL) continue ;
+        OK (LAGraph_Delete (&(R[i]), msg)) ;
+    }
+}
+
+//****************************************************************************
 void test_Rpq_Simple (void)
 {
     LAGraph_Init (msg) ;
@@ -71,97 +190,15 @@ void test_Rpq_Simple (void)
         snprintf (testcase_name, LEN, "basic regular path query %s", files[k].name) ;
         TEST_CASE (testcase_name) ;
 
-        // Load graph from MTX files representing its adjacency matrix
-        // decomposition
-        for (int i = 0 ; ; i++)
-        {
-            const char *name = files[k].graphs[i] ;
-
-            if (name == NULL) break ;
-            if (strlen(name) == 0) continue ;
-
-            snprintf (filename, LEN, LG_DATA_DIR "%s", name) ;
-            FILE *f = fopen (filename, "r") ;
-            TEST_CHECK (f != NULL) ;
-            OK (LAGraph_MMRead (&A, f, msg)) ;
-            OK (fclose (f));
-
-            OK (LAGraph_New (&(G[i]), &A, LAGraph_ADJACENCY_DIRECTED, msg)) ;
-
-            TEST_CHECK (A == NULL) ;
-        }
-
-        // Load NFA from MTX files representing its adjacency matrix
-        // decomposition
-        for (int i = 0 ; ; i++)
-        {
-            const char *name = files[k].fas[i] ;
-
-            if (name == NULL) break ;
-            if (strlen(name) == 0) continue ;
-
-            snprintf (filename, LEN, LG_DATA_DIR "%s", name) ;
-            FILE *f = fopen (filename, "r") ;
-            TEST_CHECK (f != NULL) ;
-            OK (LAGraph_MMRead (&A, f, msg)) ;
-            OK (fclose (f)) ;
-
-            OK (LAGraph_New (&(R[i]), &A, LAGraph_ADJACENCY_DIRECTED, msg)) ;
-            OK (LAGraph_Cached_AT (R[i], msg)) ;
-
-            TEST_CHECK (A == NULL) ;
-        }
-
-        // Note the matrix rows/cols are enumerated from 0 to n-1. Meanwhile, in
-        // MTX format they are enumerated from 1 to n. Thus, when
-        // loading/comparing the results these values should be
-        // decremented/incremented correspondingly.
-
-        // Load graph source nodes from the sources file
-        GrB_Index s ;
         GrB_Index S[16] ;
-        size_t ns = 0 ;
-
-        const char *name = files[k].sources ;
-        snprintf (filename, LEN, LG_DATA_DIR "%s", name) ;
-        FILE *f = fopen (filename, "r") ;
-        TEST_CHECK (f != NULL) ;
-
-        while (fscanf(f, "%ld", &s) != EOF)
-            S[ns++] = s - 1 ;
-
-        OK (fclose(f)) ;
-
-        // Load NFA starting states from the meta file
-        GrB_Index qs ;
+        size_t ns ;
         GrB_Index QS[16] ;
-        size_t nqs = 0 ;
+        size_t nqs ;
+        GrB_Index QF[16] ;
+        size_t nqf ;
 
-        name = files[k].fa_meta ;
-        snprintf (filename, LEN, LG_DATA_DIR "%s", name) ;
-        f = fopen (filename, "r") ;
-        TEST_CHECK (f != NULL) ;
-
-        TEST_CHECK (fscanf(f, "%ld", &nqs) != EOF) ;
-
-        for (uint64_t i = 0; i < nqs; i++) {
-            TEST_CHECK (fscanf(f, "%ld", &qs) != EOF) ;
-            QS[i] = qs - 1 ;
-        }
-
-        // Load NFA final states from the same file
-        uint64_t qf ;
-        uint64_t QF[16] ;
-        size_t nqf = 0 ;
-
-        TEST_CHECK (fscanf(f, "%ld", &nqf) != EOF) ;
-
-        for (uint64_t i = 0; i < nqf; i++) {
-            TEST_CHECK (fscanf(f, "%ld", &qf) != EOF) ;
-            QF[i] = qf - 1 ;
-        }
-
-        OK (fclose(f)) ;
+        load_testcase (files[k].graphs, files[k].fas, files[k].fa_meta,
+            files[k].sources, S, &ns, QS, &nqs, QF, &nqf) ;
 
         // Evaluate the algorithm
         GrB_Vector r = NULL ;
@@ -247,17 +284,187 @@ void test_Rpq_Simple (void)
         // Cleanup
         OK (LAGraph_Free ((void **) &paths, NULL)) ;
 
-        for (uint64_t i = 0 ; i < MAX_LABELS ; i++)
+        free_testcase () ;
+    }
+
+    LAGraph_Finalize (msg) ;
+}
+
+
+//****************************************************************************
+#define MAX_PATH_VERTICES 4
+#define MAX_EXPECTED_PATHS 4
+
+typedef struct
+{
+    const size_t vertex_count ;
+    const GrB_Index vertices[MAX_PATH_VERTICES] ;
+    const GrB_Index labels[MAX_PATH_VERTICES] ;
+}
+path_info ;
+
+typedef struct
+{
+    const char* name ;
+    const char* graphs[MAX_LABELS] ;
+    const char* fas[MAX_LABELS] ;
+    const char* fa_meta ;
+    const char* sources ;
+    const path_info simple[MAX_EXPECTED_PATHS] ;
+    const size_t simple_count ;
+    const path_info trails[MAX_EXPECTED_PATHS] ;
+    const size_t trails_count ;
+    const path_info all[MAX_EXPECTED_PATHS] ;
+    const size_t all_count ;
+    const path_info shortest[MAX_EXPECTED_PATHS] ;
+    const size_t shortest_count ;
+}
+labelled_info ;
+
+// The graph joins vertices 1 and 2 by both labels, so a path is determined by
+// its labels and not by its vertices alone. Expected vertices and labels are
+// written in the MTX numbering, starting from 1.
+const labelled_info labelled_files [ ] =
+{
+    {"parallel edges with distinct labels",
+     {"rpq_data/labels_a.mtx", "rpq_data/labels_b.mtx", NULL},
+     {"rpq_data/5_a.mtx",      "rpq_data/5_b.mtx",      NULL}, // Regex: a | b
+     "rpq_data/5_meta.txt",
+     "rpq_data/5_sources.txt",
+     {{2, {1, 2}, {1}}, {2, {1, 2}, {2}}}, 2,
+     {{2, {1, 2}, {1}}, {2, {1, 2}, {2}}}, 2,
+     {{2, {1, 2}, {1}}, {2, {1, 2}, {2}}}, 2,
+     {{2, {1, 2}, {1}}, {2, {1, 2}, {2}}}, 2},
+    {"trail revisiting a vertex pair under another label",
+     {"rpq_data/labels_a.mtx", "rpq_data/labels_b.mtx", NULL},
+     {"rpq_data/6_a.mtx",      "rpq_data/6_b.mtx",      NULL}, // Regex: a a b
+     "rpq_data/6_meta.txt",
+     "rpq_data/6_sources.txt",
+     {{0}}, 0,
+     {{4, {1, 2, 1, 2}, {1, 1, 2}}}, 1,
+     {{4, {1, 2, 1, 2}, {1, 1, 2}}}, 1,
+     {{4, {1, 2, 1, 2}, {1, 1, 2}}}, 1},
+    {NULL, NULL, NULL, NULL},
+} ;
+
+static bool path_matches (const Path *path, const path_info *expected)
+{
+    if (path->vertex_count != expected->vertex_count) return false ;
+
+    for (size_t i = 0 ; i < path->vertex_count ; i++)
+    {
+        if (path->vertices[2 * i] + 1 != expected->vertices[i]) return false ;
+    }
+
+    for (size_t i = 0 ; i + 1 < path->vertex_count ; i++)
+    {
+        if (path->vertices[2 * i + 1] + 1 != expected->labels[i]) return false ;
+    }
+
+    return true ;
+}
+
+static void check_paths
+(
+    const char *semantics,
+    const Path *paths,
+    size_t path_count,
+    const path_info *expected,
+    size_t expected_count
+)
+{
+    TEST_CHECK (path_count == expected_count) ;
+    TEST_MSG ("%s: got %zu paths, expected %zu", semantics, path_count,
+        expected_count) ;
+
+    for (size_t i = 0 ; i < expected_count ; i++)
+    {
+        bool found = false ;
+
+        for (size_t j = 0 ; j < path_count ; j++)
         {
-            if (G[i] == NULL) continue ;
-            OK (LAGraph_Delete (&(G[i]), msg)) ;
+            if (path_matches (&paths[j], &expected[i])) found = true ;
         }
 
-        for (uint64_t i = 0 ; i < MAX_LABELS ; i++ )
+        TEST_CHECK (found) ;
+        TEST_MSG ("%s: expected path %zu is missing", semantics, i) ;
+    }
+
+    for (size_t j = 0 ; j < path_count ; j++)
+    {
+        bool found = false ;
+
+        for (size_t i = 0 ; i < expected_count ; i++)
         {
-            if (R[i] == NULL) continue ;
-            OK (LAGraph_Delete (&(R[i]), msg)) ;
+            if (path_matches (&paths[j], &expected[i])) found = true ;
         }
+
+        TEST_CHECK (found) ;
+        TEST_MSG ("%s: unexpected path %zu", semantics, j) ;
+        if (!found) Path_print (&paths[j]) ;
+    }
+}
+
+//****************************************************************************
+void test_Rpq_Labels (void)
+{
+    LAGraph_Init (msg) ;
+    LAGraph_Rpq_initialize (msg) ;
+
+    for (int k = 0 ; ; k++)
+    {
+        if (labelled_files[k].sources == NULL) break ;
+
+        snprintf (testcase_name, LEN, "labelled regular path query %s",
+            labelled_files[k].name) ;
+        TEST_CASE (testcase_name) ;
+
+        GrB_Index S[16] ;
+        size_t ns ;
+        GrB_Index QS[16] ;
+        size_t nqs ;
+        GrB_Index QF[16] ;
+        size_t nqf ;
+
+        load_testcase (labelled_files[k].graphs, labelled_files[k].fas,
+            labelled_files[k].fa_meta, labelled_files[k].sources, S, &ns,
+            QS, &nqs, QF, &nqf) ;
+
+        bool inverse_labels[MAX_LABELS] = {false, false, false} ;
+        bool inverse = false ;
+
+        Path *paths ;
+        size_t path_count ;
+
+        OK (LAGraph_2Rpq_AllSimple (&paths, &path_count, R, inverse_labels,
+                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
+                                    inverse, msg)) ;
+        check_paths ("ALL SIMPLE", paths, path_count, labelled_files[k].simple,
+            labelled_files[k].simple_count) ;
+        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+        OK (LAGraph_2Rpq_AllTrails (&paths, &path_count, R, inverse_labels,
+                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
+                                    inverse, msg)) ;
+        check_paths ("ALL TRAILS", paths, path_count, labelled_files[k].trails,
+            labelled_files[k].trails_count) ;
+        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+        OK (LAGraph_2Rpq_AllPaths (&paths, &path_count, R, inverse_labels,
+                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
+                                    inverse, 10, msg)) ;
+        check_paths ("ALL PATHS", paths, path_count, labelled_files[k].all,
+            labelled_files[k].all_count) ;
+        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+        OK (LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R,
+                                    inverse_labels, MAX_LABELS, QS, nqs, QF,
+                                    nqf, G, S, ns, inverse, 100, msg)) ;
+        check_paths ("ALL SHORTEST PATHS", paths, path_count,
+            labelled_files[k].shortest, labelled_files[k].shortest_count) ;
+        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+        free_testcase () ;
     }
 
     LAGraph_Finalize (msg) ;
@@ -265,5 +472,6 @@ void test_Rpq_Simple (void)
 
 TEST_LIST = {
     {"Rpq_Simple", test_Rpq_Simple},
+    {"Rpq_Labels", test_Rpq_Labels},
     {NULL, NULL}
 };
