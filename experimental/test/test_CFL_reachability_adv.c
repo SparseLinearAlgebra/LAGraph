@@ -888,41 +888,36 @@ void test_CFL_reachability_invalid_rules(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
 
-    for (size_t mask = 0; mask < 16; mask++) {
-        /* code */
-    }
-
     GrB_Info retval;
 
     init_grammar_aSb();
     init_graph_double_cycle();
     init_outputs();
 
-    // Rule [Variable -> _ B]
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-    printf("MSG: %s\n", msg);
-    // Rule [_ -> A B]
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-    printf("MSG: %s\n", msg);
+    const LAGraph_rule_EWCNF invalid_rules[] = {
+        {0, -1, 1, 0, 0}, // Missing first RHS symbol.
+        {-1, 1, 2, 0, 0},
+        {-2, 1, 2, 0, 0},
+        {6, 1, 2, 0, 0}, // Symbol indices must be less than six.
+        {0, -2, 2, 0, 0},
+        {0, 6, 2, 0, 0},
+        {0, 1, -2, 0, 0},
+        {0, 1, 6, 0, 0},
+        {0, 6, -1, 0, 0},
+        // Valid base indices, but indexed groups extend beyond the symbol array.
+        {5, 1, 2, 2, LAGraph_EWNCF_INDEX_NONTERM},
+        {0, 5, 2, 2, LAGraph_EWNCF_INDEX_PROD_A},
+        {0, 1, 5, 2, LAGraph_EWNCF_INDEX_PROD_B},
+        {0, 1, 2, UINT32_MAX, LAGraph_EWNCF_INDEX_PROD_A},
+    };
 
-    // Rule [C -> A B], where C >= nonterms_count
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-
-    // Rule [S -> A B], where A >= nonterms_count
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-
-    // Rule [C -> t], where t >= terms_count
-    grammar.rules[0] = (LAGraph_rule_EWCNF){
-        .nonterm = 0, .prod_A = 10, .prod_B = -1, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
+    for (size_t mask = 0; mask < 16; mask++) {
+        for (size_t i = 0; i < sizeof(invalid_rules) / sizeof(invalid_rules[0]); i++) {
+            grammar.rules[0] = invalid_rules[i];
+            check_error(GrB_INVALID_VALUE, mask);
+            TEST_MSG("Mask: %zu, invalid rule: %zu", mask, i);
+        }
+    }
 
     free_workspace();
     teardown();

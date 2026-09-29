@@ -63,14 +63,6 @@
         }                                                                                \
     }
 
-#define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                 \
-    {                                                                                    \
-        rule.len_indexes_str += snprintf(rule.indexes_str + rule.len_indexes_str,        \
-                                         LAGRAPH_MSG_LEN - rule.len_indexes_str,         \
-                                         rule.count == 0 ? "%ld" : ", %ld", i);          \
-        rule.count++;                                                                    \
-    }
-
 #define BENCH_CFL_REACHBILITY false
 
 #if BENCH_CFL_REACHBILITY
@@ -709,6 +701,35 @@ GrB_Info LAGraph_CFL_reachability_adv(
         return GrB_NULL_POINTER;
     }
 
+    // Validate original rules before grouping symbols or expanding indexed rules.
+    for (size_t i = 0; i < rules_count; i++) {
+        LAGraph_rule_EWCNF rule = rules[i];
+        LG_ASSERT_MSGF(rule.prod_A != -1 || rule.prod_B == -1, GrB_INVALID_VALUE,
+                       "Rule with index %zu has an invalid [Variable -> _ B] form.", i);
+
+        int32_t prods[3] = {rule.nonterm, rule.prod_A, rule.prod_B};
+        int bitmasks[3] = {LAGraph_EWNCF_INDEX_NONTERM, LAGraph_EWNCF_INDEX_PROD_A,
+                           LAGraph_EWNCF_INDEX_PROD_B};
+
+        for (size_t j = 0; j < 3; j++) {
+            if (j != 0 && prods[j] == -1) {
+                continue;
+            }
+
+            LG_ASSERT_MSGF(prods[j] >= 0 && (size_t)prods[j] < symbols_amount,
+                           GrB_INVALID_VALUE,
+                           "Rule with index %zu has an invalid symbol index %d.",
+                           i, prods[j]);
+
+            if (rule.indexed & bitmasks[j]) {
+                LG_ASSERT_MSGF(rule.indexed_count <= symbols_amount - (size_t)prods[j],
+                               GrB_INVALID_VALUE,
+                               "Rule with index %zu has an indexed group outside the "
+                               "symbol range.", i);
+            }
+        }
+    }
+
     GrB_Index n;
     TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
@@ -725,79 +746,19 @@ GrB_Info LAGraph_CFL_reachability_adv(
     size_t bin_rules[new_rules_count], bin_rules_count = 0;   // [Variable -> AB]
 
     // Process rules
-    typedef struct {
-        size_t count;
-        size_t len_indexes_str;
-        char indexes_str[LAGRAPH_MSG_LEN];
-    } rule_error_s;
-    rule_error_s term_err = {0};
-    rule_error_s nonterm_err = {0};
-    rule_error_s invalid_err = {0};
     for (size_t i = 0; i < new_rules_count; i++) {
         LAGraph_rule_EWCNF rule = new_rules[i];
 
-        bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
-        bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
-        bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
-
-        // Check that all rules are well-formed
-        if (rule.nonterm < 0 || (size_t)rule.nonterm >= new_symbols_amount) {
-            ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-        }
-
-        // [Variable -> eps]
-        if (is_rule_eps) {
+        if (rule.prod_A == -1) {
+            // [Variable -> eps]
             eps_rules[eps_rules_count++] = i;
-
-            continue;
-        }
-
-        // [Variable -> term]
-        if (is_rule_term) {
+        } else if (rule.prod_B == -1) {
+            // [Variable -> term]
             term_rules[term_rules_count++] = i;
-
-            if (rule.prod_A < -1 || (size_t)rule.prod_A >= new_symbols_amount) {
-                ADD_INDEX_TO_ERROR_RULE(term_err, i);
-            }
-
-            continue;
-        }
-
-        // [Variable -> A B]
-        if (is_rule_bin) {
+        } else {
+            // [Variable -> A B]
             bin_rules[bin_rules_count++] = i;
-
-            if (rule.prod_A < -1 || (size_t)rule.prod_A >= new_symbols_amount ||
-                rule.prod_B < -1 || (size_t)rule.prod_B >= new_symbols_amount) {
-                ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-            }
-
-            continue;
         }
-
-        // [Variable -> _ B]
-        ADD_INDEX_TO_ERROR_RULE(invalid_err, i);
-    }
-
-    if (term_err.count + nonterm_err.count + invalid_err.count > 0) {
-        ADD_TO_MSG("Count of invalid rules: %ld.\n",
-                   term_err.count + nonterm_err.count + invalid_err.count);
-
-        if (nonterm_err.count > 0) {
-            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str)
-        }
-        if (term_err.count > 0) {
-            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str)
-        }
-        if (invalid_err.count > 0) {
-            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str)
-        }
-
-        LG_FREE_ALL;
-        return GrB_INVALID_VALUE;
     }
 
     // Create symbol matrices
