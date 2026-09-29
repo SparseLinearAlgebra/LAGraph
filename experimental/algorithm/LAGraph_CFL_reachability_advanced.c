@@ -18,13 +18,19 @@
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         TRY_INNER(CFL_matrix_free(&iden));                                               \
+        TRY_INNER(GrB_free(&identity_matrix));                                           \
+        TRY_INNER(GrB_free(&v_diag));                                                    \
+        TRY_INNER(GrB_free(&new_adj_matrix));                                            \
         TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, msg));                      \
         TRY_INNER(LAGraph_Free((void **)&new_rules, msg));                               \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
-            TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                               \
-            TRY_INNER(CFL_matrix_free(&delta_matrices[i]));                              \
-            TRY_INNER(CFL_matrix_free(&matrices[i]));                                    \
-            if (new_adj_matrices != adj_matrices) {                                      \
+            if (temp_matrices != NULL)                                                  \
+                TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                           \
+            if (delta_matrices != NULL)                                                 \
+                TRY_INNER(CFL_matrix_free(&delta_matrices[i]));                          \
+            if (matrices != NULL)                                                       \
+                TRY_INNER(CFL_matrix_free(&matrices[i]));                                \
+            if (new_adj_matrices != NULL && new_adj_matrices != adj_matrices) {         \
                 TRY_INNER(GrB_free(&new_adj_matrices[i]));                               \
             }                                                                            \
         }                                                                                \
@@ -169,8 +175,9 @@
         GrB_Info LG_GrB_Info = GrB_method;                                               \
         if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
             fprintf(stderr,                                                              \
-                    "LAGraph failure (file %s, line %d) (Iteration: %d, i: %d): \n",     \
+                    "LAGraph failure (file %s, line %d) (Iteration: %zu, i: %zu): \n",   \
                     __FILE__, __LINE__, iteration, i);                                   \
+            LG_FREE_ALL;                                                                \
             return (LG_GrB_Info);                                                        \
         }                                                                                \
     }
@@ -651,9 +658,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #define FREE_INNER()
 
     // Declare workspace and clear the msg string, if not NULL
-    CFL_Matrix **delta_matrices, **matrices, **temp_matrices;
+    CFL_Matrix **delta_matrices = NULL, **matrices = NULL, **temp_matrices = NULL;
     CFL_Matrix *iden = NULL;
     GrB_Matrix identity_matrix = NULL;
+    GrB_Vector v_diag = NULL;
+    GrB_Matrix new_adj_matrix = NULL;
 
     // for OPT_BLOCK optimization
     size_t new_symbols_amount = 0;
@@ -768,9 +777,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GrB_Index ncols;
         TRY(GrB_Matrix_ncols(&ncols, new_adj_matrices[i]));
 
-        GrB_Matrix new_adj_matrix;
         TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
         TRY(CFL_matrix_from_base(&delta_matrices[i], new_adj_matrix));
+        new_adj_matrix = NULL; // Ownership transferred to delta_matrices[i].
 
         if (optimizations & OPT_LAZY) {
             TRY(CFL_matrix_create_lazy(&matrices[i], nrows, ncols));
@@ -790,12 +799,12 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, term_matrix, true, optimizations));
     }
 
-    GrB_Vector v_diag;
     TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
     TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
     TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
     TRY(GrB_Vector_free(&v_diag));
     TRY(CFL_matrix_from_base(&iden, identity_matrix));
+    identity_matrix = NULL; // Ownership transferred to iden.
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {

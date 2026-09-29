@@ -973,6 +973,64 @@ void test_CFL_reachability_invalid_rules(void) {
 #endif
 }
 
+// Fail one LAGraph allocation while the brutal allocator tracks both LAGraph
+// and GraphBLAS resources. GraphBLAS allocations remain enabled for cleanup.
+static size_t calloc_count, calloc_fail_at;
+
+static void *fail_calloc(size_t n, size_t size) {
+    if (++calloc_count == calloc_fail_at) {
+        return NULL;
+    }
+    return LG_brutal_calloc(n, size);
+}
+
+void test_CFL_reachability_allocation_failure(void) {
+#if LAGRAPH_SUITESPARSE
+    OK(LG_brutal_setup(msg));
+
+    GrB_Matrix adj[3] = {NULL}, result[3] = {NULL};
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_Matrix_new(&adj[i], GrB_BOOL, 3, 3));
+    }
+    OK(GrB_Matrix_setElement_BOOL(adj[1], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(adj[2], true, 1, 2));
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_Matrix_wait(adj[i], GrB_MATERIALIZE));
+    }
+
+    LAGraph_rule_EWCNF rule = {0, 1, 2, 0, 0};
+    // Warm up GraphBLAS caches before taking the allocation baseline.
+    OK(LAGraph_CFL_reachability_adv(result, adj, 3, &rule, 1, msg, 0));
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_free(&result[i]));
+    }
+    // First three workspace arrays, symbol/rule setup, then a temporary matrix
+    // inside the first fixed-point iteration (allocation 16, through TRY_I).
+    const size_t failures[] = {1, 2, 3, 4, 5, 6, 16, 0};
+    int64_t baseline = LG_nmalloc;
+    for (size_t i = 0; i < sizeof(failures) / sizeof(failures[0]); i++) {
+        calloc_count = 0;
+        calloc_fail_at = failures[i];
+        LAGraph_Calloc_function = fail_calloc;
+        GrB_Info info = LAGraph_CFL_reachability_adv(result, adj, 3, &rule, 1, msg, 0);
+        LAGraph_Calloc_function = LG_brutal_calloc;
+        TEST_CHECK(info == (calloc_fail_at == 0 ? GrB_SUCCESS : GrB_OUT_OF_MEMORY));
+        TEST_MSG("Failed allocation: %zu, retval: %d", calloc_fail_at, info);
+        for (size_t j = 0; j < 3; j++) {
+            OK(GrB_free(&result[j]));
+        }
+        TEST_CHECK(LG_nmalloc == baseline);
+        TEST_MSG("Failed allocation: %zu, live allocations: %" PRId64
+                 ", expected: %" PRId64, calloc_fail_at, LG_nmalloc, baseline);
+    }
+
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_free(&adj[i]));
+    }
+    OK(LG_brutal_teardown(msg));
+#endif
+}
+
 void test_CFL_reachability_null_msg(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -1073,6 +1131,7 @@ TEST_LIST = {
     {"test_CFL_reachability_with_empty_adj_matrix",
      test_CFL_reachability_with_empty_adj_matrix},
 #if !defined(GRAPHBLAS_HAS_CUDA)
+    {"CFG_reachability_allocation_failure", test_CFL_reachability_allocation_failure},
     {"CFG_reachability_null_msg", test_CFL_reachability_null_msg},
     {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
 #endif
