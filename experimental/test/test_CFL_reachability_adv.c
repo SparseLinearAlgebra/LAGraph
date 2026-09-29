@@ -973,6 +973,38 @@ void test_CFL_reachability_invalid_rules(void) {
 #endif
 }
 
+void test_CFL_reachability_null_msg(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        init_grammar_aSb();
+        init_graph_double_cycle();
+        init_outputs();
+
+        OK(LAGraph_CFL_reachability_adv(outputs, adj_matrices,
+                                        grammar.terms_count + grammar.nonterms_count,
+                                        grammar.rules, grammar.rules_count, NULL, mask));
+        free_workspace();
+
+        init_grammar_aSb();
+        init_graph_double_cycle();
+        init_outputs();
+        GrB_free(&adj_matrices[0]);
+        GrB_free(&adj_matrices[1]);
+
+        GrB_Info info = LAGraph_CFL_reachability_adv(
+            outputs, adj_matrices, grammar.terms_count + grammar.nonterms_count,
+            grammar.rules, grammar.rules_count, NULL, mask);
+        TEST_CHECK(info == GrB_NULL_POINTER);
+        TEST_MSG("Mask: %zu, retval: %d", mask, info);
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
 void test_CFL_reachability_null_pointers(void) {
 #if LAGRAPH_SUITESPARSE
 
@@ -1041,6 +1073,7 @@ TEST_LIST = {
     {"test_CFL_reachability_with_empty_adj_matrix",
      test_CFL_reachability_with_empty_adj_matrix},
 #if !defined(GRAPHBLAS_HAS_CUDA)
+    {"CFG_reachability_null_msg", test_CFL_reachability_null_msg},
     {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
 #endif
     {NULL, NULL}};

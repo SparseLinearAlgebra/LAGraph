@@ -53,12 +53,12 @@
 
 #define ADD_TO_MSG(...)                                                                  \
     {                                                                                    \
-        if (msg_len == 0) {                                                              \
+        if (msg != NULL && msg_len == 0) {                                               \
             msg_len +=                                                                   \
                 snprintf(msg, LAGRAPH_MSG_LEN,                                           \
                          "LAGraph failure (file %s, line %d): ", __FILE__, __LINE__);    \
         }                                                                                \
-        if (msg_len < LAGRAPH_MSG_LEN) {                                                 \
+        if (msg != NULL && msg_len < LAGRAPH_MSG_LEN) {                                  \
             msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, __VA_ARGS__);  \
         }                                                                                \
     }
