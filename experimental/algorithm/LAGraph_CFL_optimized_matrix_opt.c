@@ -848,8 +848,24 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
     }
 
     if (first->block_type == CELL && second->block_type == CELL) {
-        TRY(matrix_mxm_lazy(output, first, second, accum, swap, optimizations));
-        return GrB_SUCCESS;
+        if (output->block_type == CELL) {
+            TRY(matrix_mxm_lazy(output, first, second, accum, swap, optimizations));
+            return GrB_SUCCESS;
+        }
+
+        // N_i -> A B: compute the square product and add it to every output block.
+        Matrix *temp;
+        TRY(CFL_matrix_create(&temp, swap ? second->nrows : first->nrows,
+                              swap ? first->ncols : second->ncols));
+        GrB_Info info = matrix_mxm_lazy(temp, first, second, false, swap, optimizations);
+        if (info >= GrB_SUCCESS && !accum) {
+            info = matrix_clear_empty(output, optimizations);
+        }
+        if (info >= GrB_SUCCESS) {
+            info = matrix_wise_block(output, output, temp, false, optimizations);
+        }
+        TRY(CFL_matrix_free(&temp));
+        return info;
     }
 
     if (first->block_type == CELL) {

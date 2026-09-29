@@ -1122,6 +1122,70 @@ static void test_CFL_block_mxm(void) {
 #endif
 }
 
+static void test_CFL_block_mxm_cells_into_vector(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = OPT_BLOCK; mask < OPT_N_FLAGS; mask++) {
+        for (size_t format = VEC_HORIZ; format <= VEC_VERT; format++) {
+            for (size_t is_accum = 0; is_accum < 2; is_accum++) {
+                for (size_t is_reverse = 0; is_reverse < 2; is_reverse++) {
+                    for (size_t is_empty = 0; is_empty < 2; is_empty++) {
+                        Matrix *A, *B, *C, *expected;
+                        if (mask & OPT_LAZY) {
+                            OK(CFL_matrix_create_lazy(&A, 3, 3));
+                        } else {
+                            OK(CFL_matrix_create(&A, 3, 3));
+                        }
+                        GrB_Matrix base_A = A->is_lazy ? A->base_matrices[0]->base : A->base;
+                        if (!is_empty) {
+                            OK(GrB_Matrix_setElement_BOOL(base_A, true, 0, 1));
+                        }
+                        OK(CFL_matrix_create(&B, 3, 3));
+                        OK(GrB_Matrix_setElement_BOOL(B->base, true, 1, 2));
+                        OK(GrB_Matrix_setElement_BOOL(B->base, true, 2, 0));
+
+                        GrB_Index nrows = format == VEC_VERT ? 9 : 3;
+                        GrB_Index ncols = format == VEC_HORIZ ? 9 : 3;
+                        OK(CFL_matrix_create(&C, nrows, ncols));
+                        OK(CFL_matrix_create(&expected, nrows, ncols));
+                        for (size_t i = 0; i < 3; i++) {
+                            GrB_Index row_offset = format == VEC_VERT ? 3 * i : 0;
+                            GrB_Index col_offset = format == VEC_HORIZ ? 3 * i : 0;
+                            OK(GrB_Matrix_setElement_BOOL(C->base, true, row_offset, col_offset));
+                            if (is_accum) {
+                                OK(GrB_Matrix_setElement_BOOL(expected->base, true,
+                                                              row_offset, col_offset));
+                            }
+                            if (!is_empty) {
+                                OK(GrB_Matrix_setElement_BOOL(expected->base, true,
+                                                              row_offset + (is_reverse ? 2 : 0),
+                                                              col_offset + (is_reverse ? 1 : 2)));
+                            }
+                        }
+
+                        GrB_Info info = CFL_mxm(C, A, B, is_accum, is_reverse, mask);
+                        OK(info);
+                        if (info == GrB_SUCCESS) {
+                            TEST_CHECK(compare_matrices(C, expected));
+                        }
+                        TEST_MSG("Mask: %zu, format: %zu, accum: %zu, reverse: %zu, empty: %zu",
+                                 mask, format, is_accum, is_reverse, is_empty);
+
+                        OK(free_matrix(&A));
+                        OK(free_matrix(&B));
+                        OK(free_matrix(&C));
+                        OK(free_matrix(&expected));
+                    }
+                }
+            }
+        }
+    }
+
+    teardown();
+#endif
+}
+
 static void test_CFL_block_dup(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -1410,6 +1474,7 @@ TEST_LIST = {
     {"test_CFL_lazy_wise", test_CFL_lazy_wise},
     {"test_CFL_lazy_rsub", test_CFL_lazy_rsub},
     {"test_CFL_block_mxm", test_CFL_block_mxm},
+    {"test_CFL_block_mxm_cells_into_vector", test_CFL_block_mxm_cells_into_vector},
     {"test_CFL_block_wise", test_CFL_block_wise},
     {"test_CFL_block_rsub", test_CFL_block_rsub},
     {"test_CFL_block_dup", test_CFL_block_dup},

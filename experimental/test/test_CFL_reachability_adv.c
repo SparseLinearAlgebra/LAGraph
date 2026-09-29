@@ -637,6 +637,55 @@ void test_CFL_indexed_2(void) {
 #endif
 }
 
+void test_CFL_indexed_nonterm_only(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        // Symbols: [0 S_0] [1 S_1] [2 a] [3 b]. Rules: S_i -> a b | b a.
+        OK(LAGraph_Calloc((void **)&grammar.rules, 2, sizeof(LAGraph_rule_EWCNF), msg));
+        grammar.nonterms_count = 2;
+        grammar.terms_count = 2;
+        grammar.rules_count = 2;
+        grammar.rules[0] = (LAGraph_rule_EWCNF){0, 2, 3, 2, LAGraph_EWNCF_INDEX_NONTERM};
+        grammar.rules[1] = (LAGraph_rule_EWCNF){0, 3, 2, 2, LAGraph_EWNCF_INDEX_NONTERM};
+
+        n_adj_matrices = 4;
+        OK(LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg));
+        for (size_t i = 0; i < n_adj_matrices; i++) {
+            OK(GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, 3, 3));
+        }
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[2], true, 0, 1));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[3], true, 1, 2));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[3], true, 2, 0));
+        init_outputs();
+
+        GrB_Matrix expected = NULL;
+        OK(GrB_Matrix_new(&expected, GrB_BOOL, 3, 3));
+        OK(GrB_Matrix_setElement_BOOL(expected, true, 0, 2));
+        OK(GrB_Matrix_setElement_BOOL(expected, true, 2, 1));
+
+        GrB_Info info = run_algorithm(mask);
+        OK(info);
+        TEST_MSG("Mask: %zu", mask);
+        if (info == GrB_SUCCESS) {
+            for (size_t i = 0; i < n_adj_matrices; i++) {
+                bool equal = false;
+                OK(LAGraph_Matrix_IsEqual(&equal, outputs[i],
+                                          i < 2 ? expected : adj_matrices[i], msg));
+                TEST_CHECK(equal);
+                TEST_MSG("Mask: %zu, symbol: %zu", mask, i);
+            }
+        }
+
+        OK(GrB_Matrix_free(&expected));
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
 void test_CFL_indexed_simple(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -976,6 +1025,7 @@ void test_CFL_reachability_null_pointers(void) {
 TEST_LIST = {
     {"CFG_reachability_indexed", test_CFL_indexed},
     {"CFG_reachability_indexed_2", test_CFL_indexed_2},
+    {"CFG_reachability_indexed_nonterm_only", test_CFL_indexed_nonterm_only},
     {"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
     {"CFG_reachability_indexed_simple", test_CFL_indexed_simple},
     {"CFG_reachability_indexed_simple_exploded", test_CFL_indexed_simple_exploded},
