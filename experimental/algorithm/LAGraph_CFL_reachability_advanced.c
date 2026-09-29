@@ -21,8 +21,8 @@
         TRY_INNER(GrB_free(&identity_matrix));                                           \
         TRY_INNER(GrB_free(&v_diag));                                                    \
         TRY_INNER(GrB_free(&new_adj_matrix));                                            \
-        TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, msg));                      \
-        TRY_INNER(LAGraph_Free((void **)&new_rules, msg));                               \
+        TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, NULL));                     \
+        TRY_INNER(LAGraph_Free((void **)&new_rules, NULL));                              \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             if (temp_matrices != NULL)                                                  \
                 TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                           \
@@ -35,11 +35,11 @@
             }                                                                            \
         }                                                                                \
         if (new_adj_matrices != adj_matrices) {                                          \
-            TRY_INNER(LAGraph_Free((void **)&new_adj_matrices, msg));                    \
+            TRY_INNER(LAGraph_Free((void **)&new_adj_matrices, NULL));                   \
         }                                                                                \
-        TRY_INNER(LAGraph_Free((void **)&delta_matrices, msg));                          \
-        TRY_INNER(LAGraph_Free((void **)&matrices, msg));                                \
-        TRY_INNER(LAGraph_Free((void **)&temp_matrices, msg));                           \
+        TRY_INNER(LAGraph_Free((void **)&delta_matrices, NULL));                         \
+        TRY_INNER(LAGraph_Free((void **)&matrices, NULL));                               \
+        TRY_INNER(LAGraph_Free((void **)&temp_matrices, NULL));                          \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -219,13 +219,13 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
 
 #define FREE_INNER_WORK()                                                                \
     {                                                                                    \
-        LAGraph_Free((void **)&checked, msg);                                            \
+        LAGraph_Free((void **)&checked, NULL);                                           \
     };
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
         FREE_INNER_WORK();                                                               \
-        LAGraph_Free((void **)symbols, msg);                                             \
+        LAGraph_Free((void **)symbols, NULL);                                            \
     }
 
     TRY_INNER(LAGraph_Calloc((void **)&checked, symbols_amount, sizeof(bool), msg));
@@ -322,7 +322,7 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)new_rules, msg);                                           \
+        LAGraph_Free((void **)new_rules, NULL);                                          \
     }
 
     size_t new_rules_size = 0;
@@ -398,8 +398,8 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
 #define FREE_INNER()                                                                     \
     {                                                                                    \
         CFL_matrix_free(&base_matrix);                                                   \
-        LAGraph_Free((void **)&nrows, msg);                                              \
-        LAGraph_Free((void **)&ncols, msg);                                              \
+        LAGraph_Free((void **)&nrows, NULL);                                             \
+        LAGraph_Free((void **)&ncols, NULL);                                             \
     }
 
     if (matrix->block_type == CELL) {
@@ -438,8 +438,8 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
 
     TRY_INNER(GxB_Matrix_split(outputs, m, n, nrows, ncols, base_matrix->base, GrB_NULL));
 
-    TRY_INNER(LAGraph_Free((void **)&nrows, msg));
-    TRY_INNER(LAGraph_Free((void **)&ncols, msg));
+    TRY_INNER(LAGraph_Free((void **)&nrows, NULL));
+    TRY_INNER(LAGraph_Free((void **)&ncols, NULL));
     TRY_INNER(CFL_matrix_free(&base_matrix));
 
     return GrB_SUCCESS;
@@ -458,7 +458,7 @@ static GrB_Info get_new_symbols_map(const LAGraph_rule_EWCNF *rules, size_t rule
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)map, msg);                                                 \
+        LAGraph_Free((void **)map, NULL);                                                \
     }
 
     if (optimizations & OPT_BLOCK) {
@@ -489,7 +489,7 @@ static GrB_Info get_new_adj_matrices(const GrB_Matrix *adj_matrices, CFL_Symbol 
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)new_adj_matrices_p, msg);                                  \
+        LAGraph_Free((void **)new_adj_matrices_p, NULL);                                 \
     }
 
     GrB_Index n;
@@ -536,7 +536,7 @@ static GrB_Info get_new_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)new_rules, msg);                                           \
+        LAGraph_Free((void **)new_rules, NULL);                                          \
     }
 
     if (!(optimizations & OPT_BLOCK)) {

@@ -964,6 +964,7 @@ void test_CFL_reachability_invalid_rules(void) {
         for (size_t i = 0; i < sizeof(invalid_rules) / sizeof(invalid_rules[0]); i++) {
             grammar.rules[0] = invalid_rules[i];
             check_error(GrB_INVALID_VALUE, mask);
+            TEST_CHECK(strstr(msg, "Rule with index 0") != NULL);
             TEST_MSG("Mask: %zu, invalid rule: %zu", mask, i);
         }
     }
@@ -1080,6 +1081,8 @@ void test_CFL_reachability_null_pointers(void) {
     GrB_free(&adj_matrices[1]);
 
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "Adjacency matrices with these indexes are null: 0, 1")
+               != NULL);
 
     //  adj_matrices = NULL;
     for (size_t i = 0; i < n_adj_matrices; i++) {
@@ -1088,6 +1091,7 @@ void test_CFL_reachability_null_pointers(void) {
 
     LAGraph_Free((void **)&adj_matrices, msg);
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "The adjacency matrices array cannot be null.") != NULL);
 
     free_workspace();
     init_grammar_aSb();
@@ -1097,6 +1101,7 @@ void test_CFL_reachability_null_pointers(void) {
     //  outputs = NULL;
     LAGraph_Free((void **)&outputs, msg);
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "The outputs array cannot be null.") != NULL);
 
     free_workspace();
     init_grammar_aSb();
@@ -1106,6 +1111,7 @@ void test_CFL_reachability_null_pointers(void) {
     //  grammar.rules = NULL;
     LAGraph_Free((void **)&grammar.rules, msg);
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "The rules array cannot be null.") != NULL);
 
     free_workspace();
     teardown();
