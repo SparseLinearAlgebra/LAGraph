@@ -507,6 +507,13 @@ GrB_Info CFL_matrix_to_base(Matrix **matrix_p, Matrix *input, int8_t optimizatio
 
     Matrix *matrix;
     TRY(CFL_matrix_create_lazy(&matrix, input->nrows, input->ncols));
+    GrB_Info info = LAGraph_Realloc((void **)&matrix->base_matrices,
+                                    input->base_matrices_count,
+                                    matrix->base_matrices_count, sizeof(Matrix *), NULL);
+    if (info < GrB_SUCCESS) {
+        TRY(CFL_matrix_free(&matrix));
+        return info;
+    }
     TRY(CFL_matrix_free(&matrix->base_matrices[0]));
     matrix->base_matrices_count = 0;
 
@@ -536,7 +543,8 @@ GrB_Info CFL_matrix_to_base(Matrix **matrix_p, Matrix *input, int8_t optimizatio
 
 GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold, int8_t optimizations) {
     Matrix **new_matrices;
-    TRY(LAGraph_Calloc((void **)&new_matrices, 50, sizeof(Matrix *), NULL));
+    TRY(LAGraph_Calloc((void **)&new_matrices, A->base_matrices_count,
+                       sizeof(Matrix *), NULL));
 
     size_t new_size = 0;
 
@@ -654,8 +662,7 @@ GrB_Info CFL_matrix_from_base_lazy(Matrix **matrix_p, GrB_Matrix base) {
     matrix->is_lazy = true;
     TRY(LAGraph_Calloc(
         (void **)&matrix->base_matrices, 40, sizeof(CFL_Matrix *),
-        NULL)); // this is enough for this centry i guess, because 40th matrices must
-                // have 10^40 nvals for being putten in base_matrices, this is 2^132
+        NULL)); // Initial storage; addition and copying resize it as needed.
     matrix->base_matrices[0] = result;
     matrix->base_matrices_count = 1;
     matrix->base = NULL;
@@ -1061,9 +1068,18 @@ GrB_Info matrix_wise_lazy(Matrix *output, Matrix *first, Matrix *second, bool ac
     TRY(CFL_matrix_create(&other, output->nrows, output->ncols));
     TRY(matrix_dup_empty(other, second, optimizations));
 
-    size_t other_nvals = other->nvals >= 10 ? other->nvals : 10;
+    // Reserve before merging so allocation failure leaves the components intact.
+    GrB_Info info = LAGraph_Realloc((void **)&first->base_matrices,
+                                    first->base_matrices_count + 1,
+                                    first->base_matrices_count, sizeof(Matrix *), NULL);
+    if (info < GrB_SUCCESS) {
+        TRY(CFL_matrix_free(&other));
+        return info;
+    }
 
     while (true) {
+        // A merge changes other's size and can make another component comparable.
+        size_t other_nvals = other->nvals >= 10 ? other->nvals : 10;
         bool found = false;
 
         for (size_t i = 0; i < first->base_matrices_count; i++) {

@@ -41,6 +41,8 @@ extern GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix_p,
                                             enum CFL_Matrix_block format);
 extern GrB_Info block_matrix_to_diag(Matrix *diag, Matrix *input);
 extern GrB_Info block_matrix_reduce(Matrix *matrix, Matrix *input, int8_t optimizations);
+extern GrB_Info matrix_combine_lazy(Matrix *matrix, size_t threshold,
+                                    int8_t optimizations);
 
 // extern GrB_Info matrix_clear_empty(Matrix *A, int8_t optimizations);
 // extern GrB_Info matrix_mxm_empty(Matrix *output, Matrix *first, Matrix *second,
@@ -973,6 +975,134 @@ static void test_CFL_lazy_wise(void) {
 #endif
 }
 
+// Components occupy disjoint ranges of positions in a 64-by-64 matrix.
+static void make_component(Matrix **matrix, size_t offset, size_t count) {
+    OK(CFL_matrix_create(matrix, 64, 64));
+    for (size_t i = offset; i < offset + count; i++) {
+        OK(GrB_Matrix_setElement_BOOL((*matrix)->base, true, i / 64, i % 64));
+    }
+    OK(CFL_matrix_update(*matrix));
+}
+
+static void make_lazy_components(Matrix **matrix, const size_t *counts, size_t count) {
+    OK(CFL_matrix_create_lazy(matrix, 64, 64));
+    OK(CFL_matrix_free(&(*matrix)->base_matrices[0]));
+    (*matrix)->base_matrices_count = 0;
+    OK(LAGraph_Realloc((void **)&(*matrix)->base_matrices, count, 1,
+                       sizeof(Matrix *), msg));
+    size_t offset = 0;
+    for (size_t i = 0; i < count; i++) {
+        make_component(&(*matrix)->base_matrices[i], offset, counts[i]);
+        (*matrix)->base_matrices_count++;
+        offset += counts[i];
+    }
+    OK(CFL_matrix_update(*matrix));
+}
+
+static void test_CFL_lazy_merge_chain(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    for (int8_t mask = OPT_LAZY; mask < OPT_N_FLAGS; mask++) {
+        if (!(mask & OPT_LAZY)) continue;
+        const size_t counts[] = {100, 1100};
+        Matrix *A, *B, *expected;
+        make_lazy_components(&A, counts, 2);
+        make_component(&B, 1200, 90);
+        make_component(&expected, 0, 1290);
+
+        OK(CFL_wise(A, A, B, false, mask));
+        TEST_CHECK(A->base_matrices_count == 1);
+        TEST_CHECK(A->nvals == 1290);
+        TEST_CHECK(compare_matrices(A, expected));
+
+        OK(CFL_matrix_free(&A));
+        OK(CFL_matrix_free(&B));
+        OK(CFL_matrix_free(&expected));
+    }
+    teardown();
+#endif
+}
+
+static void test_CFL_lazy_many_components(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+    for (int8_t mask = OPT_LAZY; mask < OPT_N_FLAGS; mask++) {
+        if (!(mask & OPT_LAZY)) continue;
+        size_t counts[60];
+        for (size_t i = 0; i < 60; i++) counts[i] = 1;
+        Matrix *A, *B, *base, *expected;
+        make_lazy_components(&A, counts, 60);
+
+        OK(matrix_combine_lazy(A, 0, mask));
+        TEST_CHECK(A->base_matrices_count == 60);
+        OK(CFL_matrix_to_base(&base, A, mask));
+        make_component(&expected, 0, 60);
+        TEST_CHECK(compare_matrices(base, expected));
+        OK(CFL_matrix_free(&base));
+        OK(CFL_matrix_free(&expected));
+
+        make_component(&B, 60, 1000);
+        OK(CFL_wise(A, A, B, false, mask));
+        TEST_CHECK(A->base_matrices_count == 61);
+        TEST_CHECK(A->nvals == 1060);
+        make_component(&expected, 0, 1060);
+        TEST_CHECK(compare_matrices(A, expected));
+
+        OK(CFL_matrix_free(&A));
+        OK(CFL_matrix_free(&B));
+        OK(CFL_matrix_free(&expected));
+    }
+    teardown();
+#endif
+}
+
+static void *fail_lazy_realloc(void *p, size_t size) {
+    (void)p;
+    (void)size;
+    return NULL;
+}
+
+static void test_CFL_lazy_growth_failure(void) {
+#if LAGRAPH_SUITESPARSE
+    OK(LG_brutal_setup(msg));
+    Matrix *A, *B;
+    OK(CFL_matrix_create_lazy(&A, 64, 64));
+    make_component(&B, 0, 1);
+    // Warm up GraphBLAS before checking the allocation count.
+    OK(CFL_wise(A, A, B, false, OPT_LAZY));
+    int64_t baseline = LG_nmalloc;
+    LAGraph_Realloc_function = fail_lazy_realloc;
+    GrB_Info info = CFL_wise(A, A, B, false, OPT_LAZY);
+    LAGraph_Realloc_function = LG_brutal_realloc;
+
+    TEST_CHECK(info == GrB_OUT_OF_MEMORY);
+    TEST_CHECK(LG_nmalloc == baseline);
+    TEST_CHECK(A->base_matrices_count == 1);
+    TEST_CHECK(A->nvals == 1);
+
+    OK(CFL_matrix_free(&A));
+    OK(CFL_matrix_free(&B));
+
+    const size_t counts[] = {1, 1000};
+    make_lazy_components(&A, counts, 2);
+    Matrix *base = NULL;
+    OK(CFL_matrix_to_base(&base, A, OPT_LAZY));
+    OK(CFL_matrix_free(&base));
+    baseline = LG_nmalloc;
+    LAGraph_Realloc_function = fail_lazy_realloc;
+    info = CFL_matrix_to_base(&base, A, OPT_LAZY);
+    LAGraph_Realloc_function = LG_brutal_realloc;
+
+    TEST_CHECK(info == GrB_OUT_OF_MEMORY);
+    TEST_CHECK(base == NULL);
+    TEST_CHECK(LG_nmalloc == baseline);
+    TEST_CHECK(A->base_matrices_count == 2);
+    TEST_CHECK(A->nvals == 1001);
+    OK(CFL_matrix_free(&A));
+    OK(LG_brutal_teardown(msg));
+#endif
+}
+
 static void test_CFL_lazy_rsub(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -1472,6 +1602,11 @@ TEST_LIST = {
     {"test_CFL_lazy_create", test_CFL_lazy_create},
     {"test_CFL_lazy_mxm", test_CFL_lazy_mxm},
     {"test_CFL_lazy_wise", test_CFL_lazy_wise},
+    {"test_CFL_lazy_merge_chain", test_CFL_lazy_merge_chain},
+    {"test_CFL_lazy_many_components", test_CFL_lazy_many_components},
+#if !defined(GRAPHBLAS_HAS_CUDA)
+    {"test_CFL_lazy_growth_failure", test_CFL_lazy_growth_failure},
+#endif
     {"test_CFL_lazy_rsub", test_CFL_lazy_rsub},
     {"test_CFL_block_mxm", test_CFL_block_mxm},
     {"test_CFL_block_mxm_cells_into_vector", test_CFL_block_mxm_cells_into_vector},
