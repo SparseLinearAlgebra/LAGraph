@@ -667,9 +667,12 @@ GrB_Info CFL_matrix_from_base_lazy(Matrix **matrix_p, GrB_Matrix base) {
 GrB_Info CFL_matrix_create(Matrix **matrix, GrB_Index nrows, GrB_Index ncols) {
     GrB_Matrix _result;
     TRY(GrB_Matrix_new(&_result, GrB_BOOL, nrows, ncols));
-    TRY(CFL_matrix_from_base(matrix, _result));
+    GrB_Info info = CFL_matrix_from_base(matrix, _result);
+    if (info < GrB_SUCCESS) {
+        GrB_Matrix_free(&_result);
+    }
 
-    return GrB_SUCCESS;
+    return info;
 }
 
 GrB_Info CFL_matrix_create_lazy(Matrix **matrix, GrB_Index nrows, GrB_Index ncols) {
@@ -848,8 +851,24 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
     }
 
     if (first->block_type == CELL && second->block_type == CELL) {
-        TRY(matrix_mxm_lazy(output, first, second, accum, swap, optimizations));
-        return GrB_SUCCESS;
+        if (output->block_type == CELL) {
+            TRY(matrix_mxm_lazy(output, first, second, accum, swap, optimizations));
+            return GrB_SUCCESS;
+        }
+
+        // N_i -> A B: compute the square product and add it to every output block.
+        Matrix *temp;
+        TRY(CFL_matrix_create(&temp, swap ? second->nrows : first->nrows,
+                              swap ? first->ncols : second->ncols));
+        GrB_Info info = matrix_mxm_lazy(temp, first, second, false, swap, optimizations);
+        if (info >= GrB_SUCCESS && !accum) {
+            info = matrix_clear_empty(output, optimizations);
+        }
+        if (info >= GrB_SUCCESS) {
+            info = matrix_wise_block(output, output, temp, false, optimizations);
+        }
+        TRY(CFL_matrix_free(&temp));
+        return info;
     }
 
     if (first->block_type == CELL) {

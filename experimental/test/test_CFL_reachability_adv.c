@@ -637,6 +637,55 @@ void test_CFL_indexed_2(void) {
 #endif
 }
 
+void test_CFL_indexed_nonterm_only(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        // Symbols: [0 S_0] [1 S_1] [2 a] [3 b]. Rules: S_i -> a b | b a.
+        OK(LAGraph_Calloc((void **)&grammar.rules, 2, sizeof(LAGraph_rule_EWCNF), msg));
+        grammar.nonterms_count = 2;
+        grammar.terms_count = 2;
+        grammar.rules_count = 2;
+        grammar.rules[0] = (LAGraph_rule_EWCNF){0, 2, 3, 2, LAGraph_EWNCF_INDEX_NONTERM};
+        grammar.rules[1] = (LAGraph_rule_EWCNF){0, 3, 2, 2, LAGraph_EWNCF_INDEX_NONTERM};
+
+        n_adj_matrices = 4;
+        OK(LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg));
+        for (size_t i = 0; i < n_adj_matrices; i++) {
+            OK(GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, 3, 3));
+        }
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[2], true, 0, 1));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[3], true, 1, 2));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[3], true, 2, 0));
+        init_outputs();
+
+        GrB_Matrix expected = NULL;
+        OK(GrB_Matrix_new(&expected, GrB_BOOL, 3, 3));
+        OK(GrB_Matrix_setElement_BOOL(expected, true, 0, 2));
+        OK(GrB_Matrix_setElement_BOOL(expected, true, 2, 1));
+
+        GrB_Info info = run_algorithm(mask);
+        OK(info);
+        TEST_MSG("Mask: %zu", mask);
+        if (info == GrB_SUCCESS) {
+            for (size_t i = 0; i < n_adj_matrices; i++) {
+                bool equal = false;
+                OK(LAGraph_Matrix_IsEqual(&equal, outputs[i],
+                                          i < 2 ? expected : adj_matrices[i], msg));
+                TEST_CHECK(equal);
+                TEST_MSG("Mask: %zu, symbol: %zu", mask, i);
+            }
+        }
+
+        OK(GrB_Matrix_free(&expected));
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
 void test_CFL_indexed_simple(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
@@ -888,43 +937,129 @@ void test_CFL_reachability_invalid_rules(void) {
 #if LAGRAPH_SUITESPARSE
     setup();
 
-    for (size_t mask = 0; mask < 16; mask++) {
-        /* code */
-    }
-
     GrB_Info retval;
 
     init_grammar_aSb();
     init_graph_double_cycle();
     init_outputs();
 
-    // Rule [Variable -> _ B]
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = -1, .prod_B = 1, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-    printf("MSG: %s\n", msg);
-    // Rule [_ -> A B]
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = -1, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-    printf("MSG: %s\n", msg);
+    const LAGraph_rule_EWCNF invalid_rules[] = {
+        {0, -1, 1, 0, 0}, // Missing first RHS symbol.
+        {-1, 1, 2, 0, 0},
+        {-2, 1, 2, 0, 0},
+        {6, 1, 2, 0, 0}, // Symbol indices must be less than six.
+        {0, -2, 2, 0, 0},
+        {0, 6, 2, 0, 0},
+        {0, 1, -2, 0, 0},
+        {0, 1, 6, 0, 0},
+        {0, 6, -1, 0, 0},
+        // Valid base indices, but indexed groups extend beyond the symbol array.
+        {5, 1, 2, 2, LAGraph_EWNCF_INDEX_NONTERM},
+        {0, 5, 2, 2, LAGraph_EWNCF_INDEX_PROD_A},
+        {0, 1, 5, 2, LAGraph_EWNCF_INDEX_PROD_B},
+        {0, 1, 2, UINT32_MAX, LAGraph_EWNCF_INDEX_PROD_A},
+    };
 
-    // Rule [C -> A B], where C >= nonterms_count
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = 10, .prod_A = 1, .prod_B = 2, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-
-    // Rule [S -> A B], where A >= nonterms_count
-    grammar.rules[0] =
-        (LAGraph_rule_EWCNF){.nonterm = 0, .prod_A = 10, .prod_B = 2, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
-
-    // Rule [C -> t], where t >= terms_count
-    grammar.rules[0] = (LAGraph_rule_EWCNF){
-        .nonterm = 0, .prod_A = 10, .prod_B = -1, .indexed_count = 0};
-    check_error(GrB_INVALID_VALUE, 0);
+    for (size_t mask = 0; mask < 16; mask++) {
+        for (size_t i = 0; i < sizeof(invalid_rules) / sizeof(invalid_rules[0]); i++) {
+            grammar.rules[0] = invalid_rules[i];
+            check_error(GrB_INVALID_VALUE, mask);
+            TEST_CHECK(strstr(msg, "Rule with index 0") != NULL);
+            TEST_MSG("Mask: %zu, invalid rule: %zu", mask, i);
+        }
+    }
 
     free_workspace();
+    teardown();
+#endif
+}
+
+// Fail one LAGraph allocation while the brutal allocator tracks both LAGraph
+// and GraphBLAS resources. GraphBLAS allocations remain enabled for cleanup.
+static size_t calloc_count, calloc_fail_at;
+
+static void *fail_calloc(size_t n, size_t size) {
+    if (++calloc_count == calloc_fail_at) {
+        return NULL;
+    }
+    return LG_brutal_calloc(n, size);
+}
+
+void test_CFL_reachability_allocation_failure(void) {
+#if LAGRAPH_SUITESPARSE
+    OK(LG_brutal_setup(msg));
+
+    GrB_Matrix adj[3] = {NULL}, result[3] = {NULL};
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_Matrix_new(&adj[i], GrB_BOOL, 3, 3));
+    }
+    OK(GrB_Matrix_setElement_BOOL(adj[1], true, 0, 1));
+    OK(GrB_Matrix_setElement_BOOL(adj[2], true, 1, 2));
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_Matrix_wait(adj[i], GrB_MATERIALIZE));
+    }
+
+    LAGraph_rule_EWCNF rule = {0, 1, 2, 0, 0};
+    // Warm up GraphBLAS caches before taking the allocation baseline.
+    OK(LAGraph_CFL_reachability_adv(result, adj, 3, &rule, 1, msg, 0));
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_free(&result[i]));
+    }
+    // First three workspace arrays, symbol/rule setup, then a temporary matrix
+    // inside the first fixed-point iteration (allocation 16, through TRY_I).
+    const size_t failures[] = {1, 2, 3, 4, 5, 6, 16, 0};
+    int64_t baseline = LG_nmalloc;
+    for (size_t i = 0; i < sizeof(failures) / sizeof(failures[0]); i++) {
+        calloc_count = 0;
+        calloc_fail_at = failures[i];
+        LAGraph_Calloc_function = fail_calloc;
+        GrB_Info info = LAGraph_CFL_reachability_adv(result, adj, 3, &rule, 1, msg, 0);
+        LAGraph_Calloc_function = LG_brutal_calloc;
+        TEST_CHECK(info == (calloc_fail_at == 0 ? GrB_SUCCESS : GrB_OUT_OF_MEMORY));
+        TEST_MSG("Failed allocation: %zu, retval: %d", calloc_fail_at, info);
+        for (size_t j = 0; j < 3; j++) {
+            OK(GrB_free(&result[j]));
+        }
+        TEST_CHECK(LG_nmalloc == baseline);
+        TEST_MSG("Failed allocation: %zu, live allocations: %" PRId64
+                 ", expected: %" PRId64, calloc_fail_at, LG_nmalloc, baseline);
+    }
+
+    for (size_t i = 0; i < 3; i++) {
+        OK(GrB_free(&adj[i]));
+    }
+    OK(LG_brutal_teardown(msg));
+#endif
+}
+
+void test_CFL_reachability_null_msg(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        init_grammar_aSb();
+        init_graph_double_cycle();
+        init_outputs();
+
+        OK(LAGraph_CFL_reachability_adv(outputs, adj_matrices,
+                                        grammar.terms_count + grammar.nonterms_count,
+                                        grammar.rules, grammar.rules_count, NULL, mask));
+        free_workspace();
+
+        init_grammar_aSb();
+        init_graph_double_cycle();
+        init_outputs();
+        GrB_free(&adj_matrices[0]);
+        GrB_free(&adj_matrices[1]);
+
+        GrB_Info info = LAGraph_CFL_reachability_adv(
+            outputs, adj_matrices, grammar.terms_count + grammar.nonterms_count,
+            grammar.rules, grammar.rules_count, NULL, mask);
+        TEST_CHECK(info == GrB_NULL_POINTER);
+        TEST_MSG("Mask: %zu, retval: %d", mask, info);
+        free_workspace();
+    }
+
     teardown();
 #endif
 }
@@ -946,6 +1081,8 @@ void test_CFL_reachability_null_pointers(void) {
     GrB_free(&adj_matrices[1]);
 
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "Adjacency matrices with these indexes are null: 0, 1")
+               != NULL);
 
     //  adj_matrices = NULL;
     for (size_t i = 0; i < n_adj_matrices; i++) {
@@ -954,6 +1091,7 @@ void test_CFL_reachability_null_pointers(void) {
 
     LAGraph_Free((void **)&adj_matrices, msg);
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "The adjacency matrices array cannot be null.") != NULL);
 
     free_workspace();
     init_grammar_aSb();
@@ -963,6 +1101,7 @@ void test_CFL_reachability_null_pointers(void) {
     //  outputs = NULL;
     LAGraph_Free((void **)&outputs, msg);
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "The outputs array cannot be null.") != NULL);
 
     free_workspace();
     init_grammar_aSb();
@@ -972,6 +1111,7 @@ void test_CFL_reachability_null_pointers(void) {
     //  grammar.rules = NULL;
     LAGraph_Free((void **)&grammar.rules, msg);
     check_error(GrB_NULL_POINTER, 0);
+    TEST_CHECK(strstr(msg, "The rules array cannot be null.") != NULL);
 
     free_workspace();
     teardown();
@@ -981,6 +1121,7 @@ void test_CFL_reachability_null_pointers(void) {
 TEST_LIST = {
     {"CFG_reachability_indexed", test_CFL_indexed},
     {"CFG_reachability_indexed_2", test_CFL_indexed_2},
+    {"CFG_reachability_indexed_nonterm_only", test_CFL_indexed_nonterm_only},
     {"CFL_reachability_complex_grammar", test_CFL_reachability_complex_grammar},
     {"CFG_reachability_indexed_simple", test_CFL_indexed_simple},
     {"CFG_reachability_indexed_simple_exploded", test_CFL_indexed_simple_exploded},
@@ -996,6 +1137,8 @@ TEST_LIST = {
     {"test_CFL_reachability_with_empty_adj_matrix",
      test_CFL_reachability_with_empty_adj_matrix},
 #if !defined(GRAPHBLAS_HAS_CUDA)
+    {"CFG_reachability_allocation_failure", test_CFL_reachability_allocation_failure},
+    {"CFG_reachability_null_msg", test_CFL_reachability_null_msg},
     {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
 #endif
     {NULL, NULL}};

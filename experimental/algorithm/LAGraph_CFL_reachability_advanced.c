@@ -18,22 +18,28 @@
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         TRY_INNER(CFL_matrix_free(&iden));                                               \
-        TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, msg));                      \
-        TRY_INNER(LAGraph_Free((void **)&new_rules, msg));                               \
+        TRY_INNER(GrB_free(&identity_matrix));                                           \
+        TRY_INNER(GrB_free(&v_diag));                                                    \
+        TRY_INNER(GrB_free(&new_adj_matrix));                                            \
+        TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, NULL));                     \
+        TRY_INNER(LAGraph_Free((void **)&new_rules, NULL));                              \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
-            TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                               \
-            TRY_INNER(CFL_matrix_free(&delta_matrices[i]));                              \
-            TRY_INNER(CFL_matrix_free(&matrices[i]));                                    \
-            if (new_adj_matrices != adj_matrices) {                                      \
+            if (temp_matrices != NULL)                                                  \
+                TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                           \
+            if (delta_matrices != NULL)                                                 \
+                TRY_INNER(CFL_matrix_free(&delta_matrices[i]));                          \
+            if (matrices != NULL)                                                       \
+                TRY_INNER(CFL_matrix_free(&matrices[i]));                                \
+            if (new_adj_matrices != NULL && new_adj_matrices != adj_matrices) {         \
                 TRY_INNER(GrB_free(&new_adj_matrices[i]));                               \
             }                                                                            \
         }                                                                                \
         if (new_adj_matrices != adj_matrices) {                                          \
-            TRY_INNER(LAGraph_Free((void **)&new_adj_matrices, msg));                    \
+            TRY_INNER(LAGraph_Free((void **)&new_adj_matrices, NULL));                   \
         }                                                                                \
-        TRY_INNER(LAGraph_Free((void **)&delta_matrices, msg));                          \
-        TRY_INNER(LAGraph_Free((void **)&matrices, msg));                                \
-        TRY_INNER(LAGraph_Free((void **)&temp_matrices, msg));                           \
+        TRY_INNER(LAGraph_Free((void **)&delta_matrices, NULL));                         \
+        TRY_INNER(LAGraph_Free((void **)&matrices, NULL));                               \
+        TRY_INNER(LAGraph_Free((void **)&temp_matrices, NULL));                          \
     }
 
 #define LG_FREE_ALL                                                                      \
@@ -53,22 +59,14 @@
 
 #define ADD_TO_MSG(...)                                                                  \
     {                                                                                    \
-        if (msg_len == 0) {                                                              \
+        if (msg != NULL && msg_len == 0) {                                               \
             msg_len +=                                                                   \
                 snprintf(msg, LAGRAPH_MSG_LEN,                                           \
                          "LAGraph failure (file %s, line %d): ", __FILE__, __LINE__);    \
         }                                                                                \
-        if (msg_len < LAGRAPH_MSG_LEN) {                                                 \
+        if (msg != NULL && msg_len < LAGRAPH_MSG_LEN) {                                  \
             msg_len += snprintf(msg + msg_len, LAGRAPH_MSG_LEN - msg_len, __VA_ARGS__);  \
         }                                                                                \
-    }
-
-#define ADD_INDEX_TO_ERROR_RULE(rule, i)                                                 \
-    {                                                                                    \
-        rule.len_indexes_str += snprintf(rule.indexes_str + rule.len_indexes_str,        \
-                                         LAGRAPH_MSG_LEN - rule.len_indexes_str,         \
-                                         rule.count == 0 ? "%ld" : ", %ld", i);          \
-        rule.count++;                                                                    \
     }
 
 #define BENCH_CFL_REACHBILITY false
@@ -177,8 +175,9 @@
         GrB_Info LG_GrB_Info = GrB_method;                                               \
         if (LG_GrB_Info < GrB_SUCCESS) {                                                 \
             fprintf(stderr,                                                              \
-                    "LAGraph failure (file %s, line %d) (Iteration: %d, i: %d): \n",     \
+                    "LAGraph failure (file %s, line %d) (Iteration: %zu, i: %zu): \n",   \
                     __FILE__, __LINE__, iteration, i);                                   \
+            LG_FREE_ALL;                                                                \
             return (LG_GrB_Info);                                                        \
         }                                                                                \
     }
@@ -220,13 +219,13 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
 
 #define FREE_INNER_WORK()                                                                \
     {                                                                                    \
-        LAGraph_Free((void **)&checked, msg);                                            \
+        LAGraph_Free((void **)&checked, NULL);                                           \
     };
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
         FREE_INNER_WORK();                                                               \
-        LAGraph_Free((void **)symbols, msg);                                             \
+        LAGraph_Free((void **)symbols, NULL);                                            \
     }
 
     TRY_INNER(LAGraph_Calloc((void **)&checked, symbols_amount, sizeof(bool), msg));
@@ -323,7 +322,7 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)new_rules, msg);                                           \
+        LAGraph_Free((void **)new_rules, NULL);                                          \
     }
 
     size_t new_rules_size = 0;
@@ -399,8 +398,8 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
 #define FREE_INNER()                                                                     \
     {                                                                                    \
         CFL_matrix_free(&base_matrix);                                                   \
-        LAGraph_Free((void **)&nrows, msg);                                              \
-        LAGraph_Free((void **)&ncols, msg);                                              \
+        LAGraph_Free((void **)&nrows, NULL);                                             \
+        LAGraph_Free((void **)&ncols, NULL);                                             \
     }
 
     if (matrix->block_type == CELL) {
@@ -439,8 +438,8 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
 
     TRY_INNER(GxB_Matrix_split(outputs, m, n, nrows, ncols, base_matrix->base, GrB_NULL));
 
-    TRY_INNER(LAGraph_Free((void **)&nrows, msg));
-    TRY_INNER(LAGraph_Free((void **)&ncols, msg));
+    TRY_INNER(LAGraph_Free((void **)&nrows, NULL));
+    TRY_INNER(LAGraph_Free((void **)&ncols, NULL));
     TRY_INNER(CFL_matrix_free(&base_matrix));
 
     return GrB_SUCCESS;
@@ -459,7 +458,7 @@ static GrB_Info get_new_symbols_map(const LAGraph_rule_EWCNF *rules, size_t rule
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)map, msg);                                                 \
+        LAGraph_Free((void **)map, NULL);                                                \
     }
 
     if (optimizations & OPT_BLOCK) {
@@ -490,7 +489,7 @@ static GrB_Info get_new_adj_matrices(const GrB_Matrix *adj_matrices, CFL_Symbol 
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)new_adj_matrices_p, msg);                                  \
+        LAGraph_Free((void **)new_adj_matrices_p, NULL);                                 \
     }
 
     GrB_Index n;
@@ -537,7 +536,7 @@ static GrB_Info get_new_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        LAGraph_Free((void **)new_rules, msg);                                           \
+        LAGraph_Free((void **)new_rules, NULL);                                          \
     }
 
     if (!(optimizations & OPT_BLOCK)) {
@@ -659,9 +658,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #define FREE_INNER()
 
     // Declare workspace and clear the msg string, if not NULL
-    CFL_Matrix **delta_matrices, **matrices, **temp_matrices;
+    CFL_Matrix **delta_matrices = NULL, **matrices = NULL, **temp_matrices = NULL;
     CFL_Matrix *iden = NULL;
     GrB_Matrix identity_matrix = NULL;
+    GrB_Vector v_diag = NULL;
+    GrB_Matrix new_adj_matrix = NULL;
 
     // for OPT_BLOCK optimization
     size_t new_symbols_amount = 0;
@@ -709,6 +710,35 @@ GrB_Info LAGraph_CFL_reachability_adv(
         return GrB_NULL_POINTER;
     }
 
+    // Validate original rules before grouping symbols or expanding indexed rules.
+    for (size_t i = 0; i < rules_count; i++) {
+        LAGraph_rule_EWCNF rule = rules[i];
+        LG_ASSERT_MSGF(rule.prod_A != -1 || rule.prod_B == -1, GrB_INVALID_VALUE,
+                       "Rule with index %zu has an invalid [Variable -> _ B] form.", i);
+
+        int32_t prods[3] = {rule.nonterm, rule.prod_A, rule.prod_B};
+        int bitmasks[3] = {LAGraph_EWNCF_INDEX_NONTERM, LAGraph_EWNCF_INDEX_PROD_A,
+                           LAGraph_EWNCF_INDEX_PROD_B};
+
+        for (size_t j = 0; j < 3; j++) {
+            if (j != 0 && prods[j] == -1) {
+                continue;
+            }
+
+            LG_ASSERT_MSGF(prods[j] >= 0 && (size_t)prods[j] < symbols_amount,
+                           GrB_INVALID_VALUE,
+                           "Rule with index %zu has an invalid symbol index %d.",
+                           i, prods[j]);
+
+            if (rule.indexed & bitmasks[j]) {
+                LG_ASSERT_MSGF(rule.indexed_count <= symbols_amount - (size_t)prods[j],
+                               GrB_INVALID_VALUE,
+                               "Rule with index %zu has an indexed group outside the "
+                               "symbol range.", i);
+            }
+        }
+    }
+
     GrB_Index n;
     TRY(GrB_Matrix_ncols(&n, adj_matrices[0]));
 
@@ -725,79 +755,19 @@ GrB_Info LAGraph_CFL_reachability_adv(
     size_t bin_rules[new_rules_count], bin_rules_count = 0;   // [Variable -> AB]
 
     // Process rules
-    typedef struct {
-        size_t count;
-        size_t len_indexes_str;
-        char indexes_str[LAGRAPH_MSG_LEN];
-    } rule_error_s;
-    rule_error_s term_err = {0};
-    rule_error_s nonterm_err = {0};
-    rule_error_s invalid_err = {0};
     for (size_t i = 0; i < new_rules_count; i++) {
         LAGraph_rule_EWCNF rule = new_rules[i];
 
-        bool is_rule_eps = rule.prod_A == -1 && rule.prod_B == -1;
-        bool is_rule_term = rule.prod_A != -1 && rule.prod_B == -1;
-        bool is_rule_bin = rule.prod_A != -1 && rule.prod_B != -1;
-
-        // Check that all rules are well-formed
-        if (rule.nonterm < 0 || (size_t)rule.nonterm >= new_symbols_amount) {
-            ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-        }
-
-        // [Variable -> eps]
-        if (is_rule_eps) {
+        if (rule.prod_A == -1) {
+            // [Variable -> eps]
             eps_rules[eps_rules_count++] = i;
-
-            continue;
-        }
-
-        // [Variable -> term]
-        if (is_rule_term) {
+        } else if (rule.prod_B == -1) {
+            // [Variable -> term]
             term_rules[term_rules_count++] = i;
-
-            if (rule.prod_A < -1 || (size_t)rule.prod_A >= new_symbols_amount) {
-                ADD_INDEX_TO_ERROR_RULE(term_err, i);
-            }
-
-            continue;
-        }
-
-        // [Variable -> A B]
-        if (is_rule_bin) {
+        } else {
+            // [Variable -> A B]
             bin_rules[bin_rules_count++] = i;
-
-            if (rule.prod_A < -1 || (size_t)rule.prod_A >= new_symbols_amount ||
-                rule.prod_B < -1 || (size_t)rule.prod_B >= new_symbols_amount) {
-                ADD_INDEX_TO_ERROR_RULE(nonterm_err, i);
-            }
-
-            continue;
         }
-
-        // [Variable -> _ B]
-        ADD_INDEX_TO_ERROR_RULE(invalid_err, i);
-    }
-
-    if (term_err.count + nonterm_err.count + invalid_err.count > 0) {
-        ADD_TO_MSG("Count of invalid rules: %ld.\n",
-                   term_err.count + nonterm_err.count + invalid_err.count);
-
-        if (nonterm_err.count > 0) {
-            ADD_TO_MSG("Non-terminals must be in range [0, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", nonterm_err.indexes_str)
-        }
-        if (term_err.count > 0) {
-            ADD_TO_MSG("Terminals must be in range [-1, nonterms_count). ");
-            ADD_TO_MSG("Indexes of invalid rules: %s\n", term_err.indexes_str)
-        }
-        if (invalid_err.count > 0) {
-            ADD_TO_MSG("[Variable -> _ B] type of rule is not acceptable. ");
-            ADD_TO_MSG("Indexes of invalid rules: %.120s\n", invalid_err.indexes_str)
-        }
-
-        LG_FREE_ALL;
-        return GrB_INVALID_VALUE;
     }
 
     // Create symbol matrices
@@ -807,9 +777,9 @@ GrB_Info LAGraph_CFL_reachability_adv(
         GrB_Index ncols;
         TRY(GrB_Matrix_ncols(&ncols, new_adj_matrices[i]));
 
-        GrB_Matrix new_adj_matrix;
         TRY(GrB_Matrix_dup(&new_adj_matrix, new_adj_matrices[i]));
         TRY(CFL_matrix_from_base(&delta_matrices[i], new_adj_matrix));
+        new_adj_matrix = NULL; // Ownership transferred to delta_matrices[i].
 
         if (optimizations & OPT_LAZY) {
             TRY(CFL_matrix_create_lazy(&matrices[i], nrows, ncols));
@@ -829,12 +799,12 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TRY(CFL_wise(nonterm_matrix, nonterm_matrix, term_matrix, true, optimizations));
     }
 
-    GrB_Vector v_diag;
     TRY(GrB_Vector_new(&v_diag, GrB_BOOL, n));
     TRY(GrB_Vector_assign_BOOL(v_diag, GrB_NULL, GrB_NULL, true, GrB_ALL, n, NULL));
     TRY(GrB_Matrix_diag(&identity_matrix, v_diag, 0));
     TRY(GrB_Vector_free(&v_diag));
     TRY(CFL_matrix_from_base(&iden, identity_matrix));
+    identity_matrix = NULL; // Ownership transferred to iden.
 
     // Rule [Variable -> eps]
     for (size_t i = 0; i < eps_rules_count; i++) {
