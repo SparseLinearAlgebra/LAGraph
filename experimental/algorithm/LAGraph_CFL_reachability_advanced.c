@@ -23,6 +23,8 @@
         TRY_INNER(GrB_free(&new_adj_matrix));                                            \
         TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, NULL));                     \
         TRY_INNER(LAGraph_Free((void **)&new_rules, NULL));                              \
+        TRY_INNER(LAGraph_Free((void **)&used_symbols, NULL));                           \
+        TRY_INNER(LAGraph_Free((void **)&active_symbols, NULL));                         \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             if (temp_matrices != NULL)                                                  \
                 TRY_INNER(CFL_matrix_free(&temp_matrices[i]));                           \
@@ -671,6 +673,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
     size_t new_rules_count = 0;
     CFL_Symbol *to_new_symbols_map = NULL;
 
+    // Symbols that appear in no rule never change, so the main loop skips them
+    bool *used_symbols = NULL;
+    size_t *active_symbols = NULL;
+    size_t active_symbols_count = 0;
+
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
 
@@ -770,8 +777,29 @@ GrB_Info LAGraph_CFL_reachability_adv(
         }
     }
 
-    // Create symbol matrices
+    // Collect symbols used by rules. An unused symbol is never read or written
+    // by the algorithm, so its output is just a copy of its adjacency matrix.
+    TRY(LAGraph_Calloc((void **)&used_symbols, new_symbols_amount, sizeof(bool), msg));
+    TRY(LAGraph_Calloc((void **)&active_symbols, new_symbols_amount, sizeof(size_t),
+                       msg));
+
+    for (size_t i = 0; i < new_rules_count; i++) {
+        LAGraph_rule_EWCNF rule = new_rules[i];
+        used_symbols[rule.nonterm] = true;
+        if (rule.prod_A != -1)
+            used_symbols[rule.prod_A] = true;
+        if (rule.prod_B != -1)
+            used_symbols[rule.prod_B] = true;
+    }
+
     for (size_t i = 0; i < new_symbols_amount; i++) {
+        if (used_symbols[i])
+            active_symbols[active_symbols_count++] = i;
+    }
+
+    // Create symbol matrices
+    for (size_t k = 0; k < active_symbols_count; k++) {
+        size_t i = active_symbols[k];
         GrB_Index nrows;
         TRY(GrB_Matrix_nrows(&nrows, new_adj_matrices[i]));
         GrB_Index ncols;
@@ -831,7 +859,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         printf("\n--- ITERATARION %ld ---\n", iteration);
 #endif
 
-        for (size_t i = 0; i < new_symbols_amount; i++) {
+        for (size_t k = 0; k < active_symbols_count; k++) {
+            size_t i = active_symbols[k];
             TRY_I(CFL_matrix_free(&temp_matrices[i]));
             TRY_I(CFL_matrix_create(&temp_matrices[i], matrices[i]->nrows,
                                     matrices[i]->ncols));
@@ -849,7 +878,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_STOP("MXM 1", &mxm1);
 
         TIMER_START()
-        for (size_t i = 0; i < new_symbols_amount; i++) {
+        for (size_t k = 0; k < active_symbols_count; k++) {
+            size_t i = active_symbols[k];
             CFL_Matrix *A = delta_matrices[i];
             CFL_Matrix *C = matrices[i];
 
@@ -878,13 +908,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
         }
 
         TIMER_START();
-        for (size_t i = 0; i < new_symbols_amount; i++) {
+        for (size_t k = 0; k < active_symbols_count; k++) {
+            size_t i = active_symbols[k];
             TRY_I(CFL_dup(delta_matrices[i], temp_matrices[i], optimizations));
         }
         TIMER_STOP("WISE 2 (copy)", &wise2);
 
         TIMER_START();
-        for (size_t i = 0; i < new_symbols_amount; i++) {
+        for (size_t k = 0; k < active_symbols_count; k++) {
+            size_t i = active_symbols[k];
             CFL_Matrix *A = matrices[i];
             CFL_Matrix *C = delta_matrices[i];
 
@@ -893,7 +925,8 @@ GrB_Info LAGraph_CFL_reachability_adv(
         TIMER_STOP("WISE 3 (MASK)", &rsubt);
 
         size_t new_nnz = 0;
-        for (size_t i = 0; i < new_symbols_amount; i++) {
+        for (size_t k = 0; k < active_symbols_count; k++) {
+            size_t i = active_symbols[k];
             TRY(CFL_matrix_update(delta_matrices[i]));
             new_nnz += delta_matrices[i]->nvals;
         }
@@ -911,6 +944,11 @@ GrB_Info LAGraph_CFL_reachability_adv(
     // get outputs matrices
     for (size_t i = 0; i < new_symbols_amount; i++) {
         CFL_Symbol sym = to_new_symbols_map[i];
+        if (!used_symbols[i]) {
+            // Unused symbols are never grouped, so this is a single n x n matrix
+            TRY(GrB_Matrix_dup(outputs + sym.base_index, new_adj_matrices[i]));
+            continue;
+        }
         TRY(split_CFL_matrix(outputs + sym.base_index, matrices[i], optimizations));
     }
 

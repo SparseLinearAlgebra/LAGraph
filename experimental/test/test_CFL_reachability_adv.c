@@ -929,6 +929,126 @@ void test_CFL_reachability_with_empty_adj_matrix(void) {
 #endif
 }
 
+// Symbols that appear in no rule cannot change during the algorithm, so their
+// outputs must be equal to their adjacency matrices.
+void check_outputs(GrB_Matrix *expected, size_t mask) {
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        GrB_Matrix want = expected[i] != NULL ? expected[i] : adj_matrices[i];
+        bool equal = false;
+        OK(LAGraph_Matrix_IsEqual(&equal, outputs[i], want, msg));
+        TEST_CHECK(equal);
+        TEST_MSG("Mask: %zx, symbol: %zu", mask, i);
+    }
+}
+
+void init_adj_matrices(size_t count, GrB_Index n) {
+    n_adj_matrices = count;
+    OK(LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg));
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        OK(GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, n, n));
+    }
+}
+
+void test_CFL_reachability_unused_symbols(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        // Symbols: [0 S] [1 x] [2 a] [3 y] [4 b] [5 T] [6 z] [7 C]
+        // x, y, z appear in no rule; x and z have edges, y is empty.
+        // C appears only on the left side of a rule.
+        // S -> a b | a T, T -> S b, C -> b a
+        OK(LAGraph_Calloc((void **)&grammar.rules, 4, sizeof(LAGraph_rule_EWCNF), msg));
+        grammar.nonterms_count = 3;
+        grammar.terms_count = 5;
+        grammar.rules_count = 4;
+        grammar.rules[0] = (LAGraph_rule_EWCNF){0, 2, 4, 0, 0};
+        grammar.rules[1] = (LAGraph_rule_EWCNF){0, 2, 5, 0, 0};
+        grammar.rules[2] = (LAGraph_rule_EWCNF){5, 0, 4, 0, 0};
+        grammar.rules[3] = (LAGraph_rule_EWCNF){7, 4, 2, 0, 0};
+
+        init_adj_matrices(8, 4);
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[1], true, 0, 3));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[1], true, 3, 0));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[2], true, 0, 1));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[2], true, 1, 2));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[4], true, 2, 3));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[4], true, 3, 0));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[6], true, 2, 2));
+        init_outputs();
+
+        GrB_Matrix expected[8] = {NULL};
+        OK(GrB_Matrix_new(&expected[0], GrB_BOOL, 4, 4));
+        OK(GrB_Matrix_setElement_BOOL(expected[0], true, 1, 3));
+        OK(GrB_Matrix_setElement_BOOL(expected[0], true, 0, 0));
+        OK(GrB_Matrix_new(&expected[5], GrB_BOOL, 4, 4));
+        OK(GrB_Matrix_setElement_BOOL(expected[5], true, 1, 0));
+        OK(GrB_Matrix_new(&expected[7], GrB_BOOL, 4, 4));
+        OK(GrB_Matrix_setElement_BOOL(expected[7], true, 3, 1));
+
+        GrB_Info info = run_algorithm(mask);
+        OK(info);
+        TEST_MSG("Mask: %zx, error: %s", mask, msg);
+        if (info == GrB_SUCCESS) {
+            check_outputs(expected, mask);
+        }
+
+        for (size_t i = 0; i < 8; i++) {
+            GrB_free(&expected[i]);
+        }
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
+void test_CFL_reachability_unused_symbols_indexed(void) {
+#if LAGRAPH_SUITESPARSE
+    setup();
+
+    for (size_t mask = 0; mask < 16; mask++) {
+        // Symbols: [0 a] [1 b_0] [2 b_1] [3 S_0] [4 S_1] [5 u_0] [6 u_1] [7 u_2] [8 v]
+        // u_0..u_2 and v appear in no rule; u_1 and v are empty.
+        // S_i -> a b_i
+        OK(LAGraph_Calloc((void **)&grammar.rules, 1, sizeof(LAGraph_rule_EWCNF), msg));
+        grammar.nonterms_count = 2;
+        grammar.terms_count = 7;
+        grammar.rules_count = 1;
+        grammar.rules[0] = (LAGraph_rule_EWCNF){
+            3, 0, 1, 2, LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_B};
+
+        init_adj_matrices(9, 3);
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[0], true, 0, 1));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[1], true, 1, 2));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[2], true, 1, 0));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[5], true, 0, 0));
+        OK(GrB_Matrix_setElement_BOOL(adj_matrices[7], true, 2, 1));
+        init_outputs();
+
+        GrB_Matrix expected[9] = {NULL};
+        OK(GrB_Matrix_new(&expected[3], GrB_BOOL, 3, 3));
+        OK(GrB_Matrix_setElement_BOOL(expected[3], true, 0, 2));
+        OK(GrB_Matrix_new(&expected[4], GrB_BOOL, 3, 3));
+        OK(GrB_Matrix_setElement_BOOL(expected[4], true, 0, 0));
+
+        GrB_Info info = run_algorithm(mask);
+        OK(info);
+        TEST_MSG("Mask: %zx, error: %s", mask, msg);
+        if (info == GrB_SUCCESS) {
+            check_outputs(expected, mask);
+        }
+
+        for (size_t i = 0; i < 9; i++) {
+            GrB_free(&expected[i]);
+        }
+        free_workspace();
+    }
+
+    teardown();
+#endif
+}
+
 //====================
 // Tests with invalid result
 //====================
@@ -1137,6 +1257,9 @@ TEST_LIST = {
     {"test_CFL_reachability_with_empty_adj_matrix",
      test_CFL_reachability_with_empty_adj_matrix},
 #if !defined(GRAPHBLAS_HAS_CUDA)
+    {"CFL_reachability_unused_symbols", test_CFL_reachability_unused_symbols},
+    {"CFL_reachability_unused_symbols_indexed",
+     test_CFL_reachability_unused_symbols_indexed},
     {"CFG_reachability_allocation_failure", test_CFL_reachability_allocation_failure},
     {"CFG_reachability_null_msg", test_CFL_reachability_null_msg},
     {"CFG_reachability_null_pointers", test_CFL_reachability_null_pointers},
