@@ -541,6 +541,46 @@ GrB_Info CFL_matrix_to_base(Matrix **matrix_p, Matrix *input, int8_t optimizatio
     return GrB_SUCCESS;
 }
 
+GrB_Info CFL_matrix_extract_base(GrB_Matrix *base, Matrix *matrix, int8_t optimizations) {
+    if (matrix->is_lazy) {
+        // GraphBLAS never adds sparse matrices in-place: each addition builds a new
+        // matrix, so its cost depends on the size of both operands. Smaller base
+        // matrices are summed first (from the smallest one), and the largest base
+        // matrix is added only once at the end
+        TRY(matrix_sort_lazy(matrix, false));
+
+        size_t last = matrix->base_matrices_count - 1;
+        Matrix *largest = matrix->base_matrices[last];
+        if (last > 0) {
+            Matrix *acc = matrix->base_matrices[0];
+            for (size_t i = 1; i < last; i++) {
+                TRY(CFL_wise(acc, acc, matrix->base_matrices[i], false, optimizations));
+            }
+
+            TRY(CFL_wise(largest, largest, acc, false, optimizations));
+        }
+
+        TRY(CFL_matrix_extract_base(base, largest, optimizations));
+        return GrB_SUCCESS;
+    }
+
+    // Matrix contains both formats, so free the one that is not extracted
+    if (matrix->is_both) {
+        GrB_Matrix other =
+            matrix->base == matrix->base_row ? matrix->base_col : matrix->base_row;
+        TRY(GrB_Matrix_free(&other));
+    }
+
+    *base = matrix->base;
+    matrix->base = NULL;
+    matrix->base_row = NULL;
+    matrix->base_col = NULL;
+    matrix->is_both = false;
+    matrix->nvals = 0;
+
+    return GrB_SUCCESS;
+}
+
 GrB_Info matrix_combine_lazy(Matrix *A, size_t threshold, int8_t optimizations) {
     Matrix **new_matrices;
     TRY(LAGraph_Calloc((void **)&new_matrices, A->base_matrices_count,

@@ -670,9 +670,14 @@ void test_CFL_indexed_nonterm_only(void) {
         TEST_MSG("Mask: %zu", mask);
         if (info == GrB_SUCCESS) {
             for (size_t i = 0; i < n_adj_matrices; i++) {
+                if (i >= 2) {
+                    TEST_CHECK(outputs[i] == NULL);
+                    TEST_MSG("Mask: %zu, symbol: %zu", mask, i);
+                    continue;
+                }
+
                 bool equal = false;
-                OK(LAGraph_Matrix_IsEqual(&equal, outputs[i],
-                                          i < 2 ? expected : adj_matrices[i], msg));
+                OK(LAGraph_Matrix_IsEqual(&equal, outputs[i], expected, msg));
                 TEST_CHECK(equal);
                 TEST_MSG("Mask: %zu, symbol: %zu", mask, i);
             }
@@ -792,7 +797,16 @@ void test_CFL_reachability_indexed_rules(void) {
         init_outputs();
 
         OK(run_algorithm(mask));
-        check_result("(0, 1)");
+        // Terminals a, b_0 and b_1 are not nonterminals, so they have no outputs
+        for (size_t i = 0; i < 3; i++) {
+            TEST_CHECK(outputs[i] == NULL);
+            TEST_MSG("Mask: %zx, symbol: %zu", mask, i);
+        }
+
+        char *expected = output_to_str(3);
+        TEST_CHECK(strcmp("", expected) == 0);
+        TEST_MSG("Wrong result. Mask: %zx. Actual: %s", mask, expected);
+        LAGraph_Free((void **)&expected, msg);
 
         free_workspace();
     }
@@ -929,13 +943,18 @@ void test_CFL_reachability_with_empty_adj_matrix(void) {
 #endif
 }
 
-// Symbols that appear in no rule cannot change during the algorithm, so their
-// outputs must be equal to their adjacency matrices.
+// Only nonterminals (symbols on the left side of a rule) have outputs. Outputs of
+// terminals and symbols that appear in no rule must be NULL.
 void check_outputs(GrB_Matrix *expected, size_t mask) {
     for (size_t i = 0; i < n_adj_matrices; i++) {
-        GrB_Matrix want = expected[i] != NULL ? expected[i] : adj_matrices[i];
+        if (expected[i] == NULL) {
+            TEST_CHECK(outputs[i] == NULL);
+            TEST_MSG("Mask: %zx, symbol: %zu", mask, i);
+            continue;
+        }
+
         bool equal = false;
-        OK(LAGraph_Matrix_IsEqual(&equal, outputs[i], want, msg));
+        OK(LAGraph_Matrix_IsEqual(&equal, outputs[i], expected[i], msg));
         TEST_CHECK(equal);
         TEST_MSG("Mask: %zx, symbol: %zu", mask, i);
     }

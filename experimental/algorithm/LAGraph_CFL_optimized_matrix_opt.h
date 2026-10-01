@@ -103,4 +103,19 @@ GrB_Info CFL_matrix_to_base(
     // input
     CFL_Matrix *matrix, int8_t optimizations);
 
+// Moves the underlying base matrix out of a matrix (lazy or regular) without
+// copying it. A lazy matrix is first merged into its largest base matrix.
+// The source matrix doesn't own the extracted matrix anymore, but it still must be
+// freed with CFL_matrix_free
+//
+// Parameters:
+//   base           - [out] Extracted matrix. Caller must free
+//   matrix         - [in]  Pointer to the source matrix (may be lazy).
+//   optimizations  - [in]  Bitmask specifying enabled optimizations.
+GrB_Info CFL_matrix_extract_base(
+    // output
+    GrB_Matrix *base,
+    // input
+    CFL_Matrix *matrix, int8_t optimizations);
+
 GrB_Info CFL_clear(CFL_Matrix *A, int8_t optimizations);
