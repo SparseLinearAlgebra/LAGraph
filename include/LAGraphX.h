@@ -1016,6 +1016,16 @@ GrB_Info LAGraph_RPQMatrix_reduce(
 ) ;
 
 LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_sample_submatrix(GrB_Matrix *result, GrB_Matrix source, const GrB_Index *vertices, GrB_Index count) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_sample_identity(GrB_Matrix *result, GrB_Index n) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_sample_apply(GrB_Matrix *result, GrB_Matrix lhs, GrB_Matrix rhs) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_sample_union(GrB_Matrix *result, GrB_Matrix lhs, GrB_Matrix rhs) ;
+LAGRAPHX_PUBLIC
+GrB_Info LAGraph_RPQMatrix_sample_stats(GrB_Index *nvals, GrB_Index *active_rows, GrB_Index *active_cols, GrB_Index *diagonal_nvals, GrB_Matrix sample) ;
+LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrix_reduce_count_vector(GrB_Vector *res, GrB_Matrix mat, uint8_t reduce_type) ;
 LAGRAPHX_PUBLIC
 GrB_Info LAGraph_RPQMatrix_extended_count_vectors(GrB_Vector *row_extended, GrB_Vector *col_extended, GrB_Matrix mat, GrB_Vector row_counts, GrB_Vector col_counts) ;

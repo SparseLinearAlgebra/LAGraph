@@ -1,4 +1,3 @@
-// GraphBLAS helpers for the RPQ MNC estimator.
 #include "LG_internal.h"
 #include "LAGraphX.h"
 #include <math.h>
@@ -18,6 +17,104 @@
 }
 
 static char msg[LAGRAPH_MSG_LEN] ;
+
+GrB_Info LAGraph_RPQMatrix_sample_submatrix(GrB_Matrix *result, GrB_Matrix source, const GrB_Index *vertices, GrB_Index count)
+{
+    LG_ASSERT(result != NULL && source != GrB_NULL && (vertices != NULL || count == 0), GrB_NULL_POINTER) ;
+    *result = GrB_NULL ;
+    GrB_Index rows, cols ;
+    OK(GrB_Matrix_nrows(&rows, source)) ;
+    OK(GrB_Matrix_ncols(&cols, source)) ;
+    if (rows != cols)
+    {
+        return GrB_DIMENSION_MISMATCH ;
+    }
+    OK(GrB_Matrix_new(result, GrB_BOOL, count, count)) ;
+    GrB_Info info = GrB_Matrix_extract(*result, GrB_NULL, GrB_NULL, source, vertices, count, vertices, count, GrB_NULL) ;
+    if (info != GrB_SUCCESS)
+    {
+        GrB_Matrix_free(result) ;
+    }
+    return info ;
+}
+
+GrB_Info LAGraph_RPQMatrix_sample_identity(GrB_Matrix *result, GrB_Index n)
+{
+    LG_ASSERT(result != NULL, GrB_NULL_POINTER) ;
+    *result = GrB_NULL ;
+    GrB_Vector diagonal = GrB_NULL ;
+    OK(GrB_Vector_new(&diagonal, GrB_BOOL, n)) ;
+    GrB_Info info = GrB_Vector_assign_BOOL(diagonal, GrB_NULL, GrB_NULL, true, GrB_ALL, n, GrB_NULL) ;
+    if (info == GrB_SUCCESS)
+    {
+        info = GrB_Matrix_diag(result, diagonal, 0) ;
+    }
+    GrB_Vector_free(&diagonal) ;
+    return info ;
+}
+
+GrB_Info LAGraph_RPQMatrix_sample_apply(GrB_Matrix *result, GrB_Matrix lhs, GrB_Matrix rhs)
+{
+    LG_ASSERT(result != NULL && lhs != GrB_NULL && rhs != GrB_NULL, GrB_NULL_POINTER) ;
+    *result = GrB_NULL ;
+    GrB_Index lhs_rows, lhs_cols, rhs_rows, rhs_cols ;
+    OK(GrB_Matrix_nrows(&lhs_rows, lhs)) ;
+    OK(GrB_Matrix_ncols(&lhs_cols, lhs)) ;
+    OK(GrB_Matrix_nrows(&rhs_rows, rhs)) ;
+    OK(GrB_Matrix_ncols(&rhs_cols, rhs)) ;
+    if (lhs_cols != rhs_rows)
+    {
+        return GrB_DIMENSION_MISMATCH ;
+    }
+    OK(GrB_Matrix_new(result, GrB_BOOL, lhs_rows, rhs_cols)) ;
+    GrB_Info info = GrB_mxm(*result, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, lhs, rhs, GrB_NULL) ;
+    if (info != GrB_SUCCESS)
+    {
+        GrB_Matrix_free(result) ;
+    }
+    return info ;
+}
+
+GrB_Info LAGraph_RPQMatrix_sample_union(GrB_Matrix *result, GrB_Matrix lhs, GrB_Matrix rhs)
+{
+    LG_ASSERT(result != NULL && lhs != GrB_NULL && rhs != GrB_NULL, GrB_NULL_POINTER) ;
+    *result = GrB_NULL ;
+    GrB_Index lhs_rows, lhs_cols, rhs_rows, rhs_cols ;
+    OK(GrB_Matrix_nrows(&lhs_rows, lhs)) ;
+    OK(GrB_Matrix_ncols(&lhs_cols, lhs)) ;
+    OK(GrB_Matrix_nrows(&rhs_rows, rhs)) ;
+    OK(GrB_Matrix_ncols(&rhs_cols, rhs)) ;
+    if (lhs_rows != rhs_rows || lhs_cols != rhs_cols)
+    {
+        return GrB_DIMENSION_MISMATCH ;
+    }
+    OK(GrB_Matrix_new(result, GrB_BOOL, lhs_rows, lhs_cols)) ;
+    GrB_Info info = GrB_eWiseAdd(*result, GrB_NULL, GrB_NULL, GxB_ANY_BOOL, lhs, rhs, GrB_NULL) ;
+    if (info != GrB_SUCCESS)
+    {
+        GrB_Matrix_free(result) ;
+    }
+    return info ;
+}
+
+GrB_Info LAGraph_RPQMatrix_sample_stats(GrB_Index *nvals, GrB_Index *active_rows, GrB_Index *active_cols, GrB_Index *diagonal_nvals, GrB_Matrix sample)
+{
+    LG_ASSERT(nvals != NULL && active_rows != NULL && active_cols != NULL && diagonal_nvals != NULL && sample != GrB_NULL, GrB_NULL_POINTER) ;
+    OK(GrB_Matrix_nvals(nvals, sample)) ;
+    OK(LAGraph_RPQMatrix_reduce(active_rows, sample, 0)) ;
+    OK(LAGraph_RPQMatrix_reduce(active_cols, sample, 1)) ;
+    GrB_Index n ;
+    GrB_Vector diagonal = GrB_NULL ;
+    OK(GrB_Matrix_nrows(&n, sample)) ;
+    OK(GrB_Vector_new(&diagonal, GrB_BOOL, n)) ;
+    GrB_Info info = GxB_Vector_diag(diagonal, sample, 0, GrB_NULL) ;
+    if (info == GrB_SUCCESS)
+    {
+        info = GrB_Vector_nvals(diagonal_nvals, diagonal) ;
+    }
+    GrB_Vector_free(&diagonal) ;
+    return info ;
+}
 
 GrB_Info LAGraph_RPQMatrix_reduce_count_vector(GrB_Vector *res, GrB_Matrix mat, uint8_t reduce_type)
 {
@@ -172,21 +269,17 @@ static GrB_Info LAGraph_RPQMatrix_mnc_generic_nnz(double *res, GrB_Vector lhs_co
         return GrB_SUCCESS ;
     }
 
-    GrB_Index *indices = malloc(product_nvals * sizeof(GrB_Index)) ;
     double *values = malloc(product_nvals * sizeof(double)) ;
-    if (indices == NULL || values == NULL)
+    if (values == NULL)
     {
-        free(indices) ;
-        free(values) ;
         GrB_Vector_free(&product) ;
         return GrB_OUT_OF_MEMORY ;
     }
     GrB_Index extracted = product_nvals ;
-    info = GrB_Vector_extractTuples_FP64(indices, values, &extracted, product) ;
+    info = GrB_Vector_extractTuples_FP64(NULL, values, &extracted, product) ;
     GrB_Vector_free(&product) ;
     if (info != GrB_SUCCESS)
     {
-        free(indices) ;
         free(values) ;
         return info ;
     }
@@ -203,7 +296,6 @@ static GrB_Info LAGraph_RPQMatrix_mnc_generic_nnz(double *res, GrB_Vector lhs_co
         log_zero_probability += log1p(-probability) ;
     }
     *res = -p * expm1(log_zero_probability) ;
-    free(indices) ;
     free(values) ;
     return GrB_SUCCESS ;
 }
