@@ -498,30 +498,27 @@ static GrB_Info get_new_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
 
     TRY_INNER(
         LAGraph_Calloc((void **)new_rules, rules_count, sizeof(LAGraph_rule_EWCNF), msg));
-    
     for (size_t i = 0; i < rules_count; i++) {
         LAGraph_rule_EWCNF rule = rules[i];
         LAGraph_rule_EWCNF new_rule = rule;
 
         for (size_t i_sym = 0; i_sym < map_size; i_sym++) {
             CFL_Symbol sym = map[i_sym];
-            int32_t group_size = (sym.count > 0) ? sym.count : 1;
 
-            if (rule.nonterm != -1 && 
-                rule.nonterm >= sym.base_index && rule.nonterm < sym.base_index + group_size) {
+            if (rule.nonterm != -1 && rule.nonterm == sym.base_index) {
                 new_rule.nonterm = sym.index;
             }
-            if (rule.prod_A != -1 && 
-                rule.prod_A >= sym.base_index && rule.prod_A < sym.base_index + group_size) {
+            if (rule.prod_A != -1 && rule.prod_A == sym.base_index) {
                 new_rule.prod_A = sym.index;
             }
-            if (rule.prod_B != -1 && 
-                rule.prod_B >= sym.base_index && rule.prod_B < sym.base_index + group_size) {
+            if (rule.prod_B != -1 && rule.prod_B == sym.base_index) {
                 new_rule.prod_B = sym.index;
             }
         }
+
         (*new_rules)[(*new_rules_count)++] = new_rule;
     }
+
     return GrB_SUCCESS;
 }
 
@@ -818,14 +815,13 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     double wise1 = 0.0;
     double wise2 = 0.0;
     double wise3 = 0.0;
-
     // Rule [Variable -> Variable1 Variable2]
     bool changed = true;
     long iter = 0;
     while (changed) {
         iter++;
         GrB_Index curr;
-        GrB_Matrix_nvals(&curr, T[0]->base);
+        GrB_Matrix_nvals(&curr, T[new_S]->base);
 
         changed = false;
 
@@ -841,6 +837,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
             TIMED(update, TRY(CFL_matrix_update(A)));
 
             TIMED(mxm2, TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask)));
+
             TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M, false, opt_mask)));
 
             TIMED(wise2, TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask)));
