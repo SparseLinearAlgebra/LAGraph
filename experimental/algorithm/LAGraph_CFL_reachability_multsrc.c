@@ -18,19 +18,22 @@
 
 // #define DEBUG_CFL_REACHABILITY
 
+// TODO: tell spisladqo to fix this: GraphBLAS objects were freed with LAGraph_Free,
+// which leaks their contents, and B was not freed at all
 #define LG_FREE_WORK                                                                     \
     {                                                                                    \
         LAGraph_Free((void **)&nnzs_T, msg);                                             \
         LAGraph_Free((void **)&nnzs_TSrc_B, msg);                                        \
         LAGraph_Free((void **)&nnzs_TSrc_C, msg);                                        \
-        LAGraph_Free((void **)&ones_vec, msg);                                           \
+        GrB_free(&ones_vec);                                                             \
         LAGraph_Free((void **)&T, msg);                                                  \
         LAGraph_Free((void **)&TSrc, msg);                                               \
-        LAGraph_Free((void **)&MSrc, msg);                                               \
-        LAGraph_Free((void **)&identity_matrix, msg);                                    \
-        LAGraph_Free((void **)&M, msg);                                                  \
-        LAGraph_Free((void **)&A, msg);                                                  \
-        LAGraph_Free((void **)&a, msg);                                                  \
+        GrB_free(&MSrc);                                                                 \
+        GrB_free(&identity_matrix);                                                      \
+        GrB_free(&M);                                                                    \
+        GrB_free(&A);                                                                    \
+        GrB_free(&B);                                                                    \
+        GrB_free(&a);                                                                    \
         GrB_free(&true_scalar);                                                          \
     }
 
@@ -147,11 +150,11 @@ GrB_Info LAGraph_CFL_reachability_multsrc(
     // Declare workspace and clear the msg string, if not NULL
     GrB_Matrix *T;
     GrB_Matrix *TSrc;
-    GrB_Matrix MSrc;
-    GrB_Matrix M;
-    GrB_Matrix A;
-    GrB_Matrix B;
-    GrB_Vector a;
+    GrB_Matrix MSrc = NULL;
+    GrB_Matrix M = NULL;
+    GrB_Matrix A = NULL;
+    GrB_Matrix B = NULL;
+    GrB_Vector a = NULL;
     GrB_Index n; // number of vertices in the graph
     GrB_Matrix identity_matrix = NULL;
     GrB_Index *nnzs_T = NULL;
@@ -160,8 +163,8 @@ GrB_Info LAGraph_CFL_reachability_multsrc(
     LG_CLEAR_MSG;
     size_t msg_len = 0; // For error formatting
     bool iso_flag = false;
-    GrB_Scalar true_scalar;
-    GrB_Vector ones_vec;
+    GrB_Scalar true_scalar = NULL;
+    GrB_Vector ones_vec = NULL;
 
     // Will change the interface and omit this check in the future
     if (nonterms_count < 0 || terms_count < 0)
