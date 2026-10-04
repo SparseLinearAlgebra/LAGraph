@@ -1056,62 +1056,6 @@ static void test_CFL_lazy_many_components(void) {
 #endif
 }
 
-// Checks that the extracted matrix is the same GrB_Matrix as the source one (it is
-// moved, not copied) and that it has the expected entries
-static void check_extracted_base(Matrix *A, GrB_Matrix source, size_t count,
-                                 int8_t mask) {
-    GrB_Matrix base = NULL;
-    OK(CFL_matrix_extract_base(&base, A, mask));
-    TEST_CHECK(base == source);
-    TEST_MSG("Mask: %d", mask);
-
-    Matrix *result, *expected;
-    OK(CFL_matrix_from_base(&result, base));
-    make_component(&expected, 0, count);
-    TEST_CHECK(compare_matrices(result, expected));
-    TEST_MSG("Mask: %d", mask);
-
-    OK(CFL_matrix_free(&result));
-    OK(CFL_matrix_free(&expected));
-}
-
-static void test_CFL_extract_base(void) {
-#if LAGRAPH_SUITESPARSE
-    setup();
-    for (int8_t mask = 0; mask < OPT_N_FLAGS; mask++) {
-        // regular matrix
-        {
-            Matrix *A;
-            make_component(&A, 0, 100);
-            check_extracted_base(A, A->base, 100, mask);
-            TEST_CHECK(A->base == NULL);
-            OK(CFL_matrix_free(&A));
-        }
-
-        // matrix with both formats
-        {
-            Matrix *A;
-            make_component(&A, 0, 100);
-            OK(matrix_to_format(A, GrB_COLMAJOR, true));
-            TEST_CHECK(A->is_both);
-            check_extracted_base(A, A->base_col, 100, mask);
-            TEST_CHECK(A->base_row == NULL && A->base_col == NULL);
-            OK(CFL_matrix_free(&A));
-        }
-
-        // lazy matrix is merged into its largest base matrix
-        {
-            const size_t counts[] = {10, 1000, 100};
-            Matrix *A;
-            make_lazy_components(&A, counts, 3);
-            check_extracted_base(A, A->base_matrices[1]->base, 1110, mask);
-            OK(CFL_matrix_free(&A));
-        }
-    }
-    teardown();
-#endif
-}
-
 static void *fail_lazy_realloc(void *p, size_t size) {
     (void)p;
     (void)size;
@@ -1660,7 +1604,6 @@ TEST_LIST = {
     {"test_CFL_lazy_wise", test_CFL_lazy_wise},
     {"test_CFL_lazy_merge_chain", test_CFL_lazy_merge_chain},
     {"test_CFL_lazy_many_components", test_CFL_lazy_many_components},
-    {"test_CFL_extract_base", test_CFL_extract_base},
 #if !defined(GRAPHBLAS_HAS_CUDA)
     {"test_CFL_lazy_growth_failure", test_CFL_lazy_growth_failure},
 #endif

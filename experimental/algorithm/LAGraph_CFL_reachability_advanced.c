@@ -24,7 +24,6 @@
         TRY_INNER(LAGraph_Free((void **)&to_new_symbols_map, NULL));                     \
         TRY_INNER(LAGraph_Free((void **)&new_rules, NULL));                              \
         TRY_INNER(LAGraph_Free((void **)&used_symbols, NULL));                           \
-        TRY_INNER(LAGraph_Free((void **)&nonterm_symbols, NULL));                        \
         TRY_INNER(LAGraph_Free((void **)&active_symbols, NULL));                         \
         for (size_t i = 0; i < new_symbols_amount; i++) {                                \
             if (temp_matrices != NULL)                                                  \
@@ -48,11 +47,6 @@
 #define LG_FREE_ALL                                                                      \
     {                                                                                    \
         LG_FREE_WORK;                                                                    \
-        if (outputs_initialized) {                                                       \
-            for (size_t k = 0; k < symbols_amount; k++) {                                \
-                TRY_INNER(GrB_free(&outputs[k]));                                        \
-            }                                                                            \
-        }                                                                                \
     }
 
 #include "LAGraph_CFL_optimized_matrix_opt.h"
@@ -384,59 +378,59 @@ static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_coun
     return GrB_SUCCESS;
 }
 
-// Moves a CFL_Matrix into an array of GrB_Matrix matrices
-//
-// If the matrix is not a horizontal or vertical block vector (i.e., it is a square
-// matrix), the underlying GrB_Matrix is moved into outputs[0] without copying
+// Splits a CFL_Matrix into an array of GrB_Matrix matrices
+
+// If the matrix is not a horizontal or vertical block vector (i.e., its
+// block_type is CELL), the underlying GrB_Matrix is extracted and copied
+// into outputs[0]
 //
 // Otherwise, the matrix split into square sub-matrices of size (graph_size x graph_size)
 // Parameters:
 //   outputs       - [out] Caller-allocated array of GrB_Matrix to write results into
 //                         Must have enough space for all sub-matrices
-//   matrix        - [in]  Source CFL_Matrix to move. It doesn't own its base
-//                         matrix after the call, but it still must be freed
+//   matrix        - [in]  Source CFL_Matrix to split
 static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
                                  int8_t optimizations) {
     char msg[LAGRAPH_MSG_LEN];
-    GrB_Matrix base = NULL;
+    CFL_Matrix *base_matrix;
     GrB_Index *nrows = NULL, *ncols = NULL;
 
 #undef FREE_INNER
 
 #define FREE_INNER()                                                                     \
     {                                                                                    \
-        GrB_free(&base);                                                                 \
+        CFL_matrix_free(&base_matrix);                                                   \
         LAGraph_Free((void **)&nrows, NULL);                                             \
         LAGraph_Free((void **)&ncols, NULL);                                             \
     }
 
-    TRY_INNER(CFL_matrix_extract_base(&base, matrix, optimizations));
-
-    GrB_Index base_nrows, base_ncols;
-    TRY_INNER(GrB_Matrix_nrows(&base_nrows, base));
-    TRY_INNER(GrB_Matrix_ncols(&base_ncols, base));
-
-    if (base_nrows == base_ncols) {
-        *outputs = base;
+    if (matrix->block_type == CELL) {
+        CFL_Matrix *result;
+        TRY_INNER(CFL_matrix_to_base(&result, matrix, optimizations));
+        TRY_INNER(GrB_Matrix_dup(outputs, result->base));
+        TRY_INNER(CFL_matrix_free(&result));
         return GrB_SUCCESS;
     }
 
+    TRY_INNER(CFL_matrix_to_base(&base_matrix, matrix, optimizations));
+
     // we can create nrows and ncols array with the same size, it will be mush easier than
     // calculate size of each array :)
-    GrB_Index matrices_count =
-        base_nrows > base_ncols ? base_nrows / base_ncols : base_ncols / base_nrows;
+    GrB_Index matrices_count = matrix->nrows > matrix->ncols
+                                   ? matrix->nrows / matrix->ncols
+                                   : matrix->ncols / matrix->nrows;
 
     TRY_INNER(LAGraph_Calloc((void **)&nrows, matrices_count, sizeof(GrB_Index), msg));
     TRY_INNER(LAGraph_Calloc((void **)&ncols, matrices_count, sizeof(GrB_Index), msg));
 
-    GrB_Index graph_size = base_nrows < base_ncols ? base_nrows : base_ncols;
+    GrB_Index graph_size = matrix->nrows < matrix->ncols ? matrix->nrows : matrix->ncols;
     for (size_t i = 0; i < matrices_count; i++) {
         nrows[i] = graph_size;
         ncols[i] = graph_size;
     }
 
     GrB_Index m = 0, n = 0;
-    if (base_nrows > base_ncols) {
+    if (matrix->block_type == VEC_VERT) {
         m = matrices_count;
         n = 1;
     } else {
@@ -444,11 +438,11 @@ static GrB_Info split_CFL_matrix(GrB_Matrix *outputs, CFL_Matrix *matrix,
         n = matrices_count;
     }
 
-    TRY_INNER(GxB_Matrix_split(outputs, m, n, nrows, ncols, base, GrB_NULL));
+    TRY_INNER(GxB_Matrix_split(outputs, m, n, nrows, ncols, base_matrix->base, GrB_NULL));
 
     TRY_INNER(LAGraph_Free((void **)&nrows, NULL));
     TRY_INNER(LAGraph_Free((void **)&ncols, NULL));
-    TRY_INNER(GrB_free(&base));
+    TRY_INNER(CFL_matrix_free(&base_matrix));
 
     return GrB_SUCCESS;
 }
@@ -628,16 +622,15 @@ GrB_Info LAGraph_CFL_reachability_adv(
                          // of symbols (symbols_amount).
                          //
                          // Each matrix is square, with size equal to the number of
-                         // vertices in the graph. Matrices are allocated by this
-                         // method, the caller must free them.
+                         // vertices in the graph. Matrices are allocated by the
+                         // caller, not by this method.
                          //
                          // outputs[k]: (i, j) = true if and only if there is a path
                          // from node i to node j whose edge labels form a word
-                         // derivable from the nonterminal 'k' of the specified CFG.
+                         // derivable from the symbol 'k' of the specified CFG.
                          //
-                         // Note: outputs[t] is NULL if the symbol 't' is not a
-                         // nonterminal, i.e. it is not on the left side of any rule
-                         // (terminals and symbols unused by rules).
+                         // Note: output[t], where t is the index of a terminal, will
+                         // be an exact copy of adj_matrices[t].
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
@@ -682,9 +675,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
 
     // Symbols that appear in no rule never change, so the main loop skips them
     bool *used_symbols = NULL;
-    // Only nonterminals (symbols on the left side of a rule) are given to the caller
-    bool *nonterm_symbols = NULL;
-    bool outputs_initialized = false;
     size_t *active_symbols = NULL;
     size_t active_symbols_count = 0;
 
@@ -705,11 +695,6 @@ GrB_Info LAGraph_CFL_reachability_adv(
     LG_ASSERT_MSG(rules != NULL, GrB_NULL_POINTER, "The rules array cannot be null.");
     LG_ASSERT_MSG(adj_matrices != NULL, GrB_NULL_POINTER,
                   "The adjacency matrices array cannot be null.");
-
-    for (size_t i = 0; i < symbols_amount; i++) {
-        outputs[i] = NULL;
-    }
-    outputs_initialized = true;
 
     // Find null adjacency matrices
     bool found_null = false;
@@ -797,13 +782,10 @@ GrB_Info LAGraph_CFL_reachability_adv(
     TRY(LAGraph_Calloc((void **)&used_symbols, new_symbols_amount, sizeof(bool), msg));
     TRY(LAGraph_Calloc((void **)&active_symbols, new_symbols_amount, sizeof(size_t),
                        msg));
-    TRY(LAGraph_Calloc((void **)&nonterm_symbols, new_symbols_amount, sizeof(bool),
-                       msg));
 
     for (size_t i = 0; i < new_rules_count; i++) {
         LAGraph_rule_EWCNF rule = new_rules[i];
         used_symbols[rule.nonterm] = true;
-        nonterm_symbols[rule.nonterm] = true;
         if (rule.prod_A != -1)
             used_symbols[rule.prod_A] = true;
         if (rule.prod_B != -1)
@@ -960,13 +942,13 @@ GrB_Info LAGraph_CFL_reachability_adv(
 #endif
 
     // get outputs matrices
-    // Nonterminal matrices are moved to the caller, outputs of other symbols stay NULL
     for (size_t i = 0; i < new_symbols_amount; i++) {
-        if (!nonterm_symbols[i]) {
+        CFL_Symbol sym = to_new_symbols_map[i];
+        if (!used_symbols[i]) {
+            // Unused symbols are never grouped, so this is a single n x n matrix
+            TRY(GrB_Matrix_dup(outputs + sym.base_index, new_adj_matrices[i]));
             continue;
         }
-
-        CFL_Symbol sym = to_new_symbols_map[i];
         TRY(split_CFL_matrix(outputs + sym.base_index, matrices[i], optimizations));
     }
 

@@ -1677,16 +1677,15 @@ GrB_Info LAGraph_CFL_reachability_adv
                          // of symbols (symbols_amount).
                          //
                          // Each matrix is square, with size equal to the number of
-                         // vertices in the graph. Matrices are allocated by this
-                         // method, the caller must free them.
+                         // vertices in the graph. Matrices are allocated by the
+                         // caller, not by this method.
                          //
                          // outputs[k]: (i, j) = true if and only if there is a path
                          // from node i to node j whose edge labels form a word
-                         // derivable from the nonterminal 'k' of the specified CFG.
+                         // derivable from the symbol 'k' of the specified CFG.
                          //
-                         // Note: outputs[t] is NULL if the symbol 't' is not a
-                         // nonterminal, i.e. it is not on the left side of any rule
-                         // (terminals and symbols unused by rules).
+                         // Note: output[t], where t is the index of a terminal, will
+                         // be an exact copy of adj_matrices[t].
     // Input
     const GrB_Matrix *adj_matrices, // Array of adjacency matrices representing the graph.
                                     // The length of this array is equal to the count of
