@@ -187,9 +187,6 @@ void test_Rpq_Simple (void)
     {
         if (files[k].sources == NULL) break ;
 
-        snprintf (testcase_name, LEN, "basic regular path query %s", files[k].name) ;
-        TEST_CASE (testcase_name) ;
-
         GrB_Index S[16] ;
         size_t ns ;
         GrB_Index QS[16] ;
@@ -200,93 +197,84 @@ void test_Rpq_Simple (void)
         load_testcase (files[k].graphs, files[k].fas, files[k].fa_meta,
             files[k].sources, S, &ns, QS, &nqs, QF, &nqf) ;
 
-        // Evaluate the algorithm
-        GrB_Vector r = NULL ;
-
         bool inverse_labels[] = {false, false, false, false, false, false, false, false, false, false, false, false, false};
         bool inverse = false;
 
-        Path *paths ;
-        size_t path_count ;
-        int res = LAGraph_2Rpq_AllSimple (&paths, &path_count, R, inverse_labels,
-                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                    inverse, msg) ;
-
-        // Compare the results with expected values
-        //TEST_CHECK (nvals == files[k].expected_count) ;
-        //for (uint64_t i = 0 ; i < nvals ; i++)
-        //    TEST_CHECK (reachable[i] + 1 == files[k].expected[i]) ;
-
-        printf("ALL SIMPLE:\n");
-        for (size_t i = 0 ; i < path_count ; i++)
+        // The operators carry JIT definitions, so run every semantics with
+        // both generic and JIT kernels.
+        for (int jit = 0 ; jit <= 1 ; jit++)
         {
-            Path_print (&paths[i]);
+            snprintf (testcase_name, LEN,
+                "basic regular path query %s (jit: %d)", files[k].name, jit) ;
+            TEST_CASE (testcase_name) ;
+            OK (LG_SET_JIT (jit ? GxB_JIT_ON : GxB_JIT_OFF)) ;
+            printf ("jit: %d\n", jit) ;
+
+            Path *paths ;
+            size_t path_count ;
+
+            OK (LAGraph_2Rpq_AllSimple (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, msg)) ;
+
+            printf("ALL SIMPLE:\n");
+            for (size_t i = 0 ; i < path_count ; i++)
+            {
+                Path_print (&paths[i]);
+            }
+            printf("\n");
+
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+            OK (LAGraph_2Rpq_AllTrails (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, msg)) ;
+
+            printf("ALL TRAILS:\n");
+            for (size_t i = 0 ; i < path_count ; i++)
+            {
+                Path_print (&paths[i]);
+            }
+            printf("\n");
+
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+            OK (LAGraph_2Rpq_AllPaths (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, 10, msg)) ;
+
+            printf("ALL PATHS (LIMIT = 10):\n");
+            for (size_t i = 0 ; i < path_count ; i++)
+            {
+                Path_print (&paths[i]);
+            }
+            printf("\n");
+
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+            // All shortest paths are searched from exactly one source vertex.
+            printf("ALL SHORTEST PATHS:\n");
+            for (size_t s = 0 ; s < ns ; s++)
+            {
+                OK (LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, &S[s], 1, inverse, 100,
+                                        msg)) ;
+
+                for (size_t i = 0 ; i < path_count ; i++)
+                {
+                    Path_print (&paths[i]);
+                }
+
+                OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+            }
+            printf("\n");
         }
-        printf("\n");
-
-        // Cleanup
-        OK (LAGraph_Free ((void **) &paths, NULL)) ;
-
-        res = LAGraph_2Rpq_AllTrails (&paths, &path_count, R, inverse_labels,
-                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                    inverse, msg) ;
-
-        // Compare the results with expected values
-        //TEST_CHECK (nvals == files[k].expected_count) ;
-        //for (uint64_t i = 0 ; i < nvals ; i++)
-        //    TEST_CHECK (reachable[i] + 1 == files[k].expected[i]) ;
-
-        printf("ALL TRAILS:\n");
-        for (size_t i = 0 ; i < path_count ; i++)
-        {
-            Path_print (&paths[i]);
-        }
-        printf("\n");
-
-        // Cleanup
-        OK (LAGraph_Free ((void **) &paths, NULL)) ;
-
-        res = LAGraph_2Rpq_AllPaths (&paths, &path_count, R, inverse_labels,
-                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                    inverse, 10, msg) ;
-
-        // Compare the results with expected values
-        //TEST_CHECK (nvals == files[k].expected_count) ;
-        //for (uint64_t i = 0 ; i < nvals ; i++)
-        //    TEST_CHECK (reachable[i] + 1 == files[k].expected[i]) ;
-
-        printf("ALL PATHS (LIMIT = 10):\n");
-        for (size_t i = 0 ; i < path_count ; i++)
-        {
-            Path_print (&paths[i]);
-        }
-        printf("\n");
-
-        // Cleanup
-        OK (LAGraph_Free ((void **) &paths, NULL)) ;
-
-        res = LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R, inverse_labels,
-                                            MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                            inverse, 100, msg) ;
-
-        // Compare the results with expected values
-        //TEST_CHECK (nvals == files[k].expected_count) ;
-        //for (uint64_t i = 0 ; i < nvals ; i++)
-        //    TEST_CHECK (reachable[i] + 1 == files[k].expected[i]) ;
-
-        printf("ALL SHORTEST PATHS:\n");
-        for (size_t i = 0 ; i < path_count ; i++)
-        {
-            Path_print (&paths[i]);
-        }
-        printf("\n");
-
-        // Cleanup
-        OK (LAGraph_Free ((void **) &paths, NULL)) ;
 
         free_testcase () ;
     }
 
+    OK (LG_SET_JIT (GxB_JIT_ON)) ;
     LAGraph_Finalize (msg) ;
 }
 
@@ -415,10 +403,6 @@ void test_Rpq_Labels (void)
     {
         if (labelled_files[k].sources == NULL) break ;
 
-        snprintf (testcase_name, LEN, "labelled regular path query %s",
-            labelled_files[k].name) ;
-        TEST_CASE (testcase_name) ;
-
         GrB_Index S[16] ;
         size_t ns ;
         GrB_Index QS[16] ;
@@ -433,40 +417,51 @@ void test_Rpq_Labels (void)
         bool inverse_labels[MAX_LABELS] = {false, false, false} ;
         bool inverse = false ;
 
-        Path *paths ;
-        size_t path_count ;
+        for (int jit = 0 ; jit <= 1 ; jit++)
+        {
+            snprintf (testcase_name, LEN,
+                "labelled regular path query %s (jit: %d)",
+                labelled_files[k].name, jit) ;
+            TEST_CASE (testcase_name) ;
+            OK (LG_SET_JIT (jit ? GxB_JIT_ON : GxB_JIT_OFF)) ;
 
-        OK (LAGraph_2Rpq_AllSimple (&paths, &path_count, R, inverse_labels,
-                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                    inverse, msg)) ;
-        check_paths ("ALL SIMPLE", paths, path_count, labelled_files[k].simple,
-            labelled_files[k].simple_count) ;
-        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+            Path *paths ;
+            size_t path_count ;
 
-        OK (LAGraph_2Rpq_AllTrails (&paths, &path_count, R, inverse_labels,
-                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                    inverse, msg)) ;
-        check_paths ("ALL TRAILS", paths, path_count, labelled_files[k].trails,
-            labelled_files[k].trails_count) ;
-        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+            OK (LAGraph_2Rpq_AllSimple (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, msg)) ;
+            check_paths ("ALL SIMPLE", paths, path_count,
+                labelled_files[k].simple, labelled_files[k].simple_count) ;
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
 
-        OK (LAGraph_2Rpq_AllPaths (&paths, &path_count, R, inverse_labels,
-                                    MAX_LABELS, QS, nqs, QF, nqf, G, S, ns,
-                                    inverse, 10, msg)) ;
-        check_paths ("ALL PATHS", paths, path_count, labelled_files[k].all,
-            labelled_files[k].all_count) ;
-        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+            OK (LAGraph_2Rpq_AllTrails (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, msg)) ;
+            check_paths ("ALL TRAILS", paths, path_count,
+                labelled_files[k].trails, labelled_files[k].trails_count) ;
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
 
-        OK (LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R,
-                                    inverse_labels, MAX_LABELS, QS, nqs, QF,
-                                    nqf, G, S, ns, inverse, 100, msg)) ;
-        check_paths ("ALL SHORTEST PATHS", paths, path_count,
-            labelled_files[k].shortest, labelled_files[k].shortest_count) ;
-        OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+            OK (LAGraph_2Rpq_AllPaths (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, 10, msg)) ;
+            check_paths ("ALL PATHS", paths, path_count,
+                labelled_files[k].all, labelled_files[k].all_count) ;
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+
+            OK (LAGraph_2Rpq_AllShortestPaths (&paths, &path_count, R,
+                                        inverse_labels, MAX_LABELS, QS, nqs,
+                                        QF, nqf, G, S, ns, inverse, 100,
+                                        msg)) ;
+            check_paths ("ALL SHORTEST PATHS", paths, path_count,
+                labelled_files[k].shortest, labelled_files[k].shortest_count) ;
+            OK (LAGraph_2Rpq_FreePaths (&paths, path_count, msg)) ;
+        }
 
         free_testcase () ;
     }
 
+    OK (LG_SET_JIT (GxB_JIT_ON)) ;
     LAGraph_Finalize (msg) ;
 }
 

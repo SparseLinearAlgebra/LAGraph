@@ -158,7 +158,11 @@ static size_t temp_arena_used (void)
 
 // JIT kernels are compiled into a separate shared object. They cannot call
 // static functions from this translation unit, so expose tiny wrappers for
-// the stateful parts: arena allocation and path-limit reporting.
+// the stateful parts: arena allocation and path-limit reporting. The kernels
+// declare them extern and resolve them against the loaded liblagraphx when the
+// kernel is loaded (see rpq_jit_allow_undefined_symbols for macOS). When the
+// JIT is off or a kernel cannot be compiled, GraphBLAS uses its generic kernels
+// instead, which call the C functions below directly.
 LAGRAPHX_PUBLIC
 void *LAGraph_Rpq_jit_temp_calloc_bytes (size_t size)
 {
@@ -1386,11 +1390,13 @@ static int LAGraph_2Rpq
         }
     }
 
-    // SuiteSparse bug: the generic index-binary mxm kernel sizes and casts
-    // its operand buffers as if the operands were not flipped, so an operator
-    // whose x and y types differ corrupts memory when the JIT is off. Feeding
+    // SuiteSparse bug: the generic (non-JIT) index-binary mxm kernel sizes
+    // and casts its operand buffers as if the operands were not flipped, so an
+    // operator whose x and y types differ corrupts memory. The JIT kernels
+    // type x and y correctly, but GraphBLAS still falls back to the generic
+    // kernel when the JIT is off, paused, or fails to compile a kernel. Feeding
     // the graph pattern as an iso multiple_paths matrix keeps both operand
-    // types equal, which makes the mis-sized buffer harmless.
+    // types equal, which makes the mis-sized buffer harmless in that case.
     LG_TRY (LAGraph_Calloc ((void **) &AP, nl, sizeof (GrB_Matrix), msg)) ;
     LG_TRY (LAGraph_Calloc ((void **) &APT, nl, sizeof (GrB_Matrix), msg)) ;
 
@@ -1883,21 +1889,48 @@ int LAGraph_2Rpq_FreePaths
         LG_FREE_WORK ;                          \
 }
 
+static int rpq_jit_allow_undefined_symbols (char *msg)
+{
+#if defined ( __APPLE__ )
+    const char *flag = " -undefined dynamic_lookup" ;
+    size_t flags_size = 0 ;
+    char *flags = NULL ;
+    int info ;
+
+    GRB_TRY (GrB_get (GrB_GLOBAL, &flags_size, GxB_JIT_C_LINKER_FLAGS)) ;
+    LG_TRY (LAGraph_Malloc ((void **) &flags, flags_size + strlen (flag),
+        sizeof (char), msg)) ;
+
+    info = GrB_get (GrB_GLOBAL, flags, GxB_JIT_C_LINKER_FLAGS) ;
+    if (info == GrB_SUCCESS && strstr (flags, flag) == NULL)
+    {
+        strcat (flags, flag) ;
+        info = GrB_set (GrB_GLOBAL, flags, GxB_JIT_C_LINKER_FLAGS) ;
+    }
+
+    LAGraph_Free ((void **) &flags, NULL) ;
+    GRB_TRY (info) ;
+#else
+    (void) msg ;
+#endif
+    return GrB_SUCCESS ;
+}
+
 int LAGraph_Rpq_initialize(char *msg)
 {
-        (void) msg ;
-
         memset (&multiple_paths_identity, 0, sizeof (multiple_paths_identity)) ;
 
-        GRB_TRY (GrB_set (GrB_GLOBAL, (int32_t) GxB_JIT_OFF, GxB_JIT_C_CONTROL)) ;
+        // Leave the JIT control to the caller; only make sure the kernels
+        // compiled from the definitions below can be linked.
+        LG_TRY (rpq_jit_allow_undefined_symbols (msg)) ;
 
-    GRB_TRY (GxB_Type_new (&multiple_paths, sizeof (MultiplePaths), "MultiplePaths", MULTIPLE_PATHS_TYPE_DEFN)) ;
+        GRB_TRY (GxB_Type_new (&multiple_paths, sizeof (MultiplePaths), "MultiplePaths", MULTIPLE_PATHS_TYPE_DEFN)) ;
 
         GRB_TRY (GxB_BinaryOp_new (&combine_multiple_paths_op, (GxB_binary_function) &combine_multiple_paths_f, multiple_paths, multiple_paths, multiple_paths, "combine_multiple_paths_f", COMBINE_MULTIPLE_PATHS_DEFN)) ;
-            GRB_TRY (GxB_BinaryOp_new (&second_multiple_paths, (GxB_binary_function) &second_multiple_paths_f, multiple_paths, GrB_BOOL, multiple_paths, "second_multiple_paths_f", SECOND_MULTIPLE_PATHS_DEFN)) ;
+        GRB_TRY (GxB_BinaryOp_new (&second_multiple_paths, (GxB_binary_function) &second_multiple_paths_f, multiple_paths, GrB_BOOL, multiple_paths, "second_multiple_paths_f", SECOND_MULTIPLE_PATHS_DEFN)) ;
 
         GRB_TRY (GrB_Monoid_new (&combine_multiple_paths, combine_multiple_paths_op, (void*) &multiple_paths_identity)) ;
-            GRB_TRY (GrB_Semiring_new (&second_combine_multiple_paths, combine_multiple_paths, second_multiple_paths)) ;
+        GRB_TRY (GrB_Semiring_new (&second_combine_multiple_paths, combine_multiple_paths, second_multiple_paths)) ;
 
         GRB_TRY (GxB_IndexBinaryOp_new (&extend_multiple_paths, (GxB_index_binary_function) &extend_multiple_paths_f, multiple_paths, multiple_paths, multiple_paths, GrB_UINT64, "extend_multiple_paths_f", EXTEND_MULTIPLE_PATHS_DEFN)) ;
         GRB_TRY (GxB_IndexBinaryOp_new (&extend_multiple_simple, (GxB_index_binary_function) &extend_multiple_simple_f, multiple_paths, multiple_paths, multiple_paths, GrB_UINT64, "extend_multiple_simple_f", EXTEND_MULTIPLE_SIMPLE_DEFN)) ;
