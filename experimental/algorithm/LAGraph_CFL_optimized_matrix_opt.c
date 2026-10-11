@@ -360,7 +360,7 @@ GrB_Info block_matrix_hyper_rotate_i(Matrix *matrix, enum CFL_Matrix_block forma
             TRY(GxB_Matrix_build_Scalar(new, nrows, ncols, scalar_true, matrix->nvals));
             matrix->base_col = new;
         }
-        matrix->format = GrB_ROWMAJOR;
+        matrix->format = matrix->base_row != NULL ? GrB_ROWMAJOR : GrB_COLMAJOR;
     }
     TRY(CFL_matrix_update(matrix));
     // TRY(CFL_matrix_free(matrix_p));
