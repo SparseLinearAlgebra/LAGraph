@@ -28,6 +28,8 @@
         CFL_matrix_free(&MSrc2);                                                         \
         CFL_matrix_free(&M);                                                             \
         CFL_matrix_free(&M2);                                                            \
+        CFL_matrix_free(&M_vec);                                                         \
+        CFL_matrix_free(&M2_vec);                                                        \
         CFL_matrix_free(&A);                                                             \
         LAGraph_Free((void **) &nnzs_T, msg);                                            \
         LAGraph_Free((void **) &nnzs_TSrc, msg);                                         \
@@ -38,6 +40,7 @@
         LAGraph_Free((void **) &to_new_symbols_map, msg);                                \
         GrB_Vector_free(&ones_vec);                                                      \
         GrB_Vector_free(&a);                                                             \
+        GrB_Vector_free(&a_vec);                                                         \
         GrB_free(&true_scalar);                                                          \
     }
 
@@ -267,6 +270,29 @@ static GrB_Info get_new_symbols(const LAGraph_rule_EWCNF *rules, size_t rules_co
 //           D   -> E F
 //
 // Output: LAGraph_rule_EWCNF **new_rules and size_t *new_rules_count
+// a[j] = OR over the blocks i of a_vec[i * n + j]
+static GrB_Info fold_block_vector(GrB_Vector a, GrB_Vector a_vec, GrB_Index n) {
+    GrB_Index *indices = NULL;
+#undef FREE_INNER
+#define FREE_INNER()                                                                     \
+    {                                                                                    \
+        LAGraph_Free((void **)&indices, NULL);                                           \
+    }
+
+    GrB_Index nvals = 0;
+    TRY_INNER(GrB_Vector_nvals(&nvals, a_vec));
+    TRY_INNER(LAGraph_Calloc((void **)&indices, nvals + 1, sizeof(GrB_Index), NULL));
+    TRY_INNER(GrB_Vector_extractTuples_BOOL(indices, NULL, &nvals, a_vec));
+
+    TRY_INNER(GrB_Vector_clear(a));
+    for (GrB_Index k = 0; k < nvals; k++) {
+        TRY_INNER(GrB_Vector_setElement_BOOL(a, true, indices[k] % n));
+    }
+
+    FREE_INNER();
+    return GrB_SUCCESS;
+}
+
 static GrB_Info explode_rules(const LAGraph_rule_EWCNF *rules, size_t rules_count,
                               LAGraph_rule_EWCNF **new_rules, size_t *new_rules_count,
                               char *msg) {
@@ -603,9 +629,12 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     CFL_Matrix *MSrc2 = NULL;
     CFL_Matrix *M = NULL;
     CFL_Matrix *M2 = NULL;
+    CFL_Matrix *M_vec = NULL;  // the products with a block vector, n x nk
+    CFL_Matrix *M2_vec = NULL;
     CFL_Matrix *iden = NULL;
     CFL_Matrix *A = NULL;
     GrB_Vector a = NULL;
+    GrB_Vector a_vec = NULL;
     GrB_Matrix identity_matrix = NULL;
     GrB_Index *nnzs_T = NULL;
     GrB_Index *nnzs_TSrc = NULL;
@@ -811,6 +840,20 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     TRY(CFL_dup(MSrc, TSrc[new_S], opt_mask));
     TRY(GrB_Vector_new(&a, GrB_BOOL, n));
 
+    // T of an indexed symbol is a block vector nk x n, so its products are n x nk
+    GrB_Index block_width = n;
+    for (size_t i = 0; i < new_symbols_amount; i++) {
+        TRY(CFL_matrix_update(T[i]));
+        if (T[i]->nrows > block_width) {
+            block_width = T[i]->nrows;
+        }
+    }
+    if (block_width > n) {
+        TRY(CFL_matrix_create(&M_vec, n, block_width));
+        TRY(CFL_matrix_create(&M2_vec, n, block_width));
+        TRY(GrB_Vector_new(&a_vec, GrB_BOOL, block_width));
+    }
+
     // Rule [Variable -> term]
     for (size_t i = 0; i < term_rules_count; i++) {
         LAGraph_rule_EWCNF term_rule = new_rules[term_rules[i]];
@@ -847,21 +890,28 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
 
-            TIMED(mxm1, TRY(CFL_mxm(M, T[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, true, opt_mask)));
+            // A product with a block vector stays a block vector, so the blocks are not mixed
+            CFL_Matrix *M_rule = T[bin_rule.prod_A]->block_type == CELL ? M : M_vec;
+            CFL_Matrix *M2_rule = T[bin_rule.nonterm]->block_type == CELL ? M2 : M2_vec;
+
+            TIMED(mxm1, TRY(CFL_mxm(M_rule, T[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, true, opt_mask)));
 
             // Update source vertices matrix to find appropriate paths only
             // M[i, j] == 1 => A[j, j] == 1
-            TIMED(vxm, TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M->base, GrB_NULL)));
+            if (M_rule == M) {
+                TIMED(vxm, TRY(GrB_vxm(a, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M->base, GrB_NULL)));
+            } else {
+                TIMED(vxm, TRY(GrB_vxm(a_vec, GrB_NULL, GrB_NULL, GxB_ANY_PAIR_BOOL, ones_vec, M_vec->base, GrB_NULL)));
+                TIMED(vxm, TRY(fold_block_vector(a, a_vec, n)));
+            }
             TIMED(diag, TRY(GxB_Matrix_diag(A->base, a, 0, GrB_NULL)));
             TIMED(update, TRY(CFL_matrix_update(A)));
 
-            TIMED(mxm2, TRY(CFL_mxm(M2, T[bin_rule.prod_B], M, false, true, opt_mask)));
+            TIMED(mxm2, TRY(CFL_mxm(M2_rule, T[bin_rule.prod_B], M_rule, false, true, opt_mask)));
 
             // Keep only the new pairs, so the nvals of a lazy T counts no duplicates
-            if (M2->block_type == T[bin_rule.nonterm]->block_type) {
-                TIMED(wise1, TRY(CFL_rsub(M2, T[bin_rule.nonterm], opt_mask)));
-            }
-            TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M2, false, opt_mask)));
+            TIMED(wise1, TRY(CFL_rsub(M2_rule, T[bin_rule.nonterm], opt_mask)));
+            TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M2_rule, false, opt_mask)));
 
             TIMED(wise2, TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask)));
             TIMED(wise3, TRY(CFL_wise(TSrc[bin_rule.prod_B], TSrc[bin_rule.prod_B], A, false, opt_mask)));
@@ -871,11 +921,11 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         for (size_t i = 0; i < unit_rules_count; i++) {
             LAGraph_rule_EWCNF unit_rule = new_rules[unit_rules[i]];
 
-            TRY(CFL_mxm(M2, T[unit_rule.prod_A], TSrc[unit_rule.nonterm], false, true, opt_mask));
-            if (M2->block_type == T[unit_rule.nonterm]->block_type) {
-                TRY(CFL_rsub(M2, T[unit_rule.nonterm], opt_mask));
-            }
-            TRY(CFL_wise(T[unit_rule.nonterm], T[unit_rule.nonterm], M2, false, opt_mask));
+            CFL_Matrix *M2_rule = T[unit_rule.nonterm]->block_type == CELL ? M2 : M2_vec;
+
+            TRY(CFL_mxm(M2_rule, T[unit_rule.prod_A], TSrc[unit_rule.nonterm], false, true, opt_mask));
+            TRY(CFL_rsub(M2_rule, T[unit_rule.nonterm], opt_mask));
+            TRY(CFL_wise(T[unit_rule.nonterm], T[unit_rule.nonterm], M2_rule, false, opt_mask));
 
             TRY(CFL_wise(TSrc[unit_rule.prod_A], TSrc[unit_rule.prod_A], TSrc[unit_rule.nonterm], false, opt_mask));
         }

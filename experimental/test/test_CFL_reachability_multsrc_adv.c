@@ -170,6 +170,38 @@ void init_grammar_unit() {
         .nonterms_count = 2, .terms_count = 2, .rules_count = 3, .rules = rules};
 }
 
+// Indexed grammar, the language is a_i b_i with the same index
+//
+// Terms: [3 a_0] [4 a_1] [5 b_0] [6 b_1]
+// Nonterms: [0 S] [1 A_0] [2 A_1]
+// S -> A_i b_i    [0 1 5 2 INDEX_PROD_A | INDEX_PROD_B]
+// A_i -> a_i      [1 3 -1 2 INDEX_NONTERM | INDEX_PROD_A]
+void init_grammar_indexed() {
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 2, sizeof(LAGraph_rule_EWCNF), msg);
+
+    rules[0] = (LAGraph_rule_EWCNF){0, 1, 5, 2, LAGraph_EWNCF_INDEX_PROD_A | LAGraph_EWNCF_INDEX_PROD_B};
+    rules[1] = (LAGraph_rule_EWCNF){1, 3, -1, 2, LAGraph_EWNCF_INDEX_NONTERM | LAGraph_EWNCF_INDEX_PROD_A};
+
+    grammar = (grammar_t){
+        .nonterms_count = 3, .terms_count = 4, .rules_count = 2, .rules = rules};
+}
+
+// Graph for the indexed grammar: 0 -a_0-> 1 -b_0-> 2 and 1 -b_1-> 3, so only (0, 2) is derived
+void init_graph_indexed() {
+    n_adj_matrices = grammar.nonterms_count + grammar.terms_count;
+    LAGraph_Calloc((void **)&adj_matrices, n_adj_matrices, sizeof(GrB_Matrix), msg);
+    size_t N = 4;
+
+    for (size_t i = 0; i < n_adj_matrices; i++) {
+        GrB_Matrix_new(&adj_matrices[i], GrB_BOOL, N, N);
+    }
+
+    OK(GrB_Matrix_setElement(adj_matrices[3], true, 0, 1)); // a_0
+    OK(GrB_Matrix_setElement(adj_matrices[5], true, 1, 2)); // b_0
+    OK(GrB_Matrix_setElement(adj_matrices[6], true, 1, 3)); // b_1
+}
+
 // Complex grammar
 // aaaabbbb or aaabbb
 //
@@ -774,6 +806,28 @@ void test_CFL_reachability_allout_1(void) {
 //====================
 
 // The unit rule S -> A must pass the sources of S to A and the paths of A back to S
+// The blocks of an indexed symbol must not be mixed up by the products
+void test_CFL_reachability_indexed_msrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+    init_grammar_indexed();
+    init_graph_indexed();
+
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 2)");
+    }
+
+    // free_workspace frees only the first terms_count matrices
+    for (size_t i = grammar.terms_count; i < n_adj_matrices; i++) {
+        GrB_free(&adj_matrices[i]);
+    }
+    free_workspace();
+    teardown();
+}
+
 void test_CFL_reachability_unit_rule_msrc(void) {
     setup();
     GrB_Info retval;
@@ -915,6 +969,7 @@ TEST_LIST = {
              {"CFL_reachability_allout_0", test_CFL_reachability_allout_0},
              {"CFL_reachability_allout_1", test_CFL_reachability_allout_1},
              {"CFL_reachability_unit_rule_msrc", test_CFL_reachability_unit_rule_msrc},
+             {"CFL_reachability_indexed_msrc", test_CFL_reachability_indexed_msrc},
             //  Tests with invalid parameters
              {"CFL_reachability_invalid_rules", test_CFL_reachability_invalid_rules},
              {"CFL_reachability_invalid_params", test_CFL_reachability_invalid_params},
