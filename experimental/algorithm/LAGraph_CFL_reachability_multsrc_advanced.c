@@ -38,6 +38,13 @@
         LAGraph_Free((void **) &Adj, msg);                                               \
         LAGraph_Free((void **) &new_rules, msg);                                         \
         LAGraph_Free((void **) &to_new_symbols_map, msg);                                \
+        /* with OPT_BLOCK the adjacency matrices are rebuilt, otherwise aliased */       \
+        if (new_adj_matrices != NULL && new_adj_matrices != adj_matrices) {              \
+            for (size_t i = 0; i < new_symbols_amount; i++) {                            \
+                GrB_Matrix_free(&new_adj_matrices[i]);                                   \
+            }                                                                            \
+            LAGraph_Free((void **) &new_adj_matrices, msg);                              \
+        }                                                                                \
         GrB_Vector_free(&ones_vec);                                                      \
         GrB_Vector_free(&a);                                                             \
         GrB_Vector_free(&a_vec);                                                         \
