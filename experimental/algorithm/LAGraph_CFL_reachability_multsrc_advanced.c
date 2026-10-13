@@ -25,7 +25,9 @@
         }                                                                                \
         CFL_matrix_free(&iden);                                                          \
         CFL_matrix_free(&MSrc);                                                          \
+        CFL_matrix_free(&MSrc2);                                                         \
         CFL_matrix_free(&M);                                                             \
+        CFL_matrix_free(&M2);                                                            \
         CFL_matrix_free(&A);                                                             \
         LAGraph_Free((void **) &nnzs_T, msg);                                            \
         LAGraph_Free((void **) &nnzs_TSrc, msg);                                         \
@@ -598,7 +600,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     CFL_Matrix **Adj = NULL;
     CFL_Matrix **TSrc = NULL;
     CFL_Matrix *MSrc = NULL;
+    CFL_Matrix *MSrc2 = NULL;
     CFL_Matrix *M = NULL;
+    CFL_Matrix *M2 = NULL;
     CFL_Matrix *iden = NULL;
     CFL_Matrix *A = NULL;
     GrB_Vector a = NULL;
@@ -787,7 +791,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     TRY(CFL_matrix_update(TSrc[new_S]));
 
     TRY(CFL_matrix_create(&MSrc, n, n));
+    TRY(CFL_matrix_create(&MSrc2, n, n));
     TRY(CFL_matrix_create(&M, n, n));
+    TRY(CFL_matrix_create(&M2, n, n));
     TRY(CFL_matrix_create(&A, n, n));
     TRY(CFL_dup(MSrc, TSrc[new_S], opt_mask));
     TRY(GrB_Vector_new(&a, GrB_BOOL, n));
@@ -828,7 +834,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         for (size_t i = 0; i < bin_rules_count; i++) {
             LAGraph_rule_EWCNF bin_rule = new_rules[bin_rules[i]];
 
-            TIMED(mxm1, TRY(CFL_mxm(M, TSrc[bin_rule.nonterm], T[bin_rule.prod_A], false, false, opt_mask)));
+            TIMED(mxm1, TRY(CFL_mxm(M, T[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, true, opt_mask)));
 
             // Update source vertices matrix to find appropriate paths only
             // M[i, j] == 1 => A[j, j] == 1
@@ -836,9 +842,9 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
             TIMED(diag, TRY(GxB_Matrix_diag(A->base, a, 0, GrB_NULL)));
             TIMED(update, TRY(CFL_matrix_update(A)));
 
-            TIMED(mxm2, TRY(CFL_mxm(M, M, T[bin_rule.prod_B], false, false, opt_mask)));
+            TIMED(mxm2, TRY(CFL_mxm(M2, T[bin_rule.prod_B], M, false, true, opt_mask)));
 
-            TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M, false, opt_mask)));
+            TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M2, false, opt_mask)));
 
             TIMED(wise2, TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask)));
             TIMED(wise3, TRY(CFL_wise(TSrc[bin_rule.prod_B], TSrc[bin_rule.prod_B], A, false, opt_mask)));
@@ -862,7 +868,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         }
     }
 
-    GRB_TRY(CFL_mxm(MSrc, MSrc, T[new_S], false, false, opt_mask));
+    GRB_TRY(CFL_mxm(MSrc2, T[new_S], MSrc, false, true, opt_mask));
 
     #ifdef BENCH_CFL_REACHBILITY
     printf("\nmxm1: %.3f, vxm: %.3f, dia: %.3f, upd: %.3f\nmxm2: %.3f, ws1: %.3f, ws2: %.3f, ws3: %.3f\n",
@@ -870,11 +876,11 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     #endif
 
     // Get outputs matrix
-    if (MSrc->base_matrices_count == 0) {
-        TRY(GrB_Matrix_dup(output, MSrc->base));
+    if (MSrc2->base_matrices_count == 0) {
+        TRY(GrB_Matrix_dup(output, MSrc2->base));
     } else {
         CFL_Matrix *res;
-        CFL_matrix_to_base(&res, MSrc, opt_mask);
+        CFL_matrix_to_base(&res, MSrc2, opt_mask);
         TRY(GrB_Matrix_dup(output, res->base));
         CFL_matrix_free(&res);
     }
