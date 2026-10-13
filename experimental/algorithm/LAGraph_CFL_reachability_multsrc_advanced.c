@@ -674,6 +674,7 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
     // Arrays for processing rules
     size_t eps_rules[new_rules_count], eps_rules_count = 0;   // [Variable -> eps]
     size_t term_rules[new_rules_count], term_rules_count = 0; // [Variable -> term]
+    size_t unit_rules[new_rules_count], unit_rules_count = 0; // [Variable -> Variable]
     size_t bin_rules[new_rules_count], bin_rules_count = 0;   // [Variable -> AB]
 
     // Process rules
@@ -751,6 +752,18 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
         }
 
         return GrB_INVALID_VALUE;
+    }
+
+    // A term rule whose symbol is produced by some rule is a unit rule [Variable -> Variable]
+    bool is_nonterm[new_symbols_amount];
+    memset(is_nonterm, 0, sizeof(is_nonterm));
+    for (size_t i = 0; i < new_rules_count; i++) {
+        is_nonterm[new_rules[i].nonterm] = true;
+    }
+    for (size_t i = 0; i < term_rules_count; i++) {
+        if (is_nonterm[new_rules[term_rules[i]].prod_A]) {
+            unit_rules[unit_rules_count++] = term_rules[i];
+        }
     }
 
     GrB_Scalar_new(&true_scalar, GrB_BOOL);
@@ -852,6 +865,19 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
 
             TIMED(wise2, TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask)));
             TIMED(wise3, TRY(CFL_wise(TSrc[bin_rule.prod_B], TSrc[bin_rule.prod_B], A, false, opt_mask)));
+        }
+
+        // Rule [Variable -> Variable]: the paths of the produced symbol from the sources
+        for (size_t i = 0; i < unit_rules_count; i++) {
+            LAGraph_rule_EWCNF unit_rule = new_rules[unit_rules[i]];
+
+            TRY(CFL_mxm(M2, T[unit_rule.prod_A], TSrc[unit_rule.nonterm], false, true, opt_mask));
+            if (M2->block_type == T[unit_rule.nonterm]->block_type) {
+                TRY(CFL_rsub(M2, T[unit_rule.nonterm], opt_mask));
+            }
+            TRY(CFL_wise(T[unit_rule.nonterm], T[unit_rule.nonterm], M2, false, opt_mask));
+
+            TRY(CFL_wise(TSrc[unit_rule.prod_A], TSrc[unit_rule.prod_A], TSrc[unit_rule.nonterm], false, opt_mask));
         }
 
         // Check if any of the matrices changed. If not, job is done

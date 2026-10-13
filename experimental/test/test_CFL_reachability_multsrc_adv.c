@@ -151,6 +151,25 @@ void init_grammar_aS() {
         .nonterms_count = 1, .terms_count = 1, .rules_count = 3, .rules = rules};
 }
 
+// Grammar with a unit rule, the language is a+
+//
+// Terms: [2 a] [3 b]
+// Nonterms: [0 S] [1 A]
+// S -> A      [0 1 -1]
+// A -> a      [1 2 -1]
+// A -> a S    [1 2 0]
+void init_grammar_unit() {
+    LAGraph_rule_EWCNF *rules = NULL;
+    LAGraph_Calloc((void **)&rules, 3, sizeof(LAGraph_rule_EWCNF), msg);
+
+    rules[0] = (LAGraph_rule_EWCNF){0, 1, -1, 0, 0};
+    rules[1] = (LAGraph_rule_EWCNF){1, 2, -1, 0, 0};
+    rules[2] = (LAGraph_rule_EWCNF){1, 2, 0, 0, 0};
+
+    grammar = (grammar_t){
+        .nonterms_count = 2, .terms_count = 2, .rules_count = 3, .rules = rules};
+}
+
 // Complex grammar
 // aaaabbbb or aaabbb
 //
@@ -754,6 +773,24 @@ void test_CFL_reachability_allout_1(void) {
 // Tests with invalid parameters
 //====================
 
+// The unit rule S -> A must pass the sources of S to A and the paths of A back to S
+void test_CFL_reachability_unit_rule_msrc(void) {
+    setup();
+    GrB_Info retval;
+    GrB_Index src[] = { 0 };
+    int32_t src_count = sizeof(src) / sizeof(GrB_Index);
+    init_grammar_unit();
+    init_graph_line();
+
+    for (size_t mask = MIN_MASK; mask <= MAX_MASK; mask++) {
+        OK(run_algorithm(mask));
+        check_result("(0, 1) (0, 2)");
+    }
+
+    free_workspace();
+    teardown();
+}
+
 void test_CFL_reachability_invalid_rules(void) {
     setup();
     GrB_Info retval;
@@ -877,6 +914,7 @@ TEST_LIST = {
              {"CFL_reachability_allin_1_4", test_CFL_reachability_allin_1_4},
              {"CFL_reachability_allout_0", test_CFL_reachability_allout_0},
              {"CFL_reachability_allout_1", test_CFL_reachability_allout_1},
+             {"CFL_reachability_unit_rule_msrc", test_CFL_reachability_unit_rule_msrc},
             //  Tests with invalid parameters
              {"CFL_reachability_invalid_rules", test_CFL_reachability_invalid_rules},
              {"CFL_reachability_invalid_params", test_CFL_reachability_invalid_params},
