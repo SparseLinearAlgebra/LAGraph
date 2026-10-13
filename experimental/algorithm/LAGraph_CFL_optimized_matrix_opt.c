@@ -886,6 +886,9 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
         TRY(CFL_matrix_create(&temp, swap ? second->nrows : first->nrows,
                               swap ? first->ncols : second->ncols));
         TRY(matrix_mxm_lazy(temp, first, second, accum, swap, optimizations));
+        if (!accum) {
+            TRY(matrix_clear_empty(output, optimizations));
+        }
         TRY(matrix_wise_block(output, output, temp, false, optimizations));
         TRY(CFL_matrix_free(&temp));
 
@@ -900,6 +903,9 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
         TRY(CFL_matrix_create(&temp, swap ? second->nrows : first->nrows,
                               swap ? first->ncols : first->ncols));
         TRY(matrix_mxm_lazy(temp, first, second, accum, swap, optimizations));
+        if (!accum) {
+            TRY(matrix_clear_empty(output, optimizations));
+        }
         TRY(matrix_wise_block(output, output, temp, false, optimizations));
         TRY(CFL_matrix_free(&temp));
 
@@ -919,6 +925,9 @@ GrB_Info matrix_mxm_block(Matrix *output, Matrix *first, Matrix *second, bool ac
     Matrix *temp;
     TRY(CFL_matrix_create(&temp, first->nrows, first->ncols));
     TRY(matrix_mxm_lazy(temp, first, diag, false, swap, optimizations));
+    if (!accum) {
+        TRY(matrix_clear_empty(output, optimizations));
+    }
     TRY(matrix_wise_block(output, output, temp, false, optimizations));
 
     TRY(CFL_matrix_free(&temp));
