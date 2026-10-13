@@ -844,6 +844,10 @@ GrB_Info LAGraph_CFL_reachability_multsrc_adv
 
             TIMED(mxm2, TRY(CFL_mxm(M2, T[bin_rule.prod_B], M, false, true, opt_mask)));
 
+            // Keep only the new pairs, so the nvals of a lazy T counts no duplicates
+            if (M2->block_type == T[bin_rule.nonterm]->block_type) {
+                TIMED(wise1, TRY(CFL_rsub(M2, T[bin_rule.nonterm], opt_mask)));
+            }
             TIMED(wise1, TRY(CFL_wise(T[bin_rule.nonterm], T[bin_rule.nonterm], M2, false, opt_mask)));
 
             TIMED(wise2, TRY(CFL_wise(TSrc[bin_rule.prod_A], TSrc[bin_rule.prod_A], TSrc[bin_rule.nonterm], false, opt_mask)));
