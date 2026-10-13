@@ -94,6 +94,22 @@ typedef enum CFL_Matrix_block Matrix_block;
 
 GrB_Info matrix_print_lazy(Matrix *A, int8_t optimizations);
 
+// Frees the stale copy after a write into one format only
+static GrB_Info matrix_drop_other_format(Matrix *matrix) {
+    if (!matrix->is_both) {
+        return GrB_SUCCESS;
+    }
+
+    if (matrix->base == matrix->base_row) {
+        TRY(GrB_Matrix_free(&matrix->base_col));
+    } else {
+        TRY(GrB_Matrix_free(&matrix->base_row));
+    }
+    matrix->is_both = false;
+
+    return GrB_SUCCESS;
+}
+
 GrB_Info matrix_to_format(Matrix *matrix, int32_t format, bool is_both) {
     TRY(CFL_matrix_update(matrix));
 
@@ -726,6 +742,7 @@ GrB_Info matrix_mxm(Matrix *output, Matrix *first, Matrix *second, bool accum,
     // CFL_matrix_update(output);
     TRY(GrB_mxm(output->base, GrB_NULL, accum ? GxB_ANY_BOOL : GrB_NULL,
                 GxB_ANY_PAIR_BOOL, left->base, right->base, GrB_NULL));
+    TRY(matrix_drop_other_format(output));
     // IS_ISO(output->base, "MXM output");
     TRY(CFL_matrix_update(output));
 
@@ -1191,6 +1208,7 @@ GrB_Info matrix_wise_block(Matrix *output, Matrix *first, Matrix *second, bool a
 GrB_Info matrix_rsub(Matrix *output, Matrix *mask) {
     TRY(GrB_eWiseAdd(output->base, mask->base, GrB_NULL, GxB_ANY_BOOL, output->base,
                      output->base, GrB_DESC_RSC));
+    TRY(matrix_drop_other_format(output));
 
     TRY(CFL_matrix_update(output));
 
