@@ -1515,6 +1515,26 @@ int LAGr_MaxFlow(
     char* msg
 );
 
+typedef struct {
+    GrB_Index state_count;
+    GrB_Index terminal_count;
+    GrB_Index nonterminal_count;
+    GrB_Index start_nonterminal;
+    GrB_Matrix* terminal_matrices;
+    GrB_Matrix* nonterminal_matrices;
+    GrB_Index* start_states;
+    GrB_Vector* final_states;
+} RSM;
+
+LAGRAPH_PUBLIC GrB_Info LAGraph_CFL_AllPaths_Kronecker
+(
+    GrB_Matrix* M_intersect_out,
+    GrB_Matrix* outputs,
+    const GrB_Matrix* adj_matrices,
+    int64_t terms_count,
+    RSM* rsm,
+    char* msg
+);
 
 #if defined ( __cplusplus )
 }
